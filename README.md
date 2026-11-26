@@ -19,8 +19,8 @@ Play live on GitHub Pages: **[https://nyez2016.github.io/roblox-rivals-html/](ht
 - **Auto Shoot Mode**: Toggle **Auto Shoot** in Settings or press `F` mid-match to automatically fire whenever your crosshair locks onto a target!
 - **Gravity System**: Switch between `Map Default`, `Earth 1.0x`, `Lunar Low-G (0.38x)`, and `Zero-G Bounce (0.22x)` on any map.
 - **8 Game Modes**: `Classic 1v1`, `2v2 Duel` (You + AI Blue Ally vs 2 Red Rivals, First to 5 rounds), `Team Deathmatch` (3v3 with fast respawns, First to 25 kills), `Shooting Range` (free-play test dummies with instant weapon swapping & infinite ammo), `Practice Rounds` (3 moving, strafing & jumping NPCs that never shoot back), `Ancient Assassin`, `Sniper Only`, and `Randomizer`.
-- **22 Weapons Across All 4 Loadout Slots**:
-  - **Primary (8)**: Assault Rifle, Sniper, Repeating Crossbow, Frost Longbow, Burst Rifle, Shotgun, Paintball Gun, Minigun
+- **23 Weapons Across All 4 Loadout Slots**:
+  - **Primary (9)**: Assault Rifle, **Phase Railgun (pierces straight through walls!)**, Sniper, Repeating Crossbow, Frost Longbow, Burst Rifle, Shotgun, Paintball Gun, Minigun
   - **Secondary (5)**: Revolver, Shadow Kunai, Uzi, Handgun, Shorty
   - **Melee (5)**: Katana, Shadow Daggers (105 Backstab), Imperial Saber (95 Backstab), Scythe, Battle Axe
   - **Utility (4)**: Frag Grenade, Smoke Bomb (blocks Rival Bot vision), Molotov, Flashbang

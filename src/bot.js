@@ -1,7 +1,7 @@
 (function (global) {
   const Rivals = (global.Rivals = global.Rivals || {});
   const THREE = global.THREE;
-  const { RIVAL_SKINS } = Rivals;
+  const { RIVAL_SKINS, WEAPONS, createWeaponMesh } = Rivals;
 
   const DIFFICULTIES = {
     rookie: {
@@ -57,6 +57,11 @@
       this.respawnTimer = 0;
       this.spawnHome = new THREE.Vector3(0, 0, -28);
       this.waypoints = arena.getWaypoints();
+
+      this.weaponLoadout = { long: 'sniper', mid: 'ar', close: 'shotgun' };
+      this.currentWeaponId = 'ar';
+      this.weaponDef = WEAPONS.ar;
+      this.weaponSwitchCooldown = 0;
       this.currentTarget = this.waypoints[0]?.clone() || new THREE.Vector3();
 
       this.strafeDir = 1;
@@ -116,15 +121,12 @@
       this.rightArm.castShadow = true;
       this.rightArm.userData.hitbox = 'body';
 
-      this.gunMesh = new THREE.Mesh(
-        new THREE.BoxGeometry(0.12, 0.14, 0.72),
-        new THREE.MeshStandardMaterial({ color: 0x1a2030, metalness: 0.5, roughness: 0.35 })
-      );
-      this.gunMesh.position.set(0.54, 1.18, 0.55);
-      this.gunMesh.castShadow = true;
-
-      const gunGlow = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.04, 0.5), this.matAccent);
-      gunGlow.position.set(0.54, 1.22, 0.58);
+      // Dynamic 3D Weapon Holder attached to right hand!
+      this.weaponHolder = new THREE.Group();
+      this.weaponHolder.position.set(0.54, 1.18, 0.44);
+      this.weaponHolder.rotation.y = Math.PI;
+      this.weaponHolder.scale.setScalar(1.15);
+      this.heldWeaponMesh = null;
 
       this.headMesh = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.52, 0.54), this.matSkin);
       this.headMesh.position.set(0, 1.76, 0);
@@ -184,8 +186,7 @@
         chestStripe,
         this.leftArm,
         this.rightArm,
-        this.gunMesh,
-        gunGlow,
+        this.weaponHolder,
         this.headMesh,
         visor,
         this.bambooHat,
@@ -206,7 +207,38 @@
       for (const m of this.hitMeshes) m.userData.enemyRef = this;
 
       this._buildHealthBar();
+      this.equipWeapon('ar');
       this.scene.add(this.group);
+    }
+
+    _pickLoadoutForMode(mode = 'classic') {
+      const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+      if (mode === 'sniper') {
+        return { long: 'sniper', mid: 'sniper', close: 'revolver' };
+      }
+      if (mode === 'assassin') {
+        return { long: 'bow', mid: 'crossbow', close: pick(['kunai', 'hiddenblade', 'xiuchun']) };
+      }
+      return {
+        long: pick(['sniper', 'railgun', 'burst', 'bow', 'ar']),
+        mid: pick(['ar', 'burst', 'revolver', 'paintball', 'minigun', 'crossbow']),
+        close: pick(['shotgun', 'uzi', 'shorty', 'katana', 'scythe']),
+      };
+    }
+
+    equipWeapon(weaponId) {
+      const def = WEAPONS[weaponId] || WEAPONS.ar;
+      if (this.currentWeaponId === def.id && this.heldWeaponMesh) return;
+      this.currentWeaponId = def.id;
+      this.weaponDef = def;
+
+      if (this.heldWeaponMesh) {
+        this.weaponHolder.remove(this.heldWeaponMesh);
+      }
+      const skinId = this.team === 'blue' ? 'cyber' : this.skinId === 'golden' ? 'gold' : 'default';
+      this.heldWeaponMesh = createWeaponMesh(def.id, skinId);
+      this.weaponHolder.add(this.heldWeaponMesh);
+      this._redrawHealthBar();
     }
 
     dispose() {
@@ -244,15 +276,15 @@
 
     _buildHealthBar() {
       this.hpCanvas = document.createElement('canvas');
-      this.hpCanvas.width = 128;
-      this.hpCanvas.height = 24;
+      this.hpCanvas.width = 160;
+      this.hpCanvas.height = 42;
       this.hpCtx = this.hpCanvas.getContext('2d');
       this.hpTex = new THREE.CanvasTexture(this.hpCanvas);
 
       const spriteMat = new THREE.SpriteMaterial({ map: this.hpTex, depthTest: false });
       this.hpSprite = new THREE.Sprite(spriteMat);
-      this.hpSprite.scale.set(1.35, 0.26, 1);
-      this.hpSprite.position.set(0, 2.58, 0);
+      this.hpSprite.scale.set(1.6, 0.42, 1);
+      this.hpSprite.position.set(0, 2.66, 0);
       this.group.add(this.hpSprite);
       this._redrawHealthBar();
     }
@@ -263,8 +295,17 @@
       const h = this.hpCanvas.height;
       ctx.clearRect(0, 0, w, h);
 
-      ctx.fillStyle = 'rgba(10, 14, 24, 0.8)';
-      ctx.fillRect(0, 0, w, h);
+      // Weapon label tag above HP bar so player sees what weapon the Rival switched to!
+      ctx.font = 'bold 13px Segoe UI, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = this.team === 'blue' ? '#7dd3fc' : '#fde047';
+      const wLabel = this.weaponDef ? this.weaponDef.name : 'ASSAULT RIFLE';
+      ctx.fillText(wLabel, w / 2, 13);
+
+      const barY = 18;
+      const barH = 20;
+      ctx.fillStyle = 'rgba(10, 14, 24, 0.85)';
+      ctx.fillRect(6, barY, w - 12, barH);
 
       const pct = Math.max(0, this.hp / this.maxHp);
       ctx.fillStyle =
@@ -275,11 +316,11 @@
           : pct > 0.35
           ? '#ff3e5e'
           : '#ff9f1c';
-      ctx.fillRect(4, 4, Math.round((w - 8) * pct), h - 8);
+      ctx.fillRect(10, barY + 4, Math.round((w - 20) * pct), barH - 8);
 
       ctx.strokeStyle = 'rgba(255,255,255,0.45)';
       ctx.lineWidth = 2;
-      ctx.strokeRect(1, 1, w - 2, h - 2);
+      ctx.strokeRect(7, barY + 1, w - 14, barH - 2);
 
       this.hpTex.needsUpdate = true;
     }
@@ -302,11 +343,15 @@
       return new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)).normalize();
     }
 
-    reset(spawnPos, difficultyKey = 'pro', skinId = 'classic') {
+    reset(spawnPos, difficultyKey = 'pro', skinId = 'classic', mode = 'classic') {
       this.difficulty = DIFFICULTIES[difficultyKey] || DIFFICULTIES.pro;
       this.spawnHome.copy(spawnPos);
       this.applySkin(skinId);
       this.waypoints = this.arena.getWaypoints();
+
+      this.weaponLoadout = this._pickLoadoutForMode(mode);
+      this.weaponSwitchCooldown = 1.2;
+      this.equipWeapon(this.weaponLoadout.mid);
 
       this.hp = this.maxHp;
       this.alive = true;
@@ -459,16 +504,34 @@
       }
       this.jumpCooldown = Math.max(0, this.jumpCooldown - dt);
       this.padCooldown = Math.max(0, this.padCooldown - dt);
+      this.weaponSwitchCooldown = Math.max(0, this.weaponSwitchCooldown - dt);
 
+      // Dynamically switch weapons based on combat range!
+      if (!this.passive && this.weaponSwitchCooldown <= 0) {
+        let desired = this.weaponLoadout.mid;
+        if (distToTarget > 22) desired = this.weaponLoadout.long;
+        else if (distToTarget < 9.5) desired = this.weaponLoadout.close;
+        if (desired && desired !== this.currentWeaponId) {
+          this.equipWeapon(desired);
+          this.weaponSwitchCooldown = 2.6;
+        }
+      }
+
+      const isMeleeWep = this.weaponDef && this.weaponDef.slotType === 'melee';
       const moveDir = new THREE.Vector3();
       if (isBlinded) {
         moveDir.set(Math.sin(performance.now() * 0.004), 0, Math.cos(performance.now() * 0.004));
       } else if (canSee) {
         const forward = toTarget.clone().normalize();
         const right = new THREE.Vector3(-forward.z, 0, forward.x);
-        if (distToTarget > 17) moveDir.addScaledVector(forward, 0.75);
-        else if (distToTarget < 8.5) moveDir.addScaledVector(forward, -0.7);
-        moveDir.addScaledVector(right, this.strafeDir * 0.9);
+        if (isMeleeWep) {
+          if (distToTarget > 2.8) moveDir.addScaledVector(forward, 1.0);
+          moveDir.addScaledVector(right, this.strafeDir * 0.45);
+        } else {
+          if (distToTarget > 17) moveDir.addScaledVector(forward, 0.75);
+          else if (distToTarget < 8.5) moveDir.addScaledVector(forward, -0.7);
+          moveDir.addScaledVector(right, this.strafeDir * 0.9);
+        }
 
         if (this.jumpCooldown <= 0 && Math.random() < dt * (gravityScale < 0.6 ? 1.1 : 0.65) && this.onGround) {
           this.vel.y = gravityScale < 0.6 ? 7.8 : 8.4;
@@ -561,19 +624,32 @@
       this.yaw += deltaYaw * Math.min(1, dt * 11);
 
       if (canSee && !this.passive) {
-        this.sightTimer += dt;
-        this.fireTimer -= dt;
-        if (this.sightTimer >= this.difficulty.reaction && this.fireTimer <= 0) {
-          this.fireTimer = this.difficulty.fireInterval * (0.85 + Math.random() * 0.35);
-          const muzzleWorld = new THREE.Vector3(0.54, 1.25, 0.9)
-            .applyAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw)
-            .add(this.pos);
-          const aimDir = new THREE.Vector3().subVectors(targetEye, muzzleWorld).normalize();
-          aimDir.x += (Math.random() - 0.5) * this.difficulty.spread * 2;
-          aimDir.y += (Math.random() - 0.5) * this.difficulty.spread * 1.6;
-          aimDir.z += (Math.random() - 0.5) * this.difficulty.spread * 2;
-          aimDir.normalize();
-          onBotShoot(this, muzzleWorld, aimDir, this.difficulty.damage);
+        const w = this.weaponDef || WEAPONS.ar;
+        const inRange = distToTarget <= Math.min(120, w.range || 100);
+        if (inRange) {
+          this.sightTimer += dt;
+          this.fireTimer -= dt;
+          if (this.sightTimer >= this.difficulty.reaction && this.fireTimer <= 0) {
+            // Scale weapon fire cadence & damage cleanly to bot difficulty
+            const baseInterval = Math.max(0.11, Math.min(1.35, 1.35 / Math.max(0.7, w.fireRate)));
+            const diffScale = this.difficulty.fireInterval / 0.21;
+            this.fireTimer = baseInterval * diffScale * (0.85 + Math.random() * 0.3);
+
+            const dmgScale = this.difficulty.damage / 14;
+            const rawDmg = w.slotType === 'melee' ? w.damage * 0.65 : w.damage * 0.62;
+            const shotDmg = Math.max(6, Math.round(rawDmg * dmgScale));
+
+            const muzzleWorld = new THREE.Vector3(0.54, 1.25, 0.9)
+              .applyAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw)
+              .add(this.pos);
+            const aimDir = new THREE.Vector3().subVectors(targetEye, muzzleWorld).normalize();
+            const spread = this.difficulty.spread + (w.spread || 0.015) * 0.7;
+            aimDir.x += (Math.random() - 0.5) * spread * 2;
+            aimDir.y += (Math.random() - 0.5) * spread * 1.6;
+            aimDir.z += (Math.random() - 0.5) * spread * 2;
+            aimDir.normalize();
+            onBotShoot(this, muzzleWorld, aimDir, shotDmg, w);
+          }
         }
       } else {
         this.sightTimer = Math.max(0, this.sightTimer - dt * 1.5);

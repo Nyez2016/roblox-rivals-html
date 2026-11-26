@@ -49,6 +49,32 @@
       moveMult: 0.92,
       tracerColor: 0xffd447,
     },
+    railgun: {
+      id: 'railgun',
+      name: 'PHASE RAILGUN',
+      slotType: 'primary',
+      damage: 55,
+      headDamage: 110,
+      wallDamage: 42,
+      wallHeadDamage: 84,
+      pierceWalls: true,
+      beamRadius: 0.048,
+      fireRate: 0.95,
+      auto: false,
+      burstCount: 1,
+      pellets: 1,
+      magSize: 4,
+      reserveMax: 24,
+      reloadTime: 1.8,
+      spread: 0.012,
+      adsSpread: 0.0008,
+      adsFov: 44,
+      scoped: false,
+      recoil: 0.068,
+      range: 220,
+      moveMult: 0.94,
+      tracerColor: 0x00f5ff,
+    },
     burst: {
       id: 'burst',
       name: 'BURST RIFLE',
@@ -584,6 +610,25 @@
       group.userData.magPart = mag;
       group.userData.magHome = mag.position.clone();
       group.userData.muzzle = new THREE.Vector3(0, 0.025, -0.88);
+    } else if (weaponId === 'railgun') {
+      // Twin-rail futuristic wall-piercing plasma railgun!
+      const chassis = box(0.13, 0.14, 0.56, 0x1e293b, 'body', 0.65, 0.25);
+      const topRail = box(0.042, 0.036, 0.68, 0x0f172a, 'secondary', 0.8, 0.2);
+      topRail.position.set(0, 0.055, -0.46);
+      const botRail = box(0.042, 0.036, 0.68, 0x0f172a, 'secondary', 0.8, 0.2);
+      botRail.position.set(0, -0.025, -0.46);
+      const plasmaCore = box(0.028, 0.032, 0.62, 0x00f5ff, 'accent', 0.1, 0.1, 0x00f5ff);
+      plasmaCore.position.set(0, 0.015, -0.44);
+      const coil1 = box(0.14, 0.05, 0.05, 0xd946ef, 'accent', 0.3, 0.2, 0xd946ef);
+      coil1.position.set(0, 0.015, -0.28);
+      const coil2 = box(0.13, 0.05, 0.05, 0x00f5ff, 'accent', 0.3, 0.2, 0x00f5ff);
+      coil2.position.set(0, 0.015, -0.52);
+      const cell = box(0.075, 0.14, 0.12, 0x00f5ff, 'accent', 0.3, 0.2, 0x00f5ff);
+      cell.position.set(0, -0.12, -0.05);
+      group.add(chassis, topRail, botRail, plasmaCore, coil1, coil2, cell);
+      group.userData.magPart = cell;
+      group.userData.magHome = cell.position.clone();
+      group.userData.muzzle = new THREE.Vector3(0, 0.015, -0.82);
     } else if (weaponId === 'crossbow') {
       // Zhuge Repeating Crossbow: carved wood/bronze stock, top bolt magazine, curved limbs!
       const stock = box(0.1, 0.1, 0.58, 0x6b3e26, 'body', 0.2, 0.6);

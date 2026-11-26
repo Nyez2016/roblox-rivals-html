@@ -858,14 +858,13 @@
         this.extraEnemies = [npc2, npc3];
         this.enemies = [this.bot, npc2, npc3];
       } else if (this.loadoutChoice.mode === 'twovtwo') {
-        // 2v2: YOU + 1 Blue Ally vs 2 Red Rivals
         const allySpawn = spawns.player.clone();
         allySpawn.x -= 3.6;
         const ally1 = new RivalBot(this.scene, this.arena);
         ally1.team = 'blue';
         ally1.name = 'ALLY';
         ally1.passive = false;
-        ally1.reset(allySpawn, this.loadoutChoice.difficulty, 'ally');
+        ally1.reset(allySpawn, this.loadoutChoice.difficulty, 'ally', 'twovtwo');
         this.allies = [ally1];
 
         const r1Spawn = spawns.bot.clone();
@@ -873,7 +872,7 @@
         this.bot.team = 'red';
         this.bot.name = 'RIVAL 1';
         this.bot.passive = false;
-        this.bot.reset(r1Spawn, this.loadoutChoice.difficulty, this.loadoutChoice.rivalSkin);
+        this.bot.reset(r1Spawn, this.loadoutChoice.difficulty, this.loadoutChoice.rivalSkin, 'twovtwo');
 
         const r2Spawn = spawns.bot.clone();
         r2Spawn.x += 3.5;
@@ -881,12 +880,11 @@
         red2.team = 'red';
         red2.name = 'RIVAL 2';
         red2.passive = false;
-        red2.reset(r2Spawn, this.loadoutChoice.difficulty, this.loadoutChoice.rivalSkin);
+        red2.reset(r2Spawn, this.loadoutChoice.difficulty, this.loadoutChoice.rivalSkin, 'twovtwo');
 
         this.extraEnemies = [red2];
         this.enemies = [this.bot, red2];
       } else if (this.loadoutChoice.mode === 'tdm') {
-        // 3v3 Team Deathmatch: YOU + 2 Blue Allies vs 3 Red Rivals (First to 25!)
         const a1Pos = spawns.player.clone();
         a1Pos.x -= 4.2;
         const a2Pos = spawns.player.clone();
@@ -896,13 +894,13 @@
         ally1.team = 'blue';
         ally1.name = 'BLUE ALLY 1';
         ally1.passive = false;
-        ally1.reset(a1Pos, this.loadoutChoice.difficulty, 'ally');
+        ally1.reset(a1Pos, this.loadoutChoice.difficulty, 'ally', 'tdm');
 
         const ally2 = new RivalBot(this.scene, this.arena);
         ally2.team = 'blue';
         ally2.name = 'BLUE ALLY 2';
         ally2.passive = false;
-        ally2.reset(a2Pos, this.loadoutChoice.difficulty, 'ally');
+        ally2.reset(a2Pos, this.loadoutChoice.difficulty, 'ally', 'tdm');
         this.allies = [ally1, ally2];
 
         const r1Pos = spawns.bot.clone();
@@ -914,19 +912,19 @@
         this.bot.team = 'red';
         this.bot.name = 'RED RIVAL 1';
         this.bot.passive = false;
-        this.bot.reset(r1Pos, this.loadoutChoice.difficulty, this.loadoutChoice.rivalSkin);
+        this.bot.reset(r1Pos, this.loadoutChoice.difficulty, this.loadoutChoice.rivalSkin, 'tdm');
 
         const red2 = new RivalBot(this.scene, this.arena);
         red2.team = 'red';
         red2.name = 'RED RIVAL 2';
         red2.passive = false;
-        red2.reset(r2Pos, this.loadoutChoice.difficulty, this.loadoutChoice.rivalSkin);
+        red2.reset(r2Pos, this.loadoutChoice.difficulty, this.loadoutChoice.rivalSkin, 'tdm');
 
         const red3 = new RivalBot(this.scene, this.arena);
         red3.team = 'red';
         red3.name = 'RED RIVAL 3';
         red3.passive = false;
-        red3.reset(r3Pos, this.loadoutChoice.difficulty, this.loadoutChoice.rivalSkin);
+        red3.reset(r3Pos, this.loadoutChoice.difficulty, this.loadoutChoice.rivalSkin, 'tdm');
 
         this.extraEnemies = [red2, red3];
         this.enemies = [this.bot, red2, red3];
@@ -936,7 +934,7 @@
         this.bot.passive = false;
         const botSpawn = spawns.bot.clone();
         botSpawn.x += (Math.random() - 0.5) * 4;
-        this.bot.reset(botSpawn, this.loadoutChoice.difficulty, this.loadoutChoice.rivalSkin);
+        this.bot.reset(botSpawn, this.loadoutChoice.difficulty, this.loadoutChoice.rivalSkin, this.loadoutChoice.mode);
         this.enemies = [this.bot];
       }
     }
@@ -1366,15 +1364,41 @@
         const botHits = this.raycaster.intersectObjects(enemyMeshes, false);
 
         const mapDist = mapHits.length > 0 ? mapHits[0].distance : w.range;
-        let endPoint = origin.clone().addScaledVector(dir, mapDist);
+        let endPoint = origin.clone().addScaledVector(dir, w.pierceWalls ? w.range : mapDist);
 
-        if (botHits.length > 0 && botHits[0].distance < mapDist) {
+        if (w.pierceWalls) {
+          // PHASE RAILGUN: Pierces straight through walls & cover (and can collateral-hit multiple targets)!
+          if (mapHits.length > 0) {
+            this._spawnParticles(mapHits[0].point, tracerCol, 10, 8);
+          }
+          const seenEnemies = new Set();
+          for (const hit of botHits) {
+            const enemy = hit.object.userData.enemyRef || this.bot;
+            if (seenEnemies.has(enemy)) continue;
+            seenEnemies.add(enemy);
+            const isHeadshot = hit.object.userData.hitbox === 'head';
+            const throughWall = hit.distance > mapDist;
+            const dmg = throughWall
+              ? isHeadshot
+                ? w.wallHeadDamage || w.headDamage
+                : w.wallDamage || w.damage
+              : isHeadshot
+              ? w.headDamage
+              : w.damage;
+            const prev = hitSummary.get(enemy) || { dmg: 0, hs: false, wallbang: false, point: hit.point.clone() };
+            prev.dmg += dmg;
+            if (isHeadshot) prev.hs = true;
+            if (throughWall) prev.wallbang = true;
+            prev.point = hit.point.clone();
+            hitSummary.set(enemy, prev);
+          }
+        } else if (botHits.length > 0 && botHits[0].distance < mapDist) {
           const hit = botHits[0];
           endPoint = hit.point.clone();
           const enemy = hit.object.userData.enemyRef || this.bot;
           const isHeadshot = hit.object.userData.hitbox === 'head';
           const dmg = isHeadshot ? w.headDamage : w.damage;
-          const prev = hitSummary.get(enemy) || { dmg: 0, hs: false, point: endPoint };
+          const prev = hitSummary.get(enemy) || { dmg: 0, hs: false, wallbang: false, point: endPoint };
           prev.dmg += dmg;
           if (isHeadshot) prev.hs = true;
           prev.point = endPoint;
@@ -1384,11 +1408,12 @@
           this._spawnParticles(mapHits[0].point, impactCol, w.paintSplat ? 10 : pellets > 1 ? 2 : 5);
         }
 
-        this._spawnTracer(muzzleWorld, endPoint, tracerCol);
+        this._spawnTracer(muzzleWorld, endPoint, tracerCol, w.beamRadius || 0.02);
       }
 
       for (const [enemy, info] of hitSummary.entries()) {
-        this._onPlayerHitEnemy(enemy, info.dmg, info.hs, info.point, w.name);
+        const label = info.wallbang ? `${w.name} WALLBANG` : w.name;
+        this._onPlayerHitEnemy(enemy, info.dmg, info.hs, info.point, label);
       }
 
       if (slot.ammo === 0 && slot.reserve > 0) {
@@ -1691,16 +1716,11 @@
       }
     }
 
-    _onBotShoot(shooter, origin, dir, damage) {
+    _onBotShoot(shooter, origin, dir, damage, weaponDef = WEAPONS.ar) {
       if (this.roundState !== 'playing') return;
-      this.sound.playShoot('ar');
+      const w = weaponDef || WEAPONS.ar;
+      this.sound.playShoot(w.id);
 
-      this.raycaster.set(origin, dir);
-      this.raycaster.far = 140;
-      const mapHits = this.raycaster.intersectObjects(this.arena.meshes, false);
-      const mapDist = mapHits.length > 0 ? mapHits[0].distance : 140;
-
-      // Determine candidate targets (opposing team)
       const candidates = [];
       if (shooter.team === 'red') {
         if (this.player.alive) {
@@ -1718,45 +1738,80 @@
         }
       }
 
-      let bestHit = null;
-      let bestDist = mapDist;
-      let endPoint = origin.clone().addScaledVector(dir, mapDist);
-
-      for (const c of candidates) {
-        const toTarget = new THREE.Vector3().subVectors(c.center, origin);
-        const proj = toTarget.dot(dir);
-        if (proj > 0 && proj < bestDist) {
-          const closest = origin.clone().addScaledVector(dir, proj);
-          const horizDist = Math.hypot(closest.x - c.center.x, closest.z - c.center.z);
-          const vertDist = Math.abs(closest.y - c.center.y);
-          if (horizDist < 0.56 && vertDist < 0.98) {
-            bestDist = proj;
-            bestHit = c;
-            endPoint = closest;
+      // Close-range melee swing for bots using Katana / Scythe / Daggers
+      if (w.slotType === 'melee') {
+        for (const c of candidates) {
+          if (origin.distanceTo(c.center) <= (w.range || 4.2)) {
+            if (c.isPlayer) {
+              this._damagePlayer(damage, `${shooter.name} [${w.name}]`);
+            } else {
+              const res = c.bot.takeDamage(damage, false);
+              this._spawnParticles(c.center, c.bot.team === 'blue' ? 0x2de2ff : 0xff3e5e, 7);
+              if (res.killed) this._onBotEliminatedByBot(shooter, c.bot, w.name);
+            }
+            break;
           }
         }
+        return;
       }
 
+      const pellets = Math.min(5, w.pellets || 1);
       const rSkin = RIVAL_SKINS[this.loadoutChoice.rivalSkin] || RIVAL_SKINS.classic;
-      const tracerColor = shooter.team === 'blue' ? 0x2de2ff : rSkin.accentColor;
-      this._spawnTracer(origin, endPoint, tracerColor);
+      const tracerColor = w.pierceWalls ? 0x00f5ff : shooter.team === 'blue' ? 0x2de2ff : rSkin.accentColor;
 
-      if (!bestHit) return;
+      for (let p = 0; p < pellets; p++) {
+        const shotDir = dir.clone();
+        if (pellets > 1) {
+          shotDir.x += (Math.random() - 0.5) * 0.14;
+          shotDir.y += (Math.random() - 0.5) * 0.11;
+          shotDir.z += (Math.random() - 0.5) * 0.14;
+          shotDir.normalize();
+        }
 
-      if (bestHit.isPlayer) {
-        this._damagePlayer(damage, shooter.name || 'RIVAL');
-      } else {
-        const targetBot = bestHit.bot;
-        const res = targetBot.takeDamage(damage, false);
-        this._spawnParticles(endPoint, targetBot.team === 'blue' ? 0x2de2ff : 0xff3e5e, 5);
-        if (res.killed) {
-          this._onBotEliminatedByBot(shooter, targetBot);
+        this.raycaster.set(origin, shotDir);
+        this.raycaster.far = Math.min(160, w.range || 140);
+        const mapHits = this.raycaster.intersectObjects(this.arena.meshes, false);
+        const mapDist = mapHits.length > 0 ? mapHits[0].distance : this.raycaster.far;
+
+        let bestHit = null;
+        let bestDist = w.pierceWalls ? this.raycaster.far : mapDist;
+        let endPoint = origin.clone().addScaledVector(shotDir, bestDist);
+
+        for (const c of candidates) {
+          const toTarget = new THREE.Vector3().subVectors(c.center, origin);
+          const proj = toTarget.dot(shotDir);
+          if (proj > 0 && proj < bestDist) {
+            const closest = origin.clone().addScaledVector(shotDir, proj);
+            const horizDist = Math.hypot(closest.x - c.center.x, closest.z - c.center.z);
+            const vertDist = Math.abs(closest.y - c.center.y);
+            if (horizDist < 0.56 && vertDist < 0.98) {
+              bestDist = proj;
+              bestHit = c;
+              endPoint = closest;
+            }
+          }
+        }
+
+        this._spawnTracer(origin, endPoint, tracerColor, w.beamRadius || 0.02);
+
+        if (bestHit) {
+          const perPelletDmg = pellets > 1 ? Math.max(4, Math.round(damage * 0.65)) : damage;
+          if (bestHit.isPlayer) {
+            this._damagePlayer(perPelletDmg, `${shooter.name} [${w.name}]`);
+          } else {
+            const targetBot = bestHit.bot;
+            const res = targetBot.takeDamage(perPelletDmg, false);
+            this._spawnParticles(endPoint, targetBot.team === 'blue' ? 0x2de2ff : 0xff3e5e, 5);
+            if (res.killed) {
+              this._onBotEliminatedByBot(shooter, targetBot, w.name);
+            }
+          }
         }
       }
     }
 
-    _onBotEliminatedByBot(shooter, victim) {
-      this._pushKillFeed(`${shooter.name} ELIMINATED ${victim.name}`);
+    _onBotEliminatedByBot(shooter, victim, weaponName = 'RIFLE') {
+      this._pushKillFeed(`${shooter.name} [${weaponName}] ${victim.name}`);
       if (this.loadoutChoice.mode === 'tdm') {
         if (victim.team === 'red') this.playerScore += 1;
         else this.botScore += 1;
@@ -1890,22 +1945,22 @@
       setTimeout(() => el.remove(), 650);
     }
 
-    _spawnTracer(start, end, colorHex) {
-      // Volumetric 3D glowing laser/tracer beam instead of thin 1px line!
+    _spawnTracer(start, end, colorHex, radius = 0.02) {
       const delta = new THREE.Vector3().subVectors(end, start);
       const len = delta.length();
       if (len < 0.05) return;
-      const geo = new THREE.CylinderGeometry(0.02, 0.02, len, 5, 1, true);
+      const geo = new THREE.CylinderGeometry(radius, radius, len, 5, 1, true);
       const mat = new THREE.MeshBasicMaterial({
         color: colorHex,
         transparent: true,
-        opacity: 0.9,
+        opacity: 0.92,
       });
       const beam = new THREE.Mesh(geo, mat);
       beam.position.copy(start).addScaledVector(delta, 0.5);
       beam.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), delta.normalize());
       this.scene.add(beam);
-      this.tracers.push({ line: beam, life: 0.095, maxLife: 0.095 });
+      const life = radius > 0.03 ? 0.24 : 0.095;
+      this.tracers.push({ line: beam, life, maxLife: life });
     }
 
     _spawnShockwave(pos, colorHex, maxRadius = 7.5, duration = 0.35) {
@@ -2718,7 +2773,7 @@
             dt,
             blueTargets,
             this.roundState === 'playing',
-            (shooter, origin, dir, dmg) => this._onBotShoot(shooter, origin, dir, dmg),
+            (shooter, origin, dir, dmg, wDef) => this._onBotShoot(shooter, origin, dir, dmg, wDef),
             grav,
             this.smokeClouds,
             (fallen) => {
@@ -2743,7 +2798,7 @@
             dt,
             redTargets,
             this.roundState === 'playing',
-            (shooter, origin, dir, dmg) => this._onBotShoot(shooter, origin, dir, dmg),
+            (shooter, origin, dir, dmg, wDef) => this._onBotShoot(shooter, origin, dir, dmg, wDef),
             grav,
             this.smokeClouds,
             (fallen) => {

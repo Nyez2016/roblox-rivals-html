@@ -84,6 +84,12 @@
           this._tone('sawtooth', 190, 42, 0.24, 0.32);
           this._tone('triangle', 760, 120, 0.08, 0.16);
           break;
+        case 'railgun':
+          // Futuristic electromagnetic plasma railgun blast!
+          this._tone('sawtooth', 1400, 140, 0.32, 0.26);
+          this._tone('sine', 220, 48, 0.36, 0.34);
+          this._noise(0.24, 2400, 0.32, 'bandpass');
+          break;
         case 'shotgun':
         case 'shorty':
           this._noise(0.24, 720, 0.46, 'lowpass');
