@@ -50,6 +50,8 @@
 
       this.difficulty = DIFFICULTIES.pro;
       this.skinId = 'classic';
+      this.passive = false;
+      this.isDummy = false;
       this.waypoints = arena.getWaypoints();
       this.currentTarget = this.waypoints[0]?.clone() || new THREE.Vector3();
 
@@ -197,9 +199,14 @@
         this.leftArm,
         this.rightArm,
       ];
+      for (const m of this.hitMeshes) m.userData.enemyRef = this;
 
       this._buildHealthBar();
       this.scene.add(this.group);
+    }
+
+    dispose() {
+      this.scene.remove(this.group);
     }
 
     applySkin(skinId) {
@@ -506,7 +513,7 @@
       while (deltaYaw < -Math.PI) deltaYaw += Math.PI * 2;
       this.yaw += deltaYaw * Math.min(1, dt * 11);
 
-      if (canSee) {
+      if (canSee && !this.passive) {
         this.sightTimer += dt;
         this.fireTimer -= dt;
         if (this.sightTimer >= this.difficulty.reaction && this.fireTimer <= 0) {
@@ -542,6 +549,225 @@
     }
   }
 
+  // =========================================================
+  // SHOOTING RANGE TEST DUMMY (Static / Strafing / Auto-Respawn)
+  // =========================================================
+  class TargetDummy {
+    constructor(scene, config) {
+      this.scene = scene;
+      this.isDummy = true;
+      this.passive = true;
+      this.maxHp = config.hp || 100;
+      this.hp = this.maxHp;
+      this.alive = true;
+
+      this.homePos = config.pos.clone();
+      this.pos = config.pos.clone();
+      this.moveAxis = config.moveAxis || null; // 'x' | 'z' | null
+      this.moveRange = config.moveRange || 0;
+      this.moveSpeed = config.moveSpeed || 0;
+      this.phase = config.phase || 0;
+      this.label = config.label || 'DUMMY';
+
+      this.respawnTimer = 0;
+      this.hurtFlash = 0;
+      this.blindTimer = 0;
+      this.deathFall = 0;
+      this.yaw = 0;
+      this.hitMeshes = [];
+
+      this._buildDummy();
+    }
+
+    _buildDummy() {
+      this.group = new THREE.Group();
+
+      // Classic crash-test / Roblox training dummy aesthetic (yellow + slate + red bullseye)
+      this.matYellow = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.55 });
+      this.matDark = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.65 });
+      this.matTarget = new THREE.MeshStandardMaterial({
+        color: 0xff3e5e,
+        emissive: 0xff3e5e,
+        emissiveIntensity: 0.35,
+      });
+
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.52, 0.14, 12), this.matDark);
+      base.position.set(0, 0.07, 0);
+
+      const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.66, 0.32), this.matDark);
+      leftLeg.position.set(-0.18, 0.44, 0);
+      leftLeg.castShadow = true;
+      leftLeg.userData.hitbox = 'body';
+
+      const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.66, 0.32), this.matDark);
+      rightLeg.position.set(0.18, 0.44, 0);
+      rightLeg.castShadow = true;
+      rightLeg.userData.hitbox = 'body';
+
+      this.torso = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.78, 0.4), this.matYellow);
+      this.torso.position.set(0, 1.16, 0);
+      this.torso.castShadow = true;
+      this.torso.userData.hitbox = 'body';
+
+      // Target bullseye emblem on chest
+      const ringOuter = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.46, 0.43), this.matTarget);
+      ringOuter.position.set(0, 1.18, 0);
+      ringOuter.userData.hitbox = 'body';
+
+      const ringInner = new THREE.Mesh(
+        new THREE.BoxGeometry(0.22, 0.22, 0.45),
+        new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 })
+      );
+      ringInner.position.set(0, 1.18, 0);
+      ringInner.userData.hitbox = 'body';
+
+      const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.7, 0.28), this.matYellow);
+      leftArm.position.set(-0.54, 1.14, 0);
+      leftArm.castShadow = true;
+      leftArm.userData.hitbox = 'body';
+
+      const rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.7, 0.28), this.matYellow);
+      rightArm.position.set(0.54, 1.14, 0);
+      rightArm.castShadow = true;
+      rightArm.userData.hitbox = 'body';
+
+      this.headMesh = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.54, 0.54), this.matYellow);
+      this.headMesh.position.set(0, 1.82, 0);
+      this.headMesh.castShadow = true;
+      this.headMesh.userData.hitbox = 'head';
+
+      // Headshot bullseye dot on forehead
+      const faceDot = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, 0.57), this.matTarget);
+      faceDot.position.set(0, 1.84, 0);
+      faceDot.userData.hitbox = 'head';
+
+      this.group.add(base, leftLeg, rightLeg, this.torso, ringOuter, ringInner, leftArm, rightArm, this.headMesh, faceDot);
+
+      this.hitMeshes = [this.headMesh, faceDot, this.torso, ringOuter, ringInner, leftLeg, rightLeg, leftArm, rightArm];
+      for (const m of this.hitMeshes) m.userData.enemyRef = this;
+
+      // Overhead HP Bar
+      this.hpCanvas = document.createElement('canvas');
+      this.hpCanvas.width = 128;
+      this.hpCanvas.height = 24;
+      this.hpCtx = this.hpCanvas.getContext('2d');
+      this.hpTex = new THREE.CanvasTexture(this.hpCanvas);
+      this.hpSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.hpTex, depthTest: false }));
+      this.hpSprite.scale.set(1.3, 0.25, 1);
+      this.hpSprite.position.set(0, 2.45, 0);
+      this.group.add(this.hpSprite);
+      this._redrawHealthBar();
+
+      this.group.position.copy(this.pos);
+      this.scene.add(this.group);
+    }
+
+    _redrawHealthBar() {
+      const ctx = this.hpCtx;
+      const w = this.hpCanvas.width;
+      const h = this.hpCanvas.height;
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = 'rgba(10, 14, 24, 0.8)';
+      ctx.fillRect(0, 0, w, h);
+      const pct = Math.max(0, this.hp / this.maxHp);
+      ctx.fillStyle = pct > 0.35 ? '#facc15' : '#ff3e5e';
+      ctx.fillRect(4, 4, Math.round((w - 8) * pct), h - 8);
+      ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(1, 1, w - 2, h - 2);
+      this.hpTex.needsUpdate = true;
+    }
+
+    getHitMeshes() {
+      return this.alive ? this.hitMeshes : [];
+    }
+
+    getCenterWorldPos() {
+      return new THREE.Vector3(this.pos.x, this.pos.y + 1.18, this.pos.z);
+    }
+
+    getHeadWorldPos() {
+      return new THREE.Vector3(this.pos.x, this.pos.y + 1.82, this.pos.z);
+    }
+
+    getForwardVector() {
+      return new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)).normalize();
+    }
+
+    setVisible(vis) {
+      this.group.visible = vis;
+    }
+
+    blind(sec = 2.0) {
+      this.blindTimer = Math.max(this.blindTimer, sec);
+    }
+
+    takeDamage(amount, isHeadshot = false) {
+      if (!this.alive) return { killed: false, hp: 0 };
+      this.hp = Math.max(0, this.hp - Math.round(amount));
+      this.hurtFlash = 0.14;
+      this._redrawHealthBar();
+      if (this.hp <= 0) {
+        this.alive = false;
+        this.hpSprite.visible = false;
+        this.respawnTimer = 1.65;
+        return { killed: true, hp: 0, isHeadshot };
+      }
+      return { killed: false, hp: this.hp, isHeadshot };
+    }
+
+    respawn() {
+      this.hp = this.maxHp;
+      this.alive = true;
+      this.deathFall = 0;
+      this.hurtFlash = 0;
+      this.group.visible = true;
+      this.group.rotation.x = 0;
+      this.hpSprite.visible = true;
+      this._redrawHealthBar();
+    }
+
+    update(dt, playerPos) {
+      if (this.hurtFlash > 0) {
+        this.hurtFlash = Math.max(0, this.hurtFlash - dt);
+        this.matYellow.emissive.setHex(this.hurtFlash > 0 ? 0xffffff : 0x000000);
+        this.matYellow.emissiveIntensity = this.hurtFlash > 0 ? 0.5 : 0;
+      }
+
+      if (!this.alive) {
+        this.deathFall = Math.min(Math.PI / 2, this.deathFall + dt * 6.5);
+        this.group.rotation.x = -this.deathFall;
+        this.respawnTimer -= dt;
+        if (this.respawnTimer <= 0) {
+          this.respawn();
+        }
+        return;
+      }
+
+      if (this.blindTimer > 0) this.blindTimer = Math.max(0, this.blindTimer - dt);
+
+      if (this.moveAxis && this.moveRange > 0 && this.blindTimer <= 0) {
+        this.phase += dt * this.moveSpeed;
+        const offset = Math.sin(this.phase) * this.moveRange;
+        this.pos.copy(this.homePos);
+        if (this.moveAxis === 'x') this.pos.x += offset;
+        if (this.moveAxis === 'z') this.pos.z += offset;
+      }
+
+      // Face player smoothly
+      const dx = playerPos.x - this.pos.x;
+      const dz = playerPos.z - this.pos.z;
+      this.yaw = Math.atan2(dx, dz);
+      this.group.position.copy(this.pos);
+      this.group.rotation.set(0, this.yaw, 0);
+    }
+
+    dispose() {
+      this.scene.remove(this.group);
+    }
+  }
+
   Rivals.DIFFICULTIES = DIFFICULTIES;
   Rivals.RivalBot = RivalBot;
+  Rivals.TargetDummy = TargetDummy;
 })(window);

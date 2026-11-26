@@ -137,7 +137,7 @@
       <div class="brand-header">
         <div class="brand-tag">HTML5 ARENA · SKY, ZERO-G &amp; ASSASSIN EDITION</div>
         <h1 class="brand-title">ROBLOX <span>RIVALS</span></h1>
-        <p class="brand-sub">8 Maps · 22 Weapons · 17 Skins · Auto Shoot · Anti-Gravity · Kill Effects</p>
+        <p class="brand-sub">9 Maps · 22 Weapons · 17 Skins · Shooting Range · Practice Rounds · Auto Shoot</p>
       </div>
 
       <!-- Menu Navigation Tabs -->
@@ -265,13 +265,20 @@
       <!-- TAB 2: MAPS, GRAVITY & MODES -->
       <div class="tab-panel hidden" id="tab-maps">
         <div class="loadout-section">
-          <label class="section-label">SELECT ARENA MAP (8 MAPS · LIVE 3D PREVIEW)</label>
-          <div class="choice-grid cols-4" data-category="map">
+          <label class="section-label">SELECT ARENA MAP (9 MAPS · LIVE 3D PREVIEW)</label>
+          <div class="choice-grid cols-3" data-category="map">
             <button class="choice-btn map-card active" data-map="arena">
               <span class="map-swatch" style="background: linear-gradient(135deg, #38bdf8, #1e3a8a);"></span>
               <div>
                 <strong>Arena (Classic)</strong>
                 <span>Bridge &amp; perches</span>
+              </div>
+            </button>
+            <button class="choice-btn map-card" data-map="shootingrange">
+              <span class="map-swatch" style="background: linear-gradient(135deg, #facc15, #ff3e5e, #334155);"></span>
+              <div>
+                <strong>Shooting Range</strong>
+                <span>Target bays &amp; dummies</span>
               </div>
             </button>
             <button class="choice-btn map-card" data-map="skyislands">
@@ -350,15 +357,23 @@
 
         <div class="loadout-split">
           <div class="loadout-section">
-            <label class="section-label">GAME MODE</label>
-            <div class="choice-grid cols-2" data-category="mode">
+            <label class="section-label">GAME MODE (6 MODES)</label>
+            <div class="choice-grid cols-3" data-category="mode">
               <button class="choice-btn center-text active" data-mode="classic">
                 <strong>Classic Duel</strong>
-                <span>Custom Loadout</span>
+                <span>1v1 Custom Loadout</span>
+              </button>
+              <button class="choice-btn center-text" data-mode="range">
+                <strong>Shooting Range</strong>
+                <span>Test Dummies</span>
+              </button>
+              <button class="choice-btn center-text" data-mode="practice">
+                <strong>Practice Rounds</strong>
+                <span>Moving NPCs · No Shoot</span>
               </button>
               <button class="choice-btn center-text" data-mode="assassin">
                 <strong>Ancient Assassin</strong>
-                <span>Crossbow / Kunai / Daggers</span>
+                <span>Crossbow / Kunai</span>
               </button>
               <button class="choice-btn center-text" data-mode="sniper">
                 <strong>Sniper Only</strong>
@@ -366,7 +381,7 @@
               </button>
               <button class="choice-btn center-text" data-mode="randomizer">
                 <strong>Randomizer</strong>
-                <span>Random Each Round</span>
+                <span>Random Loadout</span>
               </button>
             </div>
           </div>
@@ -523,6 +538,7 @@
       <!-- Action Buttons -->
       <div class="menu-actions">
         <button id="play-btn" class="primary-btn">ENTER ARENA</button>
+        <button id="range-quick-btn" class="secondary-btn">SHOOTING RANGE</button>
         <button id="restart-btn" class="secondary-btn hidden">NEW MATCH</button>
       </div>
 

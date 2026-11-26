@@ -10,6 +10,13 @@
       gravityScale: 1.0,
       hasFloor: true,
     },
+    shootingrange: {
+      id: 'shootingrange',
+      name: 'SHOOTING RANGE',
+      subtitle: 'Tactical firing bays, distance lanes & test dummy targets',
+      gravityScale: 1.0,
+      hasFloor: true,
+    },
     skyislands: {
       id: 'skyislands',
       name: 'SKY ISLANDS',
@@ -152,7 +159,9 @@
         bot: new THREE.Vector3(0, 0, -29),
       };
 
-      if (this.mapId === 'skyislands') {
+      if (this.mapId === 'shootingrange') {
+        this._buildShootingRangeMap();
+      } else if (this.mapId === 'skyislands') {
         this._buildSkyIslandsMap();
       } else if (this.mapId === 'cloudspire') {
         this._buildCloudSpireMap();
@@ -432,6 +441,88 @@
       this._addBox(0, Math.min(6.5, wallH - 1.5), -34.9, 52, 0.35, 0.2, { color: accentB, emissive: accentB, solid: false });
       this._addBox(-26.9, Math.min(6.5, wallH - 1.5), 0, 0.2, 0.35, 68, { color: accentSide, emissive: accentSide, solid: false });
       this._addBox(26.9, Math.min(6.5, wallH - 1.5), 0, 0.2, 0.35, 68, { color: accentSide, emissive: accentSide, solid: false });
+    }
+
+    // =========================================================
+    // MAP 0: SHOOTING RANGE (Tactical Target Bays & Dummy Lanes)
+    // =========================================================
+    _buildShootingRangeMap() {
+      this._setLighting({
+        skyHex: 0x7ec8ff,
+        fogHex: 0xa5dbff,
+        hemiSky: 0xebf8ff,
+        hemiGround: 0x475569,
+        hemiInt: 1.02,
+        sunHex: 0xfff8e6,
+        sunInt: 1.35,
+        sunPos: [26, 48, 28],
+        clouds: true,
+      });
+
+      this.spawns = {
+        player: new THREE.Vector3(0, 0, 26),
+        bot: new THREE.Vector3(0, 0, -16),
+      };
+
+      // Clean concrete range floor
+      this._addBox(0, -0.5, 0, 56, 1, 72, {
+        color: 0xd1dae6,
+        studColor: 0xdfe7f2,
+        solid: false,
+        shootable: true,
+        castShadow: false,
+      });
+
+      // Glowing range distance lines (10m, 25m, 40m from firing bay)
+      this._addBox(0, 0.02, 16, 52, 0.04, 0.45, { color: 0x2de2ff, emissive: 0x2de2ff, solid: false, castShadow: false });
+      this._addBox(0, 0.02, 2, 52, 0.04, 0.35, { color: 0xfbbf24, emissive: 0xfbbf24, solid: false, castShadow: false });
+      this._addBox(0, 0.02, -14, 52, 0.04, 0.35, { color: 0xff3e5e, emissive: 0xff3e5e, solid: false, castShadow: false });
+      this._addBox(0, 0.02, -26, 52, 0.04, 0.4, { color: 0xa855f7, emissive: 0xa855f7, solid: false, castShadow: false });
+
+      this._addPerimeter(11, 0x243044, 0x303f59, 0x2de2ff, 0xfbbf24, 0x38bdf8);
+
+      // Firing line booths (waist-high weapon benches with open center walkout!)
+      this._addBox(-11, 0.7, 21, 9, 1.4, 1.2, { color: 0x334155, studColor: 0x475569 });
+      this._addBox(11, 0.7, 21, 9, 1.4, 1.2, { color: 0x334155, studColor: 0x475569 });
+      this._addBox(-15.5, 1.7, 22.8, 0.7, 3.4, 4.4, { color: 0x1e293b });
+      this._addBox(15.5, 1.7, 22.8, 0.7, 3.4, 4.4, { color: 0x1e293b });
+
+      // Side Elevated Sniper Balcony (Left) with ramp & jump pad
+      const balcY = 3.8;
+      this._addBox(-21, balcY / 2, 10, 10, balcY, 14, { color: 0x3b4961, studColor: 0x4c5d7a });
+      this._addRamp(-21, 21.5, 5.2, 9.0, 0, balcY, 'z', -1, { baseHex: '#475569', studHex: '#64748b', trimColor: 0x2de2ff });
+      this._addJumpPad(-14, 0, 18, 1.8, 12.6, 0x2de2ff);
+
+      // Far Elevated Target Gallery Platform (North back wall at Y = 3.4)
+      const backY = 3.4;
+      this._addBox(0, backY / 2, -29, 34, backY, 8, { color: 0x334155, studColor: 0x475569 });
+      this._addBox(0, backY + 0.05, -25.1, 34, 0.16, 0.25, { color: 0xfbbf24, emissive: 0xfbbf24, solid: false });
+      this._addRamp(-21, -29, 5.0, 8.0, 0, backY, 'x', 1, { baseHex: '#475569', studHex: '#64748b', trimColor: 0xfbbf24 });
+      this._addRamp(21, -29, 5.0, 8.0, 0, backY, 'x', -1, { baseHex: '#475569', studHex: '#64748b', trimColor: 0xfbbf24 });
+
+      // Tactical CQC cover walls on right side for peek / shotgun / melee drills
+      this._addBox(14, 1.6, 6, 3.6, 3.2, 1.4, { color: 0xd98a3c, studColor: 0xe69e53 });
+      this._addBox(19, 1.6, -4, 3.6, 3.2, 1.4, { color: 0xd98a3c, studColor: 0xe69e53 });
+      this._addBox(-7, 1.1, -6, 3.4, 2.2, 1.4, { color: 0x475569, studColor: 0x64748b });
+      this._addBox(6, 1.1, -14, 3.4, 2.2, 1.4, { color: 0x475569, studColor: 0x64748b });
+
+      // Decorative bullseye backboards on North wall
+      for (const tx of [-12, 0, 12]) {
+        this._addBox(tx, 7.2, -34.7, 4.4, 4.4, 0.25, { color: 0xffffff, solid: false });
+        this._addBox(tx, 7.2, -34.55, 2.8, 2.8, 0.2, { color: 0xff3e5e, emissive: 0xff3e5e, emissiveIntensity: 0.45, solid: false });
+        this._addBox(tx, 7.2, -34.4, 1.2, 1.2, 0.2, { color: 0xfbbf24, emissive: 0xfbbf24, emissiveIntensity: 0.65, solid: false });
+      }
+
+      this.waypoints = [
+        new THREE.Vector3(-12, 0, 6),
+        new THREE.Vector3(0, 0, 2),
+        new THREE.Vector3(12, 0, -2),
+        new THREE.Vector3(-10, 0, -14),
+        new THREE.Vector3(10, 0, -14),
+        new THREE.Vector3(0, backY, -28),
+        new THREE.Vector3(-12, backY, -28),
+        new THREE.Vector3(12, backY, -28),
+      ];
     }
 
     // =========================================================

@@ -10,6 +10,7 @@
     KILL_EFFECTS,
     updateAnimatedWeaponSkin,
     RivalBot,
+    TargetDummy,
     DIFFICULTIES,
     SoundEngine,
   } = global.Rivals;
@@ -61,6 +62,8 @@
       this.arena = new Arena(this.scene, this.loadoutChoice.map);
       this.bot = new RivalBot(this.scene, this.arena);
       this.bot.applySkin(this.loadoutChoice.rivalSkin);
+      this.enemies = [this.bot];
+      this.extraEnemies = [];
 
       this.viewmodelRoot = new THREE.Group();
       this.camera.add(this.viewmodelRoot);
@@ -148,7 +151,9 @@
         if (saved.utility && WEAPONS[saved.utility]) this.loadoutChoice.utility = saved.utility;
         if (saved.map && MAPS[saved.map]) this.loadoutChoice.map = saved.map;
         if (saved.gravity && GRAVITY_MODES[saved.gravity]) this.loadoutChoice.gravity = saved.gravity;
-        if (['classic', 'assassin', 'sniper', 'randomizer'].includes(saved.mode)) this.loadoutChoice.mode = saved.mode;
+        if (['classic', 'assassin', 'sniper', 'randomizer', 'practice', 'range'].includes(saved.mode)) {
+          this.loadoutChoice.mode = saved.mode;
+        }
         if (saved.difficulty && DIFFICULTIES[saved.difficulty]) this.loadoutChoice.difficulty = saved.difficulty;
         if (saved.weaponSkin && WEAPON_SKINS[saved.weaponSkin]) this.loadoutChoice.weaponSkin = saved.weaponSkin;
         if (saved.rivalSkin && RIVAL_SKINS[saved.rivalSkin]) this.loadoutChoice.rivalSkin = saved.rivalSkin;
@@ -189,6 +194,7 @@
         menu: document.getElementById('menu-overlay'),
         matchEnd: document.getElementById('match-end-overlay'),
         playBtn: document.getElementById('play-btn'),
+        rangeQuickBtn: document.getElementById('range-quick-btn'),
         restartBtn: document.getElementById('restart-btn'),
         rematchBtn: document.getElementById('rematch-btn'),
         loadoutBtn: document.getElementById('loadout-btn'),
@@ -305,7 +311,17 @@
             if (cat === 'melee') this.loadoutChoice.melee = btn.dataset.weapon;
             if (cat === 'utility') this.loadoutChoice.utility = btn.dataset.weapon;
             if (cat === 'gravity') this.loadoutChoice.gravity = btn.dataset.grav;
-            if (cat === 'mode') this.loadoutChoice.mode = btn.dataset.mode;
+            if (cat === 'mode') {
+              this.loadoutChoice.mode = btn.dataset.mode;
+              if (btn.dataset.mode === 'range') {
+                this.loadoutChoice.map = 'shootingrange';
+                this._syncMenuFromState();
+                if (!this.matchActive) {
+                  this.arena.loadMap('shootingrange');
+                  this.bot.refreshWaypoints();
+                }
+              }
+            }
             if (cat === 'difficulty') this.loadoutChoice.difficulty = btn.dataset.diff;
             if (cat === 'killEffect') this.loadoutChoice.killEffect = btn.dataset.kfx;
 
@@ -327,6 +343,9 @@
             if (cat === 'rivalSkin') {
               this.loadoutChoice.rivalSkin = btn.dataset.rskin;
               this.bot.applySkin(this.loadoutChoice.rivalSkin);
+              for (const ex of this.extraEnemies) {
+                if (!ex.isDummy && ex.applySkin) ex.applySkin(this.loadoutChoice.rivalSkin);
+              }
             }
 
             this._savePreferences();
@@ -363,10 +382,24 @@
           this.isPaused = false;
           this.ui.menu.classList.add('hidden');
           this.ui.hud.classList.remove('hidden');
+          if (this.loadoutChoice.mode === 'range') {
+            this._buildLoadoutSlots();
+          }
           this._updateGravityBadge();
           this._requestPointerLock();
         }
       });
+
+      if (this.ui.rangeQuickBtn) {
+        this.ui.rangeQuickBtn.addEventListener('click', () => {
+          this.sound.unlock();
+          this.loadoutChoice.mode = 'range';
+          this.loadoutChoice.map = 'shootingrange';
+          this._syncMenuFromState();
+          this._savePreferences();
+          this.startNewMatch();
+        });
+      }
 
       this.ui.restartBtn.addEventListener('click', () => {
         this.sound.unlock();
@@ -513,7 +546,7 @@
     }
 
     _updateAutoShoot() {
-      if (!this.settings.autoShoot || this.roundState !== 'playing' || !this.player.alive || !this.bot.alive) {
+      if (!this.settings.autoShoot || this.roundState !== 'playing' || !this.player.alive) {
         this.ui.crosshair.classList.remove('locked');
         return;
       }
@@ -529,7 +562,7 @@
       this.raycaster.set(this.camera.position, dir);
       this.raycaster.far = w.range;
 
-      const botHits = this.raycaster.intersectObjects(this.bot.getHitMeshes(), false);
+      const botHits = this.raycaster.intersectObjects(this._getAllEnemyHitMeshes(), false);
       if (botHits.length === 0) {
         this.ui.crosshair.classList.remove('locked');
         return;
@@ -561,12 +594,98 @@
       this.ui.menu.classList.add('hidden');
       this.ui.matchEnd.classList.add('hidden');
       this.ui.hud.classList.remove('hidden');
-      this.ui.botName.textContent = DIFFICULTIES[this.loadoutChoice.difficulty].name;
+      this.ui.botName.textContent =
+        this.loadoutChoice.mode === 'range'
+          ? 'DUMMIES'
+          : this.loadoutChoice.mode === 'practice'
+          ? 'PRACTICE NPCs'
+          : DIFFICULTIES[this.loadoutChoice.difficulty].name;
       this.ui.mapBadge.textContent = MAPS[this.arena.mapId].name;
       this.ui.killFeed.innerHTML = '';
 
       this._startRound();
       this._requestPointerLock();
+    }
+
+    _clearExtraEnemies() {
+      for (const ex of this.extraEnemies) {
+        if (ex.dispose) ex.dispose();
+      }
+      this.extraEnemies = [];
+    }
+
+    _getAllEnemyHitMeshes() {
+      const meshes = [];
+      for (const enemy of this.enemies) {
+        const list = enemy.getHitMeshes();
+        for (let i = 0; i < list.length; i++) meshes.push(list[i]);
+      }
+      return meshes;
+    }
+
+    _getAliveEnemyCount() {
+      let n = 0;
+      for (const e of this.enemies) if (e.alive) n++;
+      return n;
+    }
+
+    _setupEnemiesForRound(spawns) {
+      this._clearExtraEnemies();
+
+      if (this.loadoutChoice.mode === 'range') {
+        this.bot.alive = false;
+        this.bot.setVisible(false);
+
+        const configs =
+          this.arena.mapId === 'shootingrange'
+            ? [
+                { pos: new THREE.Vector3(-8, 0, 10), label: 'CLOSE DUMMY' },
+                { pos: new THREE.Vector3(8, 0, 8), label: 'CQC DUMMY' },
+                { pos: new THREE.Vector3(0, 0, -2), moveAxis: 'x', moveRange: 7.5, moveSpeed: 1.6, phase: 0, label: 'STRAFE DUMMY' },
+                { pos: new THREE.Vector3(-12, 0, -14), moveAxis: 'x', moveRange: 5.5, moveSpeed: 2.2, phase: 1.4, label: 'FAST DUMMY' },
+                { pos: new THREE.Vector3(12, 0, -16), label: 'MID-LONG DUMMY' },
+                { pos: new THREE.Vector3(0, 3.4, -28), moveAxis: 'x', moveRange: 10, moveSpeed: 1.4, phase: 2.6, label: 'SNIPER GALLERY' },
+              ]
+            : this.arena.getWaypoints().slice(0, 6).map((wp, idx) => ({
+                pos: wp.clone(),
+                moveAxis: idx % 2 === 1 ? 'x' : null,
+                moveRange: idx % 2 === 1 ? 4.5 : 0,
+                moveSpeed: 1.8,
+                phase: idx * 1.1,
+                label: `DUMMY #${idx + 1}`,
+              }));
+
+        this.extraEnemies = configs.map((cfg) => new TargetDummy(this.scene, cfg));
+        this.enemies = [...this.extraEnemies];
+      } else if (this.loadoutChoice.mode === 'practice') {
+        // 3 Moving Practice NPCs that roam, jump & dodge, but NEVER shoot!
+        const wps = this.arena.getWaypoints();
+        const s0 = spawns.bot.clone();
+        const s1 = (wps[1] || spawns.bot).clone();
+        const s2 = (wps[2] || spawns.bot).clone();
+        s1.x = Math.min(20, Math.max(-20, s1.x - 4));
+        s2.x = Math.min(20, Math.max(-20, s2.x + 4));
+
+        this.bot.passive = true;
+        this.bot.reset(s0, this.loadoutChoice.difficulty, this.loadoutChoice.rivalSkin);
+
+        const npc2 = new RivalBot(this.scene, this.arena);
+        npc2.passive = true;
+        npc2.reset(s1, this.loadoutChoice.difficulty, this.loadoutChoice.rivalSkin);
+
+        const npc3 = new RivalBot(this.scene, this.arena);
+        npc3.passive = true;
+        npc3.reset(s2, this.loadoutChoice.difficulty, this.loadoutChoice.rivalSkin);
+
+        this.extraEnemies = [npc2, npc3];
+        this.enemies = [this.bot, npc2, npc3];
+      } else {
+        this.bot.passive = false;
+        const botSpawn = spawns.bot.clone();
+        botSpawn.x += (Math.random() - 0.5) * 4;
+        this.bot.reset(botSpawn, this.loadoutChoice.difficulty, this.loadoutChoice.rivalSkin);
+        this.enemies = [this.bot];
+      }
     }
 
     _pickRandomBySlot(slotType) {
@@ -664,13 +783,22 @@
       this.player.lungeCooldown = 0;
       this.player.padCooldown = 0;
 
-      const botSpawn = spawns.bot.clone();
-      botSpawn.x += (Math.random() - 0.5) * 4;
-      this.bot.reset(botSpawn, this.loadoutChoice.difficulty, this.loadoutChoice.rivalSkin);
-
+      this._setupEnemiesForRound(spawns);
       this._buildLoadoutSlots();
       this._renderScorePips();
       this._updateHUD();
+
+      if (this.loadoutChoice.mode === 'range') {
+        this.roundState = 'playing';
+        this._showBanner('SHOOTING RANGE', 'TEST ALL WEAPONS & SKINS · ESC TO SWAP', false);
+        setTimeout(() => {
+          if (this.roundState === 'playing' && this.loadoutChoice.mode === 'range') {
+            this.ui.centerBanner.classList.add('hidden');
+          }
+        }, 1600);
+        return;
+      }
+
       const modeTag =
         this.loadoutChoice.mode === 'assassin'
           ? 'ANCIENT ASSASSIN'
@@ -678,6 +806,8 @@
           ? 'SNIPER ONLY'
           : this.loadoutChoice.mode === 'randomizer'
           ? 'RANDOMIZER'
+          : this.loadoutChoice.mode === 'practice'
+          ? 'PRACTICE ROUND (3 MOVING NPCs)'
           : MAPS[this.arena.mapId].name;
       this._showBanner(`ROUND ${this.roundNumber}`, `${modeTag} — FIGHT IN 3...`, false);
     }
@@ -816,7 +946,7 @@
 
       if (w.slotType === 'utility') {
         if (slot.ammo <= 0) return;
-        slot.ammo -= 1;
+        if (this.loadoutChoice.mode !== 'range') slot.ammo -= 1;
         this.fireCooldown = 1 / w.fireRate;
         this._throwUtility(w);
         this._updateHUD();
@@ -865,9 +995,8 @@
         muzzleWorld.copy(origin).addScaledVector(f, 0.5);
       }
 
-      let totalBotDmg = 0;
-      let anyHeadshot = false;
-      let lastBotHitPoint = null;
+      const hitSummary = new Map();
+      const enemyMeshes = this._getAllEnemyHitMeshes();
 
       for (let p = 0; p < pellets; p++) {
         const dir = new THREE.Vector3(0, 0, -1);
@@ -879,7 +1008,7 @@
         this.raycaster.far = w.range;
 
         const mapHits = this.raycaster.intersectObjects(this.arena.meshes, false);
-        const botHits = this.raycaster.intersectObjects(this.bot.getHitMeshes(), false);
+        const botHits = this.raycaster.intersectObjects(enemyMeshes, false);
 
         const mapDist = mapHits.length > 0 ? mapHits[0].distance : w.range;
         let endPoint = origin.clone().addScaledVector(dir, mapDist);
@@ -887,10 +1016,14 @@
         if (botHits.length > 0 && botHits[0].distance < mapDist) {
           const hit = botHits[0];
           endPoint = hit.point.clone();
+          const enemy = hit.object.userData.enemyRef || this.bot;
           const isHeadshot = hit.object.userData.hitbox === 'head';
-          totalBotDmg += isHeadshot ? w.headDamage : w.damage;
-          if (isHeadshot) anyHeadshot = true;
-          lastBotHitPoint = endPoint;
+          const dmg = isHeadshot ? w.headDamage : w.damage;
+          const prev = hitSummary.get(enemy) || { dmg: 0, hs: false, point: endPoint };
+          prev.dmg += dmg;
+          if (isHeadshot) prev.hs = true;
+          prev.point = endPoint;
+          hitSummary.set(enemy, prev);
         } else if (mapHits.length > 0) {
           const impactCol = w.paintSplat ? tracerCol : 0xdbe7ff;
           this._spawnParticles(mapHits[0].point, impactCol, w.paintSplat ? 10 : pellets > 1 ? 2 : 5);
@@ -899,8 +1032,8 @@
         this._spawnTracer(muzzleWorld, endPoint, tracerCol);
       }
 
-      if (totalBotDmg > 0 && lastBotHitPoint) {
-        this._onPlayerHitBot(totalBotDmg, anyHeadshot, lastBotHitPoint, w.name);
+      for (const [enemy, info] of hitSummary.entries()) {
+        this._onPlayerHitEnemy(enemy, info.dmg, info.hs, info.point, w.name);
       }
 
       if (slot.ammo === 0 && slot.reserve > 0) {
@@ -914,21 +1047,31 @@
       this.slashAnim = 1.0;
       this.sound.playShoot(w.id);
 
-      if (!this.bot.alive) return;
       const origin = this.camera.position.clone();
-      const botCenter = this.bot.getCenterWorldPos();
-      const toBot = new THREE.Vector3().subVectors(botCenter, origin);
-      const dist = toBot.length();
-
       const forward = new THREE.Vector3();
       this.camera.getWorldDirection(forward);
-      const dot = forward.dot(toBot.clone().normalize());
-
       const reach = isLunge ? w.range + 1.6 : w.range;
-      if (dist <= reach && dot > 0.42) {
-        // Check Ancient Assassin Backstab! (attacking along same horizontal direction bot is facing)
-        const attackFlat = new THREE.Vector3(toBot.x, 0, toBot.z).normalize();
-        const botFacing = this.bot.getForwardVector();
+
+      let bestEnemy = null;
+      let bestDist = Infinity;
+      let bestToBot = null;
+
+      for (const enemy of this.enemies) {
+        if (!enemy.alive) continue;
+        const botCenter = enemy.getCenterWorldPos();
+        const toBot = new THREE.Vector3().subVectors(botCenter, origin);
+        const dist = toBot.length();
+        const dot = forward.dot(toBot.clone().normalize());
+        if (dist <= reach && dot > 0.42 && dist < bestDist) {
+          bestDist = dist;
+          bestEnemy = enemy;
+          bestToBot = toBot;
+        }
+      }
+
+      if (bestEnemy && bestToBot) {
+        const attackFlat = new THREE.Vector3(bestToBot.x, 0, bestToBot.z).normalize();
+        const botFacing = bestEnemy.getForwardVector();
         const isBackstab = Boolean(w.backstabDamage && attackFlat.dot(botFacing) > 0.32);
 
         const dmg = isBackstab
@@ -937,7 +1080,7 @@
           ? w.lungeDamage || w.damage + 15
           : w.damage;
         const label = isBackstab ? `${w.name} BACKSTAB` : isLunge ? `${w.name} LUNGE` : w.name;
-        this._onPlayerHitBot(dmg, isBackstab || isLunge, botCenter, label);
+        this._onPlayerHitEnemy(bestEnemy, dmg, isBackstab || isLunge, bestEnemy.getCenterWorldPos(), label);
       }
     }
 
@@ -978,12 +1121,13 @@
       this._spawnParticles(pos, 0xffe45e, 14, 8);
 
       const blastRadius = 8.5;
-      if (this.bot.alive) {
-        const botPos = this.bot.getCenterWorldPos();
+      for (const enemy of this.enemies) {
+        if (!enemy.alive) continue;
+        const botPos = enemy.getCenterWorldPos();
         const d = pos.distanceTo(botPos);
         if (d < blastRadius) {
           const dmg = Math.round(92 * (1 - d / blastRadius));
-          if (dmg > 4) this._onPlayerHitBot(dmg, false, botPos, 'FRAG GRENADE');
+          if (dmg > 4) this._onPlayerHitEnemy(enemy, dmg, false, botPos, 'FRAG GRENADE');
         }
       }
 
@@ -1068,12 +1212,13 @@
       this._spawnParticles(pos, 0xffffff, 24, 11);
 
       const radius = 14;
-      if (this.bot.alive) {
-        const d = pos.distanceTo(this.bot.getHeadWorldPos());
+      for (const enemy of this.enemies) {
+        if (!enemy.alive) continue;
+        const d = pos.distanceTo(enemy.getHeadWorldPos());
         if (d < radius) {
-          this.bot.blind(2.8);
-          this._pushKillFeed('RIVAL FLASHBANGED (2.8s)!');
-          this._onPlayerHitBot(10, false, this.bot.getHeadWorldPos(), 'FLASHBANG');
+          enemy.blind(2.8);
+          this._pushKillFeed(`${enemy.isDummy ? 'DUMMY' : 'TARGET'} FLASHBANGED (2.8s)!`);
+          this._onPlayerHitEnemy(enemy, 10, false, enemy.getHeadWorldPos(), 'FLASHBANG');
         }
       }
 
@@ -1090,7 +1235,7 @@
       }
     }
 
-    _triggerKillEffect(pos) {
+    _triggerKillEffect(pos, targetEnemy) {
       const fxType = this.loadoutChoice.killEffect || 'classic';
       if (fxType === 'classic') return;
 
@@ -1108,7 +1253,7 @@
         this._spawnParticles(pos, 0xff5da2, 24, 8);
         this._spawnParticles(pos, 0xfbcfe8, 20, 6);
       } else if (fxType === 'blackhole') {
-        this.bot.setVisible(false);
+        if (targetEnemy) targetEnemy.setVisible(false);
         const hole = new THREE.Group();
         const core = new THREE.Mesh(
           new THREE.SphereGeometry(1.15, 16, 14),
@@ -1121,18 +1266,18 @@
         hole.add(core, halo);
         hole.position.copy(pos);
         this.scene.add(hole);
-        this.killFXList.push({ type: 'blackhole', obj: hole, life: 2.2, maxLife: 2.2 });
+        this.killFXList.push({ type: 'blackhole', obj: hole, life: 1.5, maxLife: 1.5 });
         this._spawnParticles(pos, 0xc084fc, 22, 6);
       } else if (fxType === 'pixel') {
-        this.bot.setVisible(false);
+        if (targetEnemy) targetEnemy.setVisible(false);
         this._spawnParticles(pos, 0xff3e5e, 14, 10);
         this._spawnParticles(pos, 0xfbbf24, 14, 11);
         this._spawnParticles(pos, 0x2de2ff, 12, 9);
       }
     }
 
-    _onPlayerHitBot(damage, isHeadshot, worldPoint, weaponLabel) {
-      const res = this.bot.takeDamage(damage, isHeadshot);
+    _onPlayerHitEnemy(enemy, damage, isHeadshot, worldPoint, weaponLabel) {
+      const res = enemy.takeDamage(damage, isHeadshot);
       this.stats.damageDealt += damage;
       if (isHeadshot) this.stats.headshots += 1;
 
@@ -1144,9 +1289,29 @@
       if (res.killed) {
         this.stats.kills += 1;
         this.sound.playKill();
-        this._triggerKillEffect(this.bot.getCenterWorldPos());
-        this._pushKillFeed(`YOU [${weaponLabel}${isHeadshot ? ' ★' : ''}] RIVAL`);
-        this._endRound(true, isHeadshot ? 'CRITICAL ELIMINATION!' : 'RIVAL ELIMINATED!');
+        this._triggerKillEffect(enemy.getCenterWorldPos(), enemy);
+        const targetLabel = enemy.isDummy ? (enemy.label || 'DUMMY') : this.loadoutChoice.mode === 'practice' ? 'PRACTICE NPC' : 'RIVAL';
+        this._pushKillFeed(`YOU [${weaponLabel}${isHeadshot ? ' *' : ''}] ${targetLabel}`);
+
+        if (this.loadoutChoice.mode === 'range') {
+          this.playerScore = this.stats.kills;
+          this.botScore = this.stats.headshots;
+          this._renderScorePips();
+          return;
+        }
+
+        const remaining = this._getAliveEnemyCount();
+        if (remaining > 0) {
+          this._pushKillFeed(`${remaining} TARGET${remaining > 1 ? 'S' : ''} REMAINING`);
+        } else {
+          const msg =
+            this.loadoutChoice.mode === 'practice'
+              ? 'ALL PRACTICE TARGETS CLEARED!'
+              : isHeadshot
+              ? 'CRITICAL ELIMINATION!'
+              : 'RIVAL ELIMINATED!';
+          this._endRound(true, msg);
+        }
       }
     }
 
@@ -1295,7 +1460,12 @@
     _renderScorePips() {
       this.ui.playerScore.textContent = String(this.playerScore);
       this.ui.botScore.textContent = String(this.botScore);
-      this.ui.roundLabel.textContent = `ROUND ${this.roundNumber}`;
+      this.ui.roundLabel.textContent =
+        this.loadoutChoice.mode === 'range'
+          ? 'FREE PLAY'
+          : this.loadoutChoice.mode === 'practice'
+          ? `PRACTICE ${this.roundNumber}`
+          : `ROUND ${this.roundNumber}`;
 
       const makePips = (count) => {
         let html = '';
@@ -1304,8 +1474,8 @@
         }
         return html;
       };
-      this.ui.playerPips.innerHTML = makePips(this.playerScore);
-      this.ui.botPips.innerHTML = makePips(this.botScore);
+      this.ui.playerPips.innerHTML = makePips(this.loadoutChoice.mode === 'range' ? Math.min(5, this.playerScore) : this.playerScore);
+      this.ui.botPips.innerHTML = makePips(this.loadoutChoice.mode === 'range' ? 0 : this.botScore);
     }
 
     _updateHUD() {
@@ -1333,9 +1503,13 @@
         this.ui.reloadInd.classList.toggle('hidden', !this.isReloading);
       }
 
-      const mins = Math.floor(Math.max(0, this.roundTimer) / 60);
-      const secs = Math.floor(Math.max(0, this.roundTimer) % 60);
-      this.ui.roundTimer.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+      if (this.loadoutChoice.mode === 'range') {
+        this.ui.roundTimer.textContent = 'RANGE';
+      } else {
+        const mins = Math.floor(Math.max(0, this.roundTimer) / 60);
+        const secs = Math.floor(Math.max(0, this.roundTimer) % 60);
+        this.ui.roundTimer.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+      }
     }
 
     _updatePlayer(dt) {
@@ -1471,10 +1645,15 @@
         this.reloadTimer -= dt;
         if (this.reloadTimer <= 0) {
           const slot = this._currentSlot();
-          const needed = slot.def.magSize - slot.ammo;
-          const take = Math.min(needed, slot.reserve);
-          slot.ammo += take;
-          slot.reserve -= take;
+          if (this.loadoutChoice.mode === 'range') {
+            slot.ammo = slot.def.magSize;
+            slot.reserve = slot.def.reserveMax;
+          } else {
+            const needed = slot.def.magSize - slot.ammo;
+            const take = Math.min(needed, slot.reserve);
+            slot.ammo += take;
+            slot.reserve -= take;
+          }
           this.isReloading = false;
           this._updateHUD();
         }
@@ -1668,13 +1847,14 @@
 
         if (fp.tickTimer <= 0 && this.roundState === 'playing') {
           fp.tickTimer = 0.42;
-          if (this.bot.alive) {
-            const dBot = Math.hypot(this.bot.pos.x - fp.pos.x, this.bot.pos.z - fp.pos.z);
-            if (dBot < fp.radius && Math.abs(this.bot.pos.y - fp.pos.y) < 1.8) {
-              this._onPlayerHitBot(14, false, this.bot.getCenterWorldPos(), 'MOLOTOV');
+          for (const enemy of this.enemies) {
+            if (!enemy.alive) continue;
+            const dBot = Math.hypot(enemy.pos.x - fp.pos.x, enemy.pos.z - fp.pos.z);
+            if (dBot < fp.radius && Math.abs(enemy.pos.y - fp.pos.y) < 1.8) {
+              this._onPlayerHitEnemy(enemy, 14, false, enemy.getCenterWorldPos(), 'MOLOTOV');
             }
           }
-          if (this.player.alive) {
+          if (this.player.alive && this.loadoutChoice.mode !== 'range') {
             const dP = Math.hypot(this.player.pos.x - fp.pos.x, this.player.pos.z - fp.pos.z);
             if (dP < fp.radius && Math.abs(this.player.pos.y - fp.pos.y) < 1.8) {
               this._damagePlayer(8, 'MOLOTOV FIRE');
@@ -1710,11 +1890,12 @@
           }, 700);
         }
       } else if (this.roundState === 'playing') {
+        if (this.loadoutChoice.mode === 'range') return;
         this.roundTimer -= dt;
         if (this.roundTimer <= 0) {
           this.roundTimer = 0;
-          const playerWinsTimeout = this.player.hp >= this.bot.hp;
-          this._endRound(playerWinsTimeout, 'TIME EXPIRED — HIGHER HP WINS');
+          const playerWinsTimeout = this.loadoutChoice.mode === 'practice' ? false : this.player.hp >= this.bot.hp;
+          this._endRound(playerWinsTimeout, 'TIME EXPIRED');
         }
       } else if (this.roundState === 'round_over') {
         this.stateTimer -= dt;
@@ -1746,23 +1927,28 @@
         this._updateRoundState(dt);
         this._updatePlayer(dt);
         this._updateWeaponAndViewmodel(dt);
-        this.bot.update(
-          dt,
-          this.player.pos,
-          this.player.alive,
-          this.roundState === 'playing',
-          (origin, dir, dmg) => this._onBotShoot(origin, dir, dmg),
-          this._getActiveGravityScale(),
-          this.smokeClouds,
-          () => {
-            if (this.roundState === 'playing') {
-              this.stats.kills += 1;
-              this.sound.playKill();
-              this._pushKillFeed('RIVAL FELL INTO THE SKY VOID!');
-              this._endRound(true, 'SKY VOID RING-OUT!');
+        const grav = this._getActiveGravityScale();
+        for (const enemy of this.enemies) {
+          enemy.update(
+            dt,
+            this.player.pos,
+            this.player.alive,
+            this.roundState === 'playing',
+            (origin, dir, dmg) => this._onBotShoot(origin, dir, dmg),
+            grav,
+            this.smokeClouds,
+            () => {
+              if (this.roundState === 'playing') {
+                this.stats.kills += 1;
+                this.sound.playKill();
+                this._pushKillFeed('TARGET FELL INTO THE SKY VOID!');
+                if (this._getAliveEnemyCount() === 0 && this.loadoutChoice.mode !== 'range') {
+                  this._endRound(true, 'SKY VOID RING-OUT!');
+                }
+              }
             }
-          }
-        );
+          );
+        }
         this._updateEffects(dt);
         this._updateHUD();
       }

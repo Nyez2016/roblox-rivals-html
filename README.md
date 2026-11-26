@@ -6,8 +6,9 @@ Play live on GitHub Pages: **[https://nyez2016.github.io/roblox-rivals-html/](ht
 
 ## Features
 
-- **8 Playable Arena Maps** *(with live 3D menu preview)*:
+- **9 Playable Arena Maps** *(with live 3D menu preview)*:
   - **Arena (Classic)** — Symmetrical bridge, side ramps, sniper perches, and stud crates
+  - **Shooting Range** — Tactical firing bays, distance markers, sniper balcony, and 6 interactive static/strafing Test Dummies
   - **Sky Islands** — Floating grassy islands high above the clouds with sky bridges, jump pads, and void ring-outs
   - **Cloud Spire** — Multi-tier airborne sky citadel with glass walkways, floating monoliths, and open-air sky edges
   - **Orbital Zero-G** — Deep space station with starfield, ringed planet, **0.36x low gravity**, and 4 Anti-Gravity Jump Pads
@@ -15,9 +16,9 @@ Play live on GitHub Pages: **[https://nyez2016.github.io/roblox-rivals-html/](ht
   - **Neon Station** — Cyberpunk nighttime subway platforms & climbable central metro train
   - **Construction** — Sunset rooftop scaffolding tower, overhead crane & shipping containers
   - **Splash Park** — Tropical pool island, twin water slides & water geyser launch pads
-- **Auto Shoot Mode**: Toggle **Auto Shoot** in Settings or press `F` mid-match to automatically fire whenever your crosshair locks onto the Rival!
+- **Auto Shoot Mode**: Toggle **Auto Shoot** in Settings or press `F` mid-match to automatically fire whenever your crosshair locks onto a target!
 - **Gravity System**: Switch between `Map Default`, `Earth 1.0x`, `Lunar Low-G (0.38x)`, and `Zero-G Bounce (0.22x)` on any map.
-- **4 Game Modes**: `Classic Duel`, `Ancient Assassin` (Repeating Crossbow / Shadow Kunai / Shadow Daggers / Smoke Bomb), `Sniper Only`, and `Randomizer`.
+- **6 Game Modes**: `Classic Duel`, `Shooting Range` (free-play test dummies with instant weapon swapping & infinite ammo), `Practice Rounds` (3 moving, strafing & jumping NPCs that never shoot back), `Ancient Assassin`, `Sniper Only`, and `Randomizer`.
 - **22 Weapons Across All 4 Loadout Slots**:
   - **Primary (8)**: Assault Rifle, Sniper, Repeating Crossbow, Frost Longbow, Burst Rifle, Shotgun, Paintball Gun, Minigun
   - **Secondary (5)**: Revolver, Shadow Kunai, Uzi, Handgun, Shorty
