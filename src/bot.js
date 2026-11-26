@@ -50,8 +50,12 @@
 
       this.difficulty = DIFFICULTIES.pro;
       this.skinId = 'classic';
+      this.team = 'red'; // 'red' | 'blue'
+      this.name = 'RIVAL';
       this.passive = false;
       this.isDummy = false;
+      this.respawnTimer = 0;
+      this.spawnHome = new THREE.Vector3(0, 0, -28);
       this.waypoints = arena.getWaypoints();
       this.currentTarget = this.waypoints[0]?.clone() || new THREE.Vector3();
 
@@ -210,6 +214,20 @@
     }
 
     applySkin(skinId) {
+      if (this.team === 'blue') {
+        this.skinId = 'ally';
+        this.matSkin.color.setHex(0xf7cf86);
+        this.matTorso.color.setHex(0x0284c7);
+        this.matTorso.metalness = 0.25;
+        this.matLegs.color.setHex(0x0f172a);
+        this.matAccent.color.setHex(0x2de2ff);
+        this.matAccent.emissive.setHex(0x2de2ff);
+        this.bambooHat.visible = false;
+        this.jetpack.visible = false;
+        this._redrawHealthBar();
+        return;
+      }
+
       const skin = RIVAL_SKINS[skinId] || RIVAL_SKINS.classic;
       this.skinId = skin.id;
       this.matSkin.color.setHex(skin.skinColor);
@@ -221,6 +239,7 @@
 
       this.bambooHat.visible = skin.accessory === 'bambooHat';
       this.jetpack.visible = skin.accessory === 'jetpack';
+      this._redrawHealthBar();
     }
 
     _buildHealthBar() {
@@ -248,7 +267,14 @@
       ctx.fillRect(0, 0, w, h);
 
       const pct = Math.max(0, this.hp / this.maxHp);
-      ctx.fillStyle = this.blindTimer > 0 ? '#fde047' : pct > 0.35 ? '#ff3e5e' : '#ff9f1c';
+      ctx.fillStyle =
+        this.blindTimer > 0
+          ? '#fde047'
+          : this.team === 'blue'
+          ? '#2de2ff'
+          : pct > 0.35
+          ? '#ff3e5e'
+          : '#ff9f1c';
       ctx.fillRect(4, 4, Math.round((w - 8) * pct), h - 8);
 
       ctx.strokeStyle = 'rgba(255,255,255,0.45)';
@@ -278,6 +304,7 @@
 
     reset(spawnPos, difficultyKey = 'pro', skinId = 'classic') {
       this.difficulty = DIFFICULTIES[difficultyKey] || DIFFICULTIES.pro;
+      this.spawnHome.copy(spawnPos);
       this.applySkin(skinId);
       this.waypoints = this.arena.getWaypoints();
 
@@ -286,15 +313,16 @@
       this.onGround = true;
       this.pos.copy(spawnPos);
       this.vel.set(0, 0, 0);
-      this.yaw = 0;
+      this.yaw = this.team === 'blue' ? Math.PI : 0;
       this.deathFall = 0;
       this.hurtFlash = 0;
       this.blindTimer = 0;
       this.sightTimer = 0;
       this.fireTimer = 0.45;
       this.padCooldown = 0;
+      this.respawnTimer = 0;
       this.group.visible = true;
-      this.group.rotation.set(0, 0, 0);
+      this.group.rotation.set(0, this.yaw, 0);
       this.group.position.copy(this.pos);
       this.hpSprite.visible = true;
       this.stunRing.visible = false;
@@ -361,7 +389,27 @@
       return hits.length === 0;
     }
 
-    update(dt, playerPos, playerAlive, canFight, onBotShoot, gravityScale = 1.0, smokeClouds = [], onBotVoidFall = null) {
+    _selectTarget(targets, smokeClouds) {
+      let best = null;
+      let bestScore = Infinity;
+      let bestCanSee = false;
+
+      for (const t of targets) {
+        if (!t || !t.alive) continue;
+        const eye = new THREE.Vector3(t.pos.x, t.pos.y + 1.55, t.pos.z);
+        const dist = this.pos.distanceTo(t.pos);
+        const see = this.blindTimer <= 0 && this._hasLineOfSight(eye, smokeClouds);
+        const score = see ? dist : dist + 80;
+        if (score < bestScore) {
+          bestScore = score;
+          best = t;
+          bestCanSee = see;
+        }
+      }
+      return { target: best, canSee: bestCanSee };
+    }
+
+    update(dt, targetList, canFight, onBotShoot, gravityScale = 1.0, smokeClouds = [], onBotVoidFall = null) {
       if (this.hurtFlash > 0) {
         this.hurtFlash = Math.max(0, this.hurtFlash - dt);
         const emissiveVal = this.hurtFlash > 0 ? 0.5 : 0;
@@ -386,20 +434,23 @@
         }
       }
 
-      if (!canFight) {
-        const dx = playerPos.x - this.pos.x;
-        const dz = playerPos.z - this.pos.z;
-        this.yaw = Math.atan2(dx, dz);
+      const targets = Array.isArray(targetList) ? targetList : [targetList];
+      const { target, canSee } = this._selectTarget(targets, smokeClouds);
+
+      if (!canFight || !target) {
+        if (target) {
+          this.yaw = Math.atan2(target.pos.x - this.pos.x, target.pos.z - this.pos.z);
+        }
         this.group.position.copy(this.pos);
         this.group.rotation.set(0, this.yaw, 0);
         return;
       }
 
       const isBlinded = this.blindTimer > 0;
-      const playerEye = new THREE.Vector3(playerPos.x, playerPos.y + 1.55, playerPos.z);
-      const toPlayer = new THREE.Vector3(playerPos.x - this.pos.x, 0, playerPos.z - this.pos.z);
-      const distToPlayer = toPlayer.length();
-      const canSee = !isBlinded && playerAlive && this._hasLineOfSight(playerEye, smokeClouds);
+      const targetPos = target.pos;
+      const targetEye = new THREE.Vector3(targetPos.x, targetPos.y + 1.55, targetPos.z);
+      const toTarget = new THREE.Vector3(targetPos.x - this.pos.x, 0, targetPos.z - this.pos.z);
+      const distToTarget = toTarget.length();
 
       this.strafeTimer -= dt;
       if (this.strafeTimer <= 0) {
@@ -413,10 +464,10 @@
       if (isBlinded) {
         moveDir.set(Math.sin(performance.now() * 0.004), 0, Math.cos(performance.now() * 0.004));
       } else if (canSee) {
-        const forward = toPlayer.clone().normalize();
+        const forward = toTarget.clone().normalize();
         const right = new THREE.Vector3(-forward.z, 0, forward.x);
-        if (distToPlayer > 17) moveDir.addScaledVector(forward, 0.75);
-        else if (distToPlayer < 8.5) moveDir.addScaledVector(forward, -0.7);
+        if (distToTarget > 17) moveDir.addScaledVector(forward, 0.75);
+        else if (distToTarget < 8.5) moveDir.addScaledVector(forward, -0.7);
         moveDir.addScaledVector(right, this.strafeDir * 0.9);
 
         if (this.jumpCooldown <= 0 && Math.random() < dt * (gravityScale < 0.6 ? 1.1 : 0.65) && this.onGround) {
@@ -427,11 +478,11 @@
       } else {
         const toWp = new THREE.Vector3(this.currentTarget.x - this.pos.x, 0, this.currentTarget.z - this.pos.z);
         if (toWp.length() < 2.2) {
-          if (Math.random() < 0.5) {
+          if (Math.random() < 0.45 && this.arena.hasFloor) {
             this.currentTarget.set(
-              playerPos.x + (Math.random() - 0.5) * 14,
+              targetPos.x + (Math.random() - 0.5) * 14,
               0,
-              playerPos.z + (Math.random() - 0.5) * 14
+              targetPos.z + (Math.random() - 0.5) * 14
             );
           } else {
             this._pickNewWaypoint();
@@ -451,7 +502,6 @@
         this.vel.z *= Math.max(0, 1 - dt * 8);
       }
 
-      // On open-air floating maps, avoid stepping off edges when grounded
       if (!this.arena.hasFloor && this.onGround) {
         const probeX = this.pos.x + this.vel.x * 0.28;
         const probeZ = this.pos.z + this.vel.z * 0.28;
@@ -464,7 +514,6 @@
         }
       }
 
-      // Gravity scaled by space/anti-gravity mode
       this.vel.y -= 23 * gravityScale * dt;
       this.pos.x += this.vel.x * dt;
       this.pos.z += this.vel.z * dt;
@@ -480,17 +529,15 @@
         this.onGround = false;
       }
 
-      // Check open-air void ring-out!
       if (!this.arena.hasFloor && this.pos.y < this.arena.voidY) {
         this.alive = false;
         this.hp = 0;
         this.hpSprite.visible = false;
         this.stunRing.visible = false;
-        if (typeof onBotVoidFall === 'function') onBotVoidFall();
+        if (typeof onBotVoidFall === 'function') onBotVoidFall(this);
         return;
       }
 
-      // Bot uses Jump Pads too!
       if (this.padCooldown <= 0) {
         const launch = this.arena.checkJumpPad(this.pos);
         if (launch > 0) {
@@ -504,7 +551,7 @@
       if (isBlinded) {
         targetYaw = this.yaw + dt * 4.5;
       } else if (canSee) {
-        targetYaw = Math.atan2(playerPos.x - this.pos.x, playerPos.z - this.pos.z);
+        targetYaw = Math.atan2(targetPos.x - this.pos.x, targetPos.z - this.pos.z);
       } else if (Math.hypot(this.vel.x, this.vel.z) > 0.5) {
         targetYaw = Math.atan2(this.vel.x, this.vel.z);
       }
@@ -521,12 +568,12 @@
           const muzzleWorld = new THREE.Vector3(0.54, 1.25, 0.9)
             .applyAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw)
             .add(this.pos);
-          const aimDir = new THREE.Vector3().subVectors(playerEye, muzzleWorld).normalize();
+          const aimDir = new THREE.Vector3().subVectors(targetEye, muzzleWorld).normalize();
           aimDir.x += (Math.random() - 0.5) * this.difficulty.spread * 2;
           aimDir.y += (Math.random() - 0.5) * this.difficulty.spread * 1.6;
           aimDir.z += (Math.random() - 0.5) * this.difficulty.spread * 2;
           aimDir.normalize();
-          onBotShoot(muzzleWorld, aimDir, this.difficulty.damage);
+          onBotShoot(this, muzzleWorld, aimDir, this.difficulty.damage);
         }
       } else {
         this.sightTimer = Math.max(0, this.sightTimer - dt * 1.5);
@@ -727,7 +774,9 @@
       this._redrawHealthBar();
     }
 
-    update(dt, playerPos) {
+    update(dt, targetList) {
+      const target = Array.isArray(targetList) ? targetList[0] : targetList;
+      const playerPos = target?.pos || target || this.pos;
       if (this.hurtFlash > 0) {
         this.hurtFlash = Math.max(0, this.hurtFlash - dt);
         this.matYellow.emissive.setHex(this.hurtFlash > 0 ? 0xffffff : 0x000000);

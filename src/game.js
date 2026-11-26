@@ -16,7 +16,9 @@
   } = global.Rivals;
 
   const WINS_TO_VICTORY = 5;
+  const TDM_SCORE_LIMIT = 25;
   const ROUND_DURATION = 90;
+  const TDM_DURATION = 180;
   const STORAGE_KEY = 'rivals_html_prefs_v3';
   const PAINT_COLORS = [0xff5ef7, 0x2de2ff, 0x38ef7d, 0xffd447, 0xff5a36, 0xa855f7];
 
@@ -64,6 +66,8 @@
       this.bot.applySkin(this.loadoutChoice.rivalSkin);
       this.enemies = [this.bot];
       this.extraEnemies = [];
+      this.allies = [];
+      this.playerRespawnTimer = 0;
 
       this.viewmodelRoot = new THREE.Group();
       this.camera.add(this.viewmodelRoot);
@@ -151,7 +155,7 @@
         if (saved.utility && WEAPONS[saved.utility]) this.loadoutChoice.utility = saved.utility;
         if (saved.map && MAPS[saved.map]) this.loadoutChoice.map = saved.map;
         if (saved.gravity && GRAVITY_MODES[saved.gravity]) this.loadoutChoice.gravity = saved.gravity;
-        if (['classic', 'assassin', 'sniper', 'randomizer', 'practice', 'range'].includes(saved.mode)) {
+        if (['classic', 'assassin', 'sniper', 'randomizer', 'practice', 'range', 'twovtwo', 'tdm'].includes(saved.mode)) {
           this.loadoutChoice.mode = saved.mode;
         }
         if (saved.difficulty && DIFFICULTIES[saved.difficulty]) this.loadoutChoice.difficulty = saved.difficulty;
@@ -202,6 +206,7 @@
         botScore: document.getElementById('bot-score'),
         playerPips: document.getElementById('player-pips'),
         botPips: document.getElementById('bot-pips'),
+        playerTeamName: document.getElementById('player-team-name'),
         botName: document.getElementById('bot-name'),
         mapBadge: document.getElementById('map-badge'),
         gravBadge: document.getElementById('grav-badge'),
@@ -594,11 +599,23 @@
       this.ui.menu.classList.add('hidden');
       this.ui.matchEnd.classList.add('hidden');
       this.ui.hud.classList.remove('hidden');
+      if (this.ui.playerTeamName) {
+        this.ui.playerTeamName.textContent =
+          this.loadoutChoice.mode === 'tdm'
+            ? 'BLUE TEAM'
+            : this.loadoutChoice.mode === 'twovtwo'
+            ? 'BLUE (2v2)'
+            : 'YOU';
+      }
       this.ui.botName.textContent =
         this.loadoutChoice.mode === 'range'
           ? 'DUMMIES'
           : this.loadoutChoice.mode === 'practice'
           ? 'PRACTICE NPCs'
+          : this.loadoutChoice.mode === 'tdm'
+          ? 'RED TEAM'
+          : this.loadoutChoice.mode === 'twovtwo'
+          ? 'RED (2v2)'
           : DIFFICULTIES[this.loadoutChoice.difficulty].name;
       this.ui.mapBadge.textContent = MAPS[this.arena.mapId].name;
       this.ui.killFeed.innerHTML = '';
@@ -612,6 +629,10 @@
         if (ex.dispose) ex.dispose();
       }
       this.extraEnemies = [];
+      for (const al of this.allies) {
+        if (al.dispose) al.dispose();
+      }
+      this.allies = [];
     }
 
     _getAllEnemyHitMeshes() {
@@ -626,6 +647,12 @@
     _getAliveEnemyCount() {
       let n = 0;
       for (const e of this.enemies) if (e.alive) n++;
+      return n;
+    }
+
+    _getAliveAllyCount() {
+      let n = 0;
+      for (const a of this.allies) if (a.alive) n++;
       return n;
     }
 
@@ -658,7 +685,6 @@
         this.extraEnemies = configs.map((cfg) => new TargetDummy(this.scene, cfg));
         this.enemies = [...this.extraEnemies];
       } else if (this.loadoutChoice.mode === 'practice') {
-        // 3 Moving Practice NPCs that roam, jump & dodge, but NEVER shoot!
         const wps = this.arena.getWaypoints();
         const s0 = spawns.bot.clone();
         const s1 = (wps[1] || spawns.bot).clone();
@@ -666,20 +692,101 @@
         s1.x = Math.min(20, Math.max(-20, s1.x - 4));
         s2.x = Math.min(20, Math.max(-20, s2.x + 4));
 
+        this.bot.team = 'red';
+        this.bot.name = 'PRACTICE NPC';
         this.bot.passive = true;
         this.bot.reset(s0, this.loadoutChoice.difficulty, this.loadoutChoice.rivalSkin);
 
         const npc2 = new RivalBot(this.scene, this.arena);
+        npc2.team = 'red';
+        npc2.name = 'PRACTICE NPC';
         npc2.passive = true;
         npc2.reset(s1, this.loadoutChoice.difficulty, this.loadoutChoice.rivalSkin);
 
         const npc3 = new RivalBot(this.scene, this.arena);
+        npc3.team = 'red';
+        npc3.name = 'PRACTICE NPC';
         npc3.passive = true;
         npc3.reset(s2, this.loadoutChoice.difficulty, this.loadoutChoice.rivalSkin);
 
         this.extraEnemies = [npc2, npc3];
         this.enemies = [this.bot, npc2, npc3];
+      } else if (this.loadoutChoice.mode === 'twovtwo') {
+        // 2v2: YOU + 1 Blue Ally vs 2 Red Rivals
+        const allySpawn = spawns.player.clone();
+        allySpawn.x -= 3.6;
+        const ally1 = new RivalBot(this.scene, this.arena);
+        ally1.team = 'blue';
+        ally1.name = 'ALLY';
+        ally1.passive = false;
+        ally1.reset(allySpawn, this.loadoutChoice.difficulty, 'ally');
+        this.allies = [ally1];
+
+        const r1Spawn = spawns.bot.clone();
+        r1Spawn.x -= 3.5;
+        this.bot.team = 'red';
+        this.bot.name = 'RIVAL 1';
+        this.bot.passive = false;
+        this.bot.reset(r1Spawn, this.loadoutChoice.difficulty, this.loadoutChoice.rivalSkin);
+
+        const r2Spawn = spawns.bot.clone();
+        r2Spawn.x += 3.5;
+        const red2 = new RivalBot(this.scene, this.arena);
+        red2.team = 'red';
+        red2.name = 'RIVAL 2';
+        red2.passive = false;
+        red2.reset(r2Spawn, this.loadoutChoice.difficulty, this.loadoutChoice.rivalSkin);
+
+        this.extraEnemies = [red2];
+        this.enemies = [this.bot, red2];
+      } else if (this.loadoutChoice.mode === 'tdm') {
+        // 3v3 Team Deathmatch: YOU + 2 Blue Allies vs 3 Red Rivals (First to 25!)
+        const a1Pos = spawns.player.clone();
+        a1Pos.x -= 4.2;
+        const a2Pos = spawns.player.clone();
+        a2Pos.x += 4.2;
+
+        const ally1 = new RivalBot(this.scene, this.arena);
+        ally1.team = 'blue';
+        ally1.name = 'BLUE ALLY 1';
+        ally1.passive = false;
+        ally1.reset(a1Pos, this.loadoutChoice.difficulty, 'ally');
+
+        const ally2 = new RivalBot(this.scene, this.arena);
+        ally2.team = 'blue';
+        ally2.name = 'BLUE ALLY 2';
+        ally2.passive = false;
+        ally2.reset(a2Pos, this.loadoutChoice.difficulty, 'ally');
+        this.allies = [ally1, ally2];
+
+        const r1Pos = spawns.bot.clone();
+        r1Pos.x -= 4.5;
+        const r2Pos = spawns.bot.clone();
+        const r3Pos = spawns.bot.clone();
+        r3Pos.x += 4.5;
+
+        this.bot.team = 'red';
+        this.bot.name = 'RED RIVAL 1';
+        this.bot.passive = false;
+        this.bot.reset(r1Pos, this.loadoutChoice.difficulty, this.loadoutChoice.rivalSkin);
+
+        const red2 = new RivalBot(this.scene, this.arena);
+        red2.team = 'red';
+        red2.name = 'RED RIVAL 2';
+        red2.passive = false;
+        red2.reset(r2Pos, this.loadoutChoice.difficulty, this.loadoutChoice.rivalSkin);
+
+        const red3 = new RivalBot(this.scene, this.arena);
+        red3.team = 'red';
+        red3.name = 'RED RIVAL 3';
+        red3.passive = false;
+        red3.reset(r3Pos, this.loadoutChoice.difficulty, this.loadoutChoice.rivalSkin);
+
+        this.extraEnemies = [red2, red3];
+        this.enemies = [this.bot, red2, red3];
       } else {
+        this.bot.team = 'red';
+        this.bot.name = 'RIVAL';
         this.bot.passive = false;
         const botSpawn = spawns.bot.clone();
         botSpawn.x += (Math.random() - 0.5) * 4;
@@ -759,7 +866,8 @@
       this.roundState = 'countdown';
       this.stateTimer = 2.6;
       this.countdownLastSec = 4;
-      this.roundTimer = ROUND_DURATION;
+      this.roundTimer = this.loadoutChoice.mode === 'tdm' ? TDM_DURATION : ROUND_DURATION;
+      this.playerRespawnTimer = 0;
       this.isReloading = false;
       this.isAds = false;
       this.burstQueue = 0;
@@ -808,8 +916,28 @@
           ? 'RANDOMIZER'
           : this.loadoutChoice.mode === 'practice'
           ? 'PRACTICE ROUND (3 MOVING NPCs)'
+          : this.loadoutChoice.mode === 'twovtwo'
+          ? '2v2 TEAM DUEL'
+          : this.loadoutChoice.mode === 'tdm'
+          ? '3v3 TEAM DEATHMATCH · FIRST TO 25'
           : MAPS[this.arena.mapId].name;
-      this._showBanner(`ROUND ${this.roundNumber}`, `${modeTag} — FIGHT IN 3...`, false);
+      const titleTag = this.loadoutChoice.mode === 'tdm' ? 'TEAM DEATHMATCH' : `ROUND ${this.roundNumber}`;
+      this._showBanner(titleTag, `${modeTag} — FIGHT IN 3...`, false);
+    }
+
+    _respawnPlayerTDM() {
+      const spawns = this.arena.getSpawns();
+      this.player.pos.copy(spawns.player);
+      this.player.pos.x += (Math.random() - 0.5) * 5;
+      this.player.vel.set(0, 0, 0);
+      this.player.yaw = 0;
+      this.player.pitch = 0;
+      this.player.hp = this.player.maxHp;
+      this.player.alive = true;
+      this.isReloading = false;
+      this._buildLoadoutSlots();
+      this.ui.centerBanner.classList.add('hidden');
+      this._updateHUD();
     }
 
     _currentSlot() {
@@ -1300,6 +1428,16 @@
           return;
         }
 
+        if (this.loadoutChoice.mode === 'tdm') {
+          this.playerScore += 1;
+          enemy.respawnTimer = 2.4;
+          this._renderScorePips();
+          if (this.playerScore >= TDM_SCORE_LIMIT) {
+            this._finishMatch();
+          }
+          return;
+        }
+
         const remaining = this._getAliveEnemyCount();
         if (remaining > 0) {
           this._pushKillFeed(`${remaining} TARGET${remaining > 1 ? 'S' : ''} REMAINING`);
@@ -1307,6 +1445,8 @@
           const msg =
             this.loadoutChoice.mode === 'practice'
               ? 'ALL PRACTICE TARGETS CLEARED!'
+              : this.loadoutChoice.mode === 'twovtwo'
+              ? 'RED TEAM ELIMINATED!'
               : isHeadshot
               ? 'CRITICAL ELIMINATION!'
               : 'RIVAL ELIMINATED!';
@@ -1315,8 +1455,8 @@
       }
     }
 
-    _onBotShoot(origin, dir, damage) {
-      if (this.roundState !== 'playing' || !this.player.alive) return;
+    _onBotShoot(shooter, origin, dir, damage) {
+      if (this.roundState !== 'playing') return;
       this.sound.playShoot('ar');
 
       this.raycaster.set(origin, dir);
@@ -1324,29 +1464,103 @@
       const mapHits = this.raycaster.intersectObjects(this.arena.meshes, false);
       const mapDist = mapHits.length > 0 ? mapHits[0].distance : 140;
 
-      const playerCenter = new THREE.Vector3(this.player.pos.x, this.player.pos.y + 1.05, this.player.pos.z);
-      const toPlayer = new THREE.Vector3().subVectors(playerCenter, origin);
-      const proj = toPlayer.dot(dir);
+      // Determine candidate targets (opposing team)
+      const candidates = [];
+      if (shooter.team === 'red') {
+        if (this.player.alive) {
+          candidates.push({
+            isPlayer: true,
+            center: new THREE.Vector3(this.player.pos.x, this.player.pos.y + 1.05, this.player.pos.z),
+          });
+        }
+        for (const ally of this.allies) {
+          if (ally.alive) candidates.push({ isPlayer: false, bot: ally, center: ally.getCenterWorldPos() });
+        }
+      } else {
+        for (const enemy of this.enemies) {
+          if (enemy.alive) candidates.push({ isPlayer: false, bot: enemy, center: enemy.getCenterWorldPos() });
+        }
+      }
 
-      let hitPlayer = false;
+      let bestHit = null;
+      let bestDist = mapDist;
       let endPoint = origin.clone().addScaledVector(dir, mapDist);
 
-      if (proj > 0 && proj < mapDist) {
-        const closest = origin.clone().addScaledVector(dir, proj);
-        const horizDist = Math.hypot(closest.x - playerCenter.x, closest.z - playerCenter.z);
-        const vertDist = Math.abs(closest.y - playerCenter.y);
-        if (horizDist < 0.52 && vertDist < 0.95) {
-          hitPlayer = true;
-          endPoint = closest;
+      for (const c of candidates) {
+        const toTarget = new THREE.Vector3().subVectors(c.center, origin);
+        const proj = toTarget.dot(dir);
+        if (proj > 0 && proj < bestDist) {
+          const closest = origin.clone().addScaledVector(dir, proj);
+          const horizDist = Math.hypot(closest.x - c.center.x, closest.z - c.center.z);
+          const vertDist = Math.abs(closest.y - c.center.y);
+          if (horizDist < 0.56 && vertDist < 0.98) {
+            bestDist = proj;
+            bestHit = c;
+            endPoint = closest;
+          }
         }
       }
 
       const rSkin = RIVAL_SKINS[this.loadoutChoice.rivalSkin] || RIVAL_SKINS.classic;
-      this._spawnTracer(origin, endPoint, rSkin.accentColor);
+      const tracerColor = shooter.team === 'blue' ? 0x2de2ff : rSkin.accentColor;
+      this._spawnTracer(origin, endPoint, tracerColor);
 
-      if (hitPlayer) {
-        this._damagePlayer(damage, 'RIVAL');
+      if (!bestHit) return;
+
+      if (bestHit.isPlayer) {
+        this._damagePlayer(damage, shooter.name || 'RIVAL');
+      } else {
+        const targetBot = bestHit.bot;
+        const res = targetBot.takeDamage(damage, false);
+        this._spawnParticles(endPoint, targetBot.team === 'blue' ? 0x2de2ff : 0xff3e5e, 5);
+        if (res.killed) {
+          this._onBotEliminatedByBot(shooter, targetBot);
+        }
       }
+    }
+
+    _onBotEliminatedByBot(shooter, victim) {
+      this._pushKillFeed(`${shooter.name} ELIMINATED ${victim.name}`);
+      if (this.loadoutChoice.mode === 'tdm') {
+        if (victim.team === 'red') this.playerScore += 1;
+        else this.botScore += 1;
+        victim.respawnTimer = 2.4;
+        this._renderScorePips();
+        if (this.playerScore >= TDM_SCORE_LIMIT || this.botScore >= TDM_SCORE_LIMIT) {
+          this._finishMatch();
+        }
+        return;
+      }
+
+      if (victim.team === 'red' && this._getAliveEnemyCount() === 0) {
+        this._endRound(true, 'ALLY CLUTCHED THE ROUND!');
+      } else if (victim.team === 'blue' && !this.player.alive && this._getAliveAllyCount() === 0) {
+        this._endRound(false, 'BLUE TEAM ELIMINATED');
+      }
+    }
+
+    _handlePlayerDeath(source) {
+      this.player.alive = false;
+      this._pushKillFeed(`${source} ELIMINATED YOU`);
+
+      if (this.loadoutChoice.mode === 'tdm') {
+        this.botScore += 1;
+        this._renderScorePips();
+        if (this.botScore >= TDM_SCORE_LIMIT) {
+          this._finishMatch();
+        } else {
+          this.playerRespawnTimer = 2.2;
+          this._showBanner('ELIMINATED', 'RESPAWNING IN 2s...', true);
+        }
+        return;
+      }
+
+      if (this.loadoutChoice.mode === 'twovtwo' && this._getAliveAllyCount() > 0) {
+        this._showBanner('ELIMINATED', 'SPECTATING BLUE ALLY...', true);
+        return;
+      }
+
+      this._endRound(false, source === 'SKY VOID' ? 'FELL INTO THE SKY VOID' : 'YOU WERE ELIMINATED');
     }
 
     _damagePlayer(amount, source) {
@@ -1357,9 +1571,7 @@
       this._updateHUD();
 
       if (this.player.hp <= 0) {
-        this.player.alive = false;
-        this._pushKillFeed(`${source} ELIMINATED YOU`);
-        this._endRound(false, 'YOU WERE ELIMINATED');
+        this._handlePlayerDeath(source);
       }
     }
 
@@ -1384,7 +1596,10 @@
       this.isPaused = true;
       if (document.pointerLockElement) document.exitPointerLock();
 
-      const won = this.playerScore >= WINS_TO_VICTORY;
+      const won =
+        this.loadoutChoice.mode === 'tdm'
+          ? this.playerScore >= this.botScore
+          : this.playerScore >= WINS_TO_VICTORY;
       this.ui.hud.classList.add('hidden');
       this.ui.centerBanner.classList.add('hidden');
       this.ui.matchEnd.classList.remove('hidden');
@@ -1463,6 +1678,10 @@
       this.ui.roundLabel.textContent =
         this.loadoutChoice.mode === 'range'
           ? 'FREE PLAY'
+          : this.loadoutChoice.mode === 'tdm'
+          ? `TDM · TO ${TDM_SCORE_LIMIT}`
+          : this.loadoutChoice.mode === 'twovtwo'
+          ? `2v2 · RD ${this.roundNumber}`
           : this.loadoutChoice.mode === 'practice'
           ? `PRACTICE ${this.roundNumber}`
           : `ROUND ${this.roundNumber}`;
@@ -1474,8 +1693,20 @@
         }
         return html;
       };
-      this.ui.playerPips.innerHTML = makePips(this.loadoutChoice.mode === 'range' ? Math.min(5, this.playerScore) : this.playerScore);
-      this.ui.botPips.innerHTML = makePips(this.loadoutChoice.mode === 'range' ? 0 : this.botScore);
+      const pPips =
+        this.loadoutChoice.mode === 'tdm'
+          ? Math.floor(this.playerScore / 5)
+          : this.loadoutChoice.mode === 'range'
+          ? Math.min(5, this.playerScore)
+          : this.playerScore;
+      const bPips =
+        this.loadoutChoice.mode === 'tdm'
+          ? Math.floor(this.botScore / 5)
+          : this.loadoutChoice.mode === 'range'
+          ? 0
+          : this.botScore;
+      this.ui.playerPips.innerHTML = makePips(pPips);
+      this.ui.botPips.innerHTML = makePips(bPips);
     }
 
     _updateHUD() {
@@ -1572,14 +1803,12 @@
         p.onGround = false;
       }
 
-      // Open-air void ring-out check for Sky Islands & Cloud Spire!
+      // Open-air void ring-out check for Sky Islands, Cloud Spire & Construction!
       if (!this.arena.hasFloor && p.pos.y < this.arena.voidY && p.alive && this.roundState === 'playing') {
         p.hp = 0;
-        p.alive = false;
         this.sound.playHurt();
         this._updateHUD();
-        this._pushKillFeed('YOU FELL INTO THE SKY VOID');
-        this._endRound(false, 'FELL INTO THE SKY VOID');
+        this._handlePlayerDeath('SKY VOID');
       }
 
       // Anti-Gravity Jump Pads / Qi Wind Pads / Water Geysers!
@@ -1605,9 +1834,21 @@
       this.recoilPitch = THREE.MathUtils.lerp(this.recoilPitch, 0, Math.min(1, dt * 12));
       this.recoilKick = THREE.MathUtils.lerp(this.recoilKick, 0, Math.min(1, dt * 14));
 
-      this.camera.position.set(p.pos.x, p.pos.y + p.eyeHeight, p.pos.z);
-      const euler = new THREE.Euler(p.pitch + this.recoilPitch, p.yaw, 0, 'YXZ');
-      this.camera.quaternion.setFromEuler(euler);
+      if (!p.alive && this.loadoutChoice.mode === 'twovtwo' && this._getAliveAllyCount() > 0) {
+        // Spectate living Blue Ally in 2v2!
+        const liveAlly = this.allies.find((a) => a.alive);
+        if (liveAlly) {
+          this.camera.position.lerp(
+            new THREE.Vector3(liveAlly.pos.x, liveAlly.pos.y + 5.2, liveAlly.pos.z + 7.5),
+            Math.min(1, dt * 6)
+          );
+          this.camera.lookAt(liveAlly.pos.x, liveAlly.pos.y + 1.4, liveAlly.pos.z);
+        }
+      } else {
+        this.camera.position.set(p.pos.x, p.pos.y + p.eyeHeight, p.pos.z);
+        const euler = new THREE.Euler(p.pitch + this.recoilPitch, p.yaw, 0, 'YXZ');
+        this.camera.quaternion.setFromEuler(euler);
+      }
 
       const targetFov = this.isAds
         ? w.adsFov
@@ -1894,8 +2135,12 @@
         this.roundTimer -= dt;
         if (this.roundTimer <= 0) {
           this.roundTimer = 0;
-          const playerWinsTimeout = this.loadoutChoice.mode === 'practice' ? false : this.player.hp >= this.bot.hp;
-          this._endRound(playerWinsTimeout, 'TIME EXPIRED');
+          if (this.loadoutChoice.mode === 'tdm') {
+            this._finishMatch();
+          } else {
+            const playerWinsTimeout = this.loadoutChoice.mode === 'practice' ? false : this.player.hp >= this.bot.hp;
+            this._endRound(playerWinsTimeout, 'TIME EXPIRED');
+          }
         }
       } else if (this.roundState === 'round_over') {
         this.stateTimer -= dt;
@@ -1927,28 +2172,80 @@
         this._updateRoundState(dt);
         this._updatePlayer(dt);
         this._updateWeaponAndViewmodel(dt);
+
+        // TDM Respawn Timers (Player, Allies & Red Enemies)
+        if (this.loadoutChoice.mode === 'tdm' && this.roundState === 'playing') {
+          if (!this.player.alive && this.playerRespawnTimer > 0) {
+            this.playerRespawnTimer -= dt;
+            if (this.playerRespawnTimer <= 0) this._respawnPlayerTDM();
+          }
+          for (const b of [...this.allies, ...this.enemies]) {
+            if (!b.alive && b.respawnTimer > 0) {
+              b.respawnTimer -= dt;
+              if (b.respawnTimer <= 0) {
+                const sp = b.spawnHome.clone();
+                sp.x += (Math.random() - 0.5) * 4;
+                b.reset(sp, this.loadoutChoice.difficulty, b.team === 'blue' ? 'ally' : this.loadoutChoice.rivalSkin);
+              }
+            }
+          }
+        }
+
         const grav = this._getActiveGravityScale();
+        const blueTargets = [
+          { pos: this.player.pos, alive: this.player.alive },
+          ...this.allies.map((a) => ({ pos: a.pos, alive: a.alive })),
+        ];
+        const redTargets = this.enemies.map((e) => ({ pos: e.pos, alive: e.alive }));
+
         for (const enemy of this.enemies) {
           enemy.update(
             dt,
-            this.player.pos,
-            this.player.alive,
+            blueTargets,
             this.roundState === 'playing',
-            (origin, dir, dmg) => this._onBotShoot(origin, dir, dmg),
+            (shooter, origin, dir, dmg) => this._onBotShoot(shooter, origin, dir, dmg),
             grav,
             this.smokeClouds,
-            () => {
-              if (this.roundState === 'playing') {
-                this.stats.kills += 1;
-                this.sound.playKill();
-                this._pushKillFeed('TARGET FELL INTO THE SKY VOID!');
-                if (this._getAliveEnemyCount() === 0 && this.loadoutChoice.mode !== 'range') {
-                  this._endRound(true, 'SKY VOID RING-OUT!');
-                }
+            (fallen) => {
+              if (this.roundState !== 'playing') return;
+              this.stats.kills += 1;
+              this.sound.playKill();
+              this._pushKillFeed(`${fallen.name || 'TARGET'} FELL INTO THE SKY VOID!`);
+              if (this.loadoutChoice.mode === 'tdm') {
+                this.playerScore += 1;
+                fallen.respawnTimer = 2.4;
+                this._renderScorePips();
+                if (this.playerScore >= TDM_SCORE_LIMIT) this._finishMatch();
+              } else if (this._getAliveEnemyCount() === 0 && this.loadoutChoice.mode !== 'range') {
+                this._endRound(true, 'SKY VOID RING-OUT!');
               }
             }
           );
         }
+
+        for (const ally of this.allies) {
+          ally.update(
+            dt,
+            redTargets,
+            this.roundState === 'playing',
+            (shooter, origin, dir, dmg) => this._onBotShoot(shooter, origin, dir, dmg),
+            grav,
+            this.smokeClouds,
+            (fallen) => {
+              if (this.roundState !== 'playing') return;
+              this._pushKillFeed(`${fallen.name} FELL INTO THE SKY VOID!`);
+              if (this.loadoutChoice.mode === 'tdm') {
+                this.botScore += 1;
+                fallen.respawnTimer = 2.4;
+                this._renderScorePips();
+                if (this.botScore >= TDM_SCORE_LIMIT) this._finishMatch();
+              } else if (!this.player.alive && this._getAliveAllyCount() === 0) {
+                this._endRound(false, 'BLUE TEAM ELIMINATED');
+              }
+            }
+          );
+        }
+
         this._updateEffects(dt);
         this._updateHUD();
       }

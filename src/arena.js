@@ -55,9 +55,9 @@
     construction: {
       id: 'construction',
       name: 'CONSTRUCTION',
-      subtitle: 'Sunset scaffolding towers & climbable shipping crates',
-      gravityScale: 1.0,
-      hasFloor: true,
+      subtitle: 'High-altitude skyscraper scaffolding & cranes floating in the air',
+      gravityScale: 0.85,
+      hasFloor: false,
     },
     splash: {
       id: 'splash',
@@ -1018,68 +1018,109 @@
     }
 
     // =========================================================
-    // MAP 7: CONSTRUCTION
+    // MAP 7: CONSTRUCTION (High-Altitude Airborne Skyscraper!)
     // =========================================================
     _buildConstructionMap() {
       this._setLighting({
-        skyHex: 0xff9e64,
-        fogHex: 0xf9a875,
-        hemiSky: 0xffe4b5,
-        hemiGround: 0x5c3a21,
-        hemiInt: 0.92,
-        sunHex: 0xffd18c,
-        sunInt: 1.4,
-        sunPos: [-35, 30, -25],
+        skyHex: 0xff9254,
+        fogHex: 0xf9ab7d,
+        hemiSky: 0xffe8c2,
+        hemiGround: 0x7c4a2d,
+        hemiInt: 0.98,
+        sunHex: 0xffd48a,
+        sunInt: 1.42,
+        sunPos: [-35, 36, -25],
         clouds: true,
+        lowerClouds: true,
       });
 
-      this._addBox(0, -0.5, 0, 56, 1, 72, {
-        color: 0x9aa3b0,
-        studColor: 0xaab4c2,
-        solid: false,
-        shootable: true,
-        castShadow: false,
-      });
+      this.bounds = { minX: -40, maxX: 40, minZ: -44, maxZ: 44 };
+      this.spawns = {
+        player: new THREE.Vector3(0, 4.0, 22),
+        bot: new THREE.Vector3(0, 4.0, -22),
+      };
 
-      this._addPerimeter(10, 0x3f4756, 0x4e586b, 0xfacc15, 0xf97316, 0xfbbf24);
+      // Distant city skyscraper silhouettes far BELOW in the sunset haze!
+      for (const [bx, bz, bw, bd, bh] of [
+        [-42, -32, 12, 12, 24],
+        [44, -26, 14, 12, 28],
+        [-46, 26, 14, 14, 22],
+        [42, 30, 12, 14, 26],
+        [0, -54, 18, 12, 24],
+        [0, 54, 18, 12, 24],
+      ]) {
+        this._addBox(bx, -26 + bh / 2, bz, bw, bh, bd, { color: 0x475569, solid: false, castShadow: false });
+      }
 
-      this._addBox(-24, 15, -28, 2.4, 30, 2.4, { color: 0xeab308, solid: false });
-      this._addBox(0, 24, -20, 52, 1.6, 1.8, { color: 0xeab308, solid: false });
+      // Main Floating Concrete Skyscraper Floor Deck (Y = 4.0)
+      this._addBox(0, 3.4, 0, 26, 1.2, 54, { color: 0x9aa3b0, studColor: 0xaab4c2 });
+      // Yellow/black hazard safety trim along open sky edges
+      this._addBox(-13.1, 3.85, 0, 0.35, 0.35, 54.2, { color: 0xfacc15, emissive: 0xeab308, emissiveIntensity: 0.5, solid: false });
+      this._addBox(13.1, 3.85, 0, 0.35, 0.35, 54.2, { color: 0xfacc15, emissive: 0xeab308, emissiveIntensity: 0.5, solid: false });
+      // Under-deck steel support girders suspended in open air
+      this._addBox(0, 2.2, -16, 24, 1.2, 1.4, { color: 0x334155, solid: false });
+      this._addBox(0, 2.2, 0, 24, 1.2, 1.4, { color: 0x334155, solid: false });
+      this._addBox(0, 2.2, 16, 24, 1.2, 1.4, { color: 0x334155, solid: false });
 
-      const towerY = 4.8;
+      // Towering Yellow Construction Crane + Hanging Cables
+      this._addBox(-24, 16, -24, 2.4, 34, 2.4, { color: 0xeab308, solid: false });
+      this._addBox(0, 27, -14, 54, 1.6, 1.8, { color: 0xeab308, solid: false });
+      this._addBox(0, 27, 14, 54, 1.6, 1.8, { color: 0xeab308, solid: false });
+
+      // Central Elevated Steel Scaffolding Tower (Y = 8.8!)
+      const towerY = 8.8;
       this._addBox(0, towerY - 0.3, 0, 12, 0.6, 12, { color: 0xd97706, studColor: 0xf59e0b });
       for (const [px, pz] of [[-5.4, -5.4], [5.4, -5.4], [-5.4, 5.4], [5.4, 5.4]]) {
-        this._addBox(px, towerY / 2 - 0.3, pz, 0.9, towerY - 0.6, 0.9, { color: 0xca8a04 });
+        this._addBox(px, 4.0 + (towerY - 4.6) / 2, pz, 0.9, towerY - 4.6, 0.9, { color: 0xca8a04 });
       }
       this._addBox(0, towerY + 0.65, -5.4, 5.5, 1.3, 0.7, { color: 0x475569 });
       this._addBox(0, towerY + 0.65, 5.4, 5.5, 1.3, 0.7, { color: 0x475569 });
 
-      this._addRamp(-11.5, 0, 5.0, 11.0, 0, towerY, 'x', 1, { baseHex: '#b45309', studHex: '#d97706', trimColor: 0xfacc15 });
-      this._addRamp(11.5, 0, 5.0, 11.0, 0, towerY, 'x', -1, { baseHex: '#b45309', studHex: '#d97706', trimColor: 0xfacc15 });
+      // Ramps climbing to Central Scaffolding Tower
+      this._addRamp(0, 10.2, 5.0, 8.8, 4.0, towerY, 'z', -1, { baseHex: '#b45309', studHex: '#d97706', trimColor: 0xfacc15 });
+      this._addRamp(0, -10.2, 5.0, 8.8, 4.0, towerY, 'z', 1, { baseHex: '#b45309', studHex: '#d97706', trimColor: 0xfacc15 });
 
-      const contH = 3.2;
-      this._addBox(-16, contH / 2, -14, 5.2, contH, 12, { color: 0xb91c1c, studColor: 0xdc2626 });
-      this._addBox(16, contH / 2, 14, 5.2, contH, 12, { color: 0x1d4ed8, studColor: 0x2563eb });
-      this._addBox(16, contH / 2, -14, 5.2, contH, 12, { color: 0x0f766e, studColor: 0x14b8a6 });
-      this._addBox(-16, contH / 2, 14, 5.2, contH, 12, { color: 0xb45309, studColor: 0xd97706 });
+      // 2 Suspended Airborne Side Steel Platforms hanging from crane cables (Y = 7.4!)
+      const wingY = 7.4;
+      for (const xSign of [-1, 1]) {
+        const wx = xSign * 22;
+        this._addBox(wx, wingY - 0.4, 0, 11, 0.8, 22, { color: 0x475569, studColor: 0x64748b });
+        // Vertical steel crane cables going up to crane booms
+        this._addBox(wx, 17, -9, 0.25, 19, 0.25, { color: 0x1e293b, solid: false });
+        this._addBox(wx, 17, 9, 0.25, 19, 0.25, { color: 0x1e293b, solid: false });
+        // Shipping container perched on each airborne steel wing!
+        this._addBox(wx + xSign * 1.4, wingY + 1.5, 0, 4.6, 3.0, 10, {
+          color: xSign > 0 ? 0x1d4ed8 : 0xb91c1c,
+          studColor: xSign > 0 ? 0x2563eb : 0xdc2626,
+        });
+        // Steel I-beam skywalks connecting main deck to side wings!
+        this._addRamp(xSign * 14.5, 6.5, 4.2, 5.4, 4.0, wingY, 'x', xSign, { baseHex: '#b45309', studHex: '#d97706', trimColor: 0xfacc15 });
+        this._addRamp(xSign * 14.5, -6.5, 4.2, 5.4, 4.0, wingY, 'x', xSign, { baseHex: '#b45309', studHex: '#d97706', trimColor: 0xfacc15 });
+      }
 
-      this._addRamp(-16, -23.5, 4.4, 7.0, 0, contH, 'z', 1, { baseHex: '#64748b', studHex: '#94a3b8', trimColor: 0xfacc15 });
-      this._addRamp(16, 23.5, 4.4, 7.0, 0, contH, 'z', -1, { baseHex: '#64748b', studHex: '#94a3b8', trimColor: 0xfacc15 });
+      // Construction Hoist Jump Pads launching straight onto the Scaffolding Tower!
+      this._addJumpPad(-9.5, 4.0, 0, 1.9, 13.8, 0xfacc15);
+      this._addJumpPad(9.5, 4.0, 0, 1.9, 13.8, 0xfacc15);
 
+      // Concrete Jersey Barriers & Cinderblock Stacks on Main Deck
       for (const zSign of [-1, 1]) {
-        this._addBox(0, 1.3, zSign * 19, 8.5, 2.6, 1.6, { color: 0x64748b, studColor: 0x78879c });
-        this._addBox(-6.5, 1.1, zSign * 11, 2.8, 2.2, 2.8, { color: 0xd97706, studColor: 0xf59e0b });
-        this._addBox(6.5, 1.1, zSign * 11, 2.8, 2.2, 2.8, { color: 0xd97706, studColor: 0xf59e0b });
+        const accent = zSign > 0 ? 0x2de2ff : 0xff3e5e;
+        this._addBox(0, 5.3, zSign * 17.5, 8.0, 2.6, 1.5, { color: 0x64748b, studColor: 0x78879c });
+        this._addBox(0, 6.7, zSign * 17.5, 8.2, 0.2, 1.6, { color: accent, emissive: accent, solid: false });
+        this._addBox(-8.2, 5.2, zSign * 12, 2.8, 2.4, 2.8, { color: 0xd97706, studColor: 0xf59e0b });
+        this._addBox(8.2, 5.2, zSign * 12, 2.8, 2.4, 2.8, { color: 0xd97706, studColor: 0xf59e0b });
       }
 
       this.waypoints = [
         new THREE.Vector3(0, towerY, 0),
-        new THREE.Vector3(-16, contH, -14),
-        new THREE.Vector3(16, contH, 14),
-        new THREE.Vector3(-18, 0, 0),
-        new THREE.Vector3(18, 0, 0),
-        new THREE.Vector3(0, 0, 14),
-        new THREE.Vector3(0, 0, -14),
+        new THREE.Vector3(-21, wingY, 0),
+        new THREE.Vector3(21, wingY, 0),
+        new THREE.Vector3(-9.5, 4.0, 0),
+        new THREE.Vector3(9.5, 4.0, 0),
+        new THREE.Vector3(0, 4.0, 15),
+        new THREE.Vector3(0, 4.0, -15),
+        new THREE.Vector3(-7, 4.0, 20),
+        new THREE.Vector3(7, 4.0, -20),
       ];
     }
 

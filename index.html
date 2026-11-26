@@ -30,7 +30,7 @@
     <!-- Top Scoreboard -->
     <div id="scoreboard">
       <div class="team-block player-team">
-        <span class="team-name">YOU</span>
+        <span class="team-name" id="player-team-name">YOU</span>
         <div class="score-pips" id="player-pips"></div>
         <span class="team-score" id="player-score">0</span>
       </div>
@@ -320,7 +320,7 @@
               <span class="map-swatch" style="background: linear-gradient(135deg, #f97316, #7c2d12);"></span>
               <div>
                 <strong>Construction</strong>
-                <span>Scaffolding &amp; crates</span>
+                <span>Skyscraper in the air!</span>
               </div>
             </button>
             <button class="choice-btn map-card" data-map="splash">
@@ -357,22 +357,30 @@
 
         <div class="loadout-split">
           <div class="loadout-section">
-            <label class="section-label">GAME MODE (6 MODES)</label>
-            <div class="choice-grid cols-3" data-category="mode">
+            <label class="section-label">GAME MODE (8 MODES)</label>
+            <div class="choice-grid cols-4" data-category="mode">
               <button class="choice-btn center-text active" data-mode="classic">
-                <strong>Classic Duel</strong>
-                <span>1v1 Custom Loadout</span>
+                <strong>Classic 1v1</strong>
+                <span>Custom Loadout</span>
+              </button>
+              <button class="choice-btn center-text" data-mode="twovtwo">
+                <strong>2v2 Duel</strong>
+                <span>You + Ally vs 2</span>
+              </button>
+              <button class="choice-btn center-text" data-mode="tdm">
+                <strong>Team DM</strong>
+                <span>3v3 · First to 25</span>
               </button>
               <button class="choice-btn center-text" data-mode="range">
                 <strong>Shooting Range</strong>
                 <span>Test Dummies</span>
               </button>
               <button class="choice-btn center-text" data-mode="practice">
-                <strong>Practice Rounds</strong>
-                <span>Moving NPCs · No Shoot</span>
+                <strong>Practice</strong>
+                <span>3 NPCs · No Shoot</span>
               </button>
               <button class="choice-btn center-text" data-mode="assassin">
-                <strong>Ancient Assassin</strong>
+                <strong>Assassin</strong>
                 <span>Crossbow / Kunai</span>
               </button>
               <button class="choice-btn center-text" data-mode="sniper">
