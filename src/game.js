@@ -5,6 +5,7 @@
     MAPS,
     WEAPONS,
     createWeaponMesh,
+    createFirstPersonArms,
     WEAPON_SKINS,
     RIVAL_SKINS,
     KILL_EFFECTS,
@@ -39,13 +40,21 @@
       this.renderer.setSize(window.innerWidth, window.innerHeight);
       this.renderer.shadowMap.enabled = true;
       this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      if ('ACESFilmicToneMapping' in THREE) {
+        this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        this.renderer.toneMappingExposure = 1.12;
+      }
+      if ('sRGBEncoding' in THREE) {
+        this.renderer.outputEncoding = THREE.sRGBEncoding;
+      }
       this.container.appendChild(this.renderer.domElement);
 
       this.scene = new THREE.Scene();
-      this.camera = new THREE.PerspectiveCamera(82, window.innerWidth / window.innerHeight, 0.08, 260);
+      this.scene.environment = this._createEnvironmentMap();
+      this.camera = new THREE.PerspectiveCamera(82, window.innerWidth / window.innerHeight, 0.08, 320);
       this.scene.add(this.camera);
 
-      this.settings = { sensitivity: 1.0, fov: 82, autoShoot: false };
+      this.settings = { sensitivity: 1.0, fov: 82, autoShoot: false, highGraphics: true };
       this.loadoutChoice = {
         primary: 'ar',
         secondary: 'revolver',
@@ -75,8 +84,13 @@
       this.viewmodelRoot = new THREE.Group();
       this.camera.add(this.viewmodelRoot);
       this.weaponMesh = null;
+      this.fpArms = createFirstPersonArms();
+      this.fpArms.visible = false;
+      this.viewmodelRoot.add(this.fpArms);
       this.muzzleFlash = this._createMuzzleFlash();
       this.viewmodelRoot.add(this.muzzleFlash);
+      this.muzzleLight = new THREE.PointLight(0xffe082, 0, 7.5);
+      this.viewmodelRoot.add(this.muzzleLight);
 
       this.matchActive = false;
       this.isPaused = true;
@@ -131,6 +145,7 @@
 
       this.tracers = [];
       this.particles = [];
+      this.shockwaves = [];
       this.projectiles = [];
       this.firePools = [];
       this.smokeClouds = [];
@@ -168,9 +183,45 @@
         if (typeof saved.sensitivity === 'number') this.settings.sensitivity = saved.sensitivity;
         if (typeof saved.fov === 'number') this.settings.fov = saved.fov;
         if (typeof saved.autoShoot === 'boolean') this.settings.autoShoot = saved.autoShoot;
+        if (typeof saved.highGraphics === 'boolean') this.settings.highGraphics = saved.highGraphics;
       } catch {
         // Ignore storage failures
       }
+    }
+
+    _createEnvironmentMap() {
+      // Procedural studio/sky equirectangular reflection texture for glossy PBR weapons & skins!
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 128;
+      const ctx = canvas.getContext('2d');
+      const grad = ctx.createLinearGradient(0, 0, 0, 128);
+      grad.addColorStop(0, '#60a5fa');
+      grad.addColorStop(0.35, '#e0f2fe');
+      grad.addColorStop(0.5, '#ffffff');
+      grad.addColorStop(0.55, '#475569');
+      grad.addColorStop(1, '#0f172a');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 256, 128);
+
+      // Bright specular studio reflection panels
+      ctx.fillStyle = 'rgba(255, 250, 230, 0.9)';
+      ctx.fillRect(42, 16, 48, 22);
+      ctx.fillStyle = 'rgba(45, 226, 255, 0.75)';
+      ctx.fillRect(156, 24, 52, 18);
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.mapping = THREE.EquirectangularReflectionMapping;
+      if ('SRGBColorSpace' in THREE) tex.colorSpace = THREE.SRGBColorSpace;
+      else if ('sRGBEncoding' in THREE) tex.encoding = THREE.sRGBEncoding;
+      return tex;
+    }
+
+    _applyGraphicsSettings() {
+      const high = this.settings.highGraphics !== false;
+      this.renderer.setPixelRatio(high ? Math.min(window.devicePixelRatio, 2) : 1);
+      this.renderer.shadowMap.enabled = high;
+      this.renderer.shadowMap.needsUpdate = true;
     }
 
     _savePreferences() {
@@ -182,6 +233,7 @@
             sensitivity: this.settings.sensitivity,
             fov: this.settings.fov,
             autoShoot: this.settings.autoShoot,
+            highGraphics: this.settings.highGraphics,
           })
         );
       } catch {
@@ -252,6 +304,7 @@
         fovVal: document.getElementById('fov-val'),
         soundToggle: document.getElementById('sound-toggle'),
         autoShootToggle: document.getElementById('autoshoot-toggle'),
+        graphicsToggle: document.getElementById('graphics-toggle'),
       };
     }
 
@@ -280,6 +333,8 @@
       this.ui.fovSlider.value = String(this.settings.fov);
       this.ui.fovVal.textContent = String(this.settings.fov);
       if (this.ui.autoShootToggle) this.ui.autoShootToggle.checked = this.settings.autoShoot;
+      if (this.ui.graphicsToggle) this.ui.graphicsToggle.checked = this.settings.highGraphics !== false;
+      this._applyGraphicsSettings();
       this._updateAutoShootBadge();
     }
 
@@ -379,6 +434,13 @@
         this.ui.autoShootToggle.addEventListener('change', (e) => {
           this.settings.autoShoot = e.target.checked;
           this._updateAutoShootBadge();
+          this._savePreferences();
+        });
+      }
+      if (this.ui.graphicsToggle) {
+        this.ui.graphicsToggle.addEventListener('change', (e) => {
+          this.settings.highGraphics = e.target.checked;
+          this._applyGraphicsSettings();
           this._savePreferences();
         });
       }
@@ -1283,8 +1345,9 @@
 
     _explodeFrag(pos) {
       this.sound.playExplosion();
-      this._spawnParticles(pos, 0xff7b29, 26, 12);
-      this._spawnParticles(pos, 0xffe45e, 14, 8);
+      this._spawnShockwave(pos, 0xff7b29, 8.5, 0.35);
+      this._spawnParticles(pos, 0xff7b29, 28, 12);
+      this._spawnParticles(pos, 0xffe45e, 16, 8);
 
       const blastRadius = 8.5;
       for (const enemy of this.enemies) {
@@ -1375,6 +1438,7 @@
 
     _detonateFlashbang(pos) {
       this.sound.playFlashbang();
+      this._spawnShockwave(pos, 0xffffff, 10.0, 0.28);
       this._spawnParticles(pos, 0xffffff, 24, 11);
 
       const radius = 14;
@@ -1687,11 +1751,32 @@
     }
 
     _spawnTracer(start, end, colorHex) {
-      const geo = new THREE.BufferGeometry().setFromPoints([start, end]);
-      const mat = new THREE.LineBasicMaterial({ color: colorHex, transparent: true, opacity: 0.9 });
-      const line = new THREE.Line(geo, mat);
-      this.scene.add(line);
-      this.tracers.push({ line, life: 0.085, maxLife: 0.085 });
+      // Volumetric 3D glowing laser/tracer beam instead of thin 1px line!
+      const delta = new THREE.Vector3().subVectors(end, start);
+      const len = delta.length();
+      if (len < 0.05) return;
+      const geo = new THREE.CylinderGeometry(0.02, 0.02, len, 5, 1, true);
+      const mat = new THREE.MeshBasicMaterial({
+        color: colorHex,
+        transparent: true,
+        opacity: 0.9,
+      });
+      const beam = new THREE.Mesh(geo, mat);
+      beam.position.copy(start).addScaledVector(delta, 0.5);
+      beam.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), delta.normalize());
+      this.scene.add(beam);
+      this.tracers.push({ line: beam, life: 0.095, maxLife: 0.095 });
+    }
+
+    _spawnShockwave(pos, colorHex, maxRadius = 7.5, duration = 0.35) {
+      const geo = new THREE.TorusGeometry(1.0, 0.09, 8, 28);
+      const mat = new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.9 });
+      const ring = new THREE.Mesh(geo, mat);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.set(pos.x, pos.y + 0.35, pos.z);
+      ring.scale.setScalar(0.35);
+      this.scene.add(ring);
+      this.shockwaves.push({ mesh: ring, maxRadius, life: duration, maxLife: duration });
     }
 
     _spawnParticles(pos, colorHex, count = 8, speed = 6) {
@@ -1916,6 +2001,7 @@
       this.ui.scopeOverlay.classList.toggle('hidden', !scoped);
       this.ui.crosshair.classList.toggle('hidden', scoped);
       if (this.weaponMesh) this.weaponMesh.visible = !scoped;
+      if (this.fpArms) this.fpArms.visible = !scoped && p.alive;
       this.ui.slideLines.style.opacity = p.slideTimer > 0 ? '1' : '0';
     }
 
@@ -1991,10 +2077,13 @@
           this.muzzleFlash.visible = true;
           if (this.weaponMesh.userData.muzzle) {
             this.muzzleFlash.position.copy(this.weaponMesh.userData.muzzle);
+            this.muzzleLight.position.copy(this.weaponMesh.userData.muzzle);
           }
           this.muzzleFlash.rotation.z += dt * 25;
+          this.muzzleLight.intensity = this.settings.highGraphics ? 3.2 : 0;
         } else {
           this.muzzleFlash.visible = false;
+          this.muzzleLight.intensity = 0;
         }
       }
     }
@@ -2048,6 +2137,22 @@
           pt.vel.y -= pGrav * dt;
           pt.mesh.position.addScaledVector(pt.vel, dt);
           pt.mesh.material.opacity = Math.max(0, pt.life / pt.maxLife);
+        }
+      }
+
+      // Shockwave Rings
+      for (let i = this.shockwaves.length - 1; i >= 0; i--) {
+        const sw = this.shockwaves[i];
+        sw.life -= dt;
+        if (sw.life <= 0) {
+          this.scene.remove(sw.mesh);
+          sw.mesh.geometry.dispose();
+          sw.mesh.material.dispose();
+          this.shockwaves.splice(i, 1);
+        } else {
+          const progress = 1 - sw.life / sw.maxLife;
+          sw.mesh.scale.setScalar(0.35 + progress * sw.maxRadius);
+          sw.mesh.material.opacity = (1 - progress) * 0.9;
         }
       }
 
@@ -2212,8 +2317,12 @@
     _animate() {
       requestAnimationFrame(() => this._animate());
       const dt = Math.min(0.05, this.clock.getDelta());
+      const nowSec = performance.now() * 0.001;
+      this.arena.update(dt, nowSec);
 
       if (this.roundState === 'menu' || this.roundState === 'match_over') {
+        if (this.fpArms) this.fpArms.visible = false;
+        if (this.weaponMesh) this.weaponMesh.visible = false;
         const t = performance.now() * 0.00022;
         this.camera.position.set(Math.sin(t) * 26, 13.5, Math.cos(t) * 28);
         this.camera.lookAt(0, 2.5, 0);

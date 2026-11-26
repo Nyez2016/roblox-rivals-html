@@ -68,7 +68,41 @@
     },
   };
 
-  function createStudTexture(baseHex, studHex, gridSize = 64) {
+  let cachedStudBump = null;
+
+  function getStudBumpTexture() {
+    if (cachedStudBump) return cachedStudBump;
+    const size = 128;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#707070';
+    ctx.fillRect(0, 0, size, size);
+    ctx.strokeStyle = '#404040';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(2, 2, size - 4, size - 4);
+
+    const cx = size / 2;
+    const cy = size / 2;
+    const grad = ctx.createRadialGradient(cx, cy, size * 0.06, cx, cy, size * 0.27);
+    grad.addColorStop(0, '#ffffff');
+    grad.addColorStop(0.75, '#e8e8e8');
+    grad.addColorStop(1, '#555555');
+    ctx.beginPath();
+    ctx.arc(cx, cy, size * 0.27, 0, Math.PI * 2);
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.anisotropy = 8;
+    cachedStudBump = tex;
+    return tex;
+  }
+
+  function createStudTexture(baseHex, studHex, gridSize = 128) {
     const canvas = document.createElement('canvas');
     canvas.width = gridSize;
     canvas.height = gridSize;
@@ -77,7 +111,17 @@
     ctx.fillStyle = baseHex;
     ctx.fillRect(0, 0, gridSize, gridSize);
 
-    ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+    // Subtle matte plastic bevel & micro-grain
+    const bgGrad = ctx.createLinearGradient(0, 0, gridSize, gridSize);
+    bgGrad.addColorStop(0, 'rgba(255,255,255,0.07)');
+    bgGrad.addColorStop(1, 'rgba(0,0,0,0.08)');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, gridSize, gridSize);
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(2, 2, gridSize - 4, gridSize - 4);
+    ctx.strokeStyle = 'rgba(0,0,0,0.18)';
     ctx.lineWidth = 2;
     ctx.strokeRect(1, 1, gridSize - 2, gridSize - 2);
 
@@ -85,24 +129,55 @@
     const cx = gridSize / 2;
     const cy = gridSize / 2;
 
+    // Soft drop shadow under stud
     ctx.beginPath();
-    ctx.arc(cx + 2, cy + 2, r, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    ctx.arc(cx + 3, cy + 4, r * 1.03, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.24)';
     ctx.fill();
 
+    // Raised stud body with subtle gradient
+    const studGrad = ctx.createRadialGradient(cx - r * 0.25, cy - r * 0.25, r * 0.1, cx, cy, r);
+    studGrad.addColorStop(0, studHex);
+    studGrad.addColorStop(1, baseHex);
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.fillStyle = studHex;
+    ctx.fillStyle = studGrad;
     ctx.fill();
 
+    // Crisp rim highlight
     ctx.beginPath();
-    ctx.arc(cx - r * 0.25, cy - r * 0.25, r * 0.32, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    ctx.arc(cx, cy, r * 0.92, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Top specular crescent
+    ctx.beginPath();
+    ctx.arc(cx - r * 0.24, cy - r * 0.24, r * 0.3, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.26)';
     ctx.fill();
 
     const tex = new THREE.CanvasTexture(canvas);
     tex.wrapS = THREE.RepeatWrapping;
     tex.wrapT = THREE.RepeatWrapping;
+    tex.anisotropy = 8;
+    if ('SRGBColorSpace' in THREE) tex.colorSpace = THREE.SRGBColorSpace;
+    else if ('sRGBEncoding' in THREE) tex.encoding = THREE.sRGBEncoding;
+    return tex;
+  }
+
+  function createSkyDomeTexture(topHex, midHex, bottomHex) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 32;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    const grad = ctx.createLinearGradient(0, 0, 0, 256);
+    grad.addColorStop(0, topHex);
+    grad.addColorStop(0.52, midHex);
+    grad.addColorStop(1, bottomHex);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 32, 256);
+    const tex = new THREE.CanvasTexture(canvas);
     if ('SRGBColorSpace' in THREE) tex.colorSpace = THREE.SRGBColorSpace;
     else if ('sRGBEncoding' in THREE) tex.encoding = THREE.sRGBEncoding;
     return tex;
@@ -117,6 +192,7 @@
       this.colliders = [];
       this.ramps = [];
       this.jumpPads = [];
+      this.animatedProps = [];
       this.meshes = [];
       this.waypoints = [];
       this.hasFloor = true;
@@ -152,6 +228,7 @@
       this.colliders = [];
       this.ramps = [];
       this.jumpPads = [];
+      this.animatedProps = [];
       this.meshes = [];
       this.bounds = { minX: -27, maxX: 27, minZ: -35, maxZ: 35 };
       this.spawns = {
@@ -194,7 +271,37 @@
       stars = false,
     }) {
       this.scene.background = new THREE.Color(skyHex);
-      this.scene.fog = new THREE.Fog(fogHex, 56, 165);
+      this.scene.fog = new THREE.Fog(fogHex, 58, 175);
+
+      // Rich Procedural Gradient Sky Dome!
+      const baseColor = new THREE.Color(skyHex);
+      const topColor = baseColor.clone().multiplyScalar(stars ? 0.35 : 0.62);
+      const midColor = baseColor.clone();
+      const botColor = new THREE.Color(fogHex).lerp(new THREE.Color(stars ? 0x1e1b4b : 0xffffff), stars ? 0.35 : 0.28);
+      const skyTex = createSkyDomeTexture(
+        '#' + topColor.getHexString(),
+        '#' + midColor.getHexString(),
+        '#' + botColor.getHexString()
+      );
+      const skyDome = new THREE.Mesh(
+        new THREE.SphereGeometry(195, 24, 16),
+        new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, fog: false, depthWrite: false })
+      );
+      this.mapGroup.add(skyDome);
+
+      // Glowing Sun or Moon Disc aligned with light direction!
+      const sunDir = new THREE.Vector3(sunPos[0], sunPos[1], sunPos[2]).normalize();
+      const sunDisc = new THREE.Mesh(
+        new THREE.SphereGeometry(stars ? 5.5 : 7.5, 16, 12),
+        new THREE.MeshBasicMaterial({ color: stars ? 0xdbeafe : 0xfffbeb, fog: false })
+      );
+      sunDisc.position.copy(sunDir.multiplyScalar(155));
+      const sunHalo = new THREE.Mesh(
+        new THREE.SphereGeometry(stars ? 9.5 : 13.5, 16, 12),
+        new THREE.MeshBasicMaterial({ color: sunHex, transparent: true, opacity: 0.24, fog: false })
+      );
+      sunHalo.position.copy(sunDisc.position);
+      this.mapGroup.add(sunDisc, sunHalo);
 
       const hemi = new THREE.HemisphereLight(hemiSky, hemiGround, hemiInt);
       this.mapGroup.add(hemi);
@@ -205,17 +312,28 @@
       sun.shadow.mapSize.width = 2048;
       sun.shadow.mapSize.height = 2048;
       sun.shadow.camera.near = 5;
-      sun.shadow.camera.far = 150;
-      const d = 52;
+      sun.shadow.camera.far = 155;
+      const d = 56;
       sun.shadow.camera.left = -d;
       sun.shadow.camera.right = d;
       sun.shadow.camera.top = d;
       sun.shadow.camera.bottom = -d;
-      sun.shadow.bias = -0.0005;
+      sun.shadow.bias = -0.00045;
       this.mapGroup.add(sun);
 
+      // Opposite cool Rim Light so avatars, cover & weapons pop in 3D!
+      const rim = new THREE.DirectionalLight(stars ? 0xa855f7 : 0x93c5fd, stars ? 0.55 : 0.42);
+      rim.position.set(-sunPos[0], sunPos[1] * 0.6, -sunPos[2]);
+      this.mapGroup.add(rim);
+
       if (clouds) {
-        const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.78 });
+        const cloudMat = new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+          roughness: 0.95,
+          metalness: 0,
+          transparent: true,
+          opacity: 0.85,
+        });
         const cloudPositions = [
           [-32, 34, -26, 15, 3, 8],
           [26, 38, -10, 18, 3.5, 9],
@@ -226,6 +344,7 @@
           const c = new THREE.Mesh(new THREE.BoxGeometry(w, h, dep), cloudMat);
           c.position.set(x, y, z);
           this.mapGroup.add(c);
+          this.animatedProps.push({ type: 'drift', mesh: c, speed: 0.65 + Math.random() * 0.4 });
         }
       }
 
@@ -303,10 +422,17 @@
           '#' + new THREE.Color(color).getHexString(),
           '#' + new THREE.Color(studColor).getHexString()
         );
-        tex.repeat.set(Math.max(1, Math.round(w * repeatScale)), Math.max(1, Math.round(d * repeatScale)));
+        const rx = Math.max(1, Math.round(w * repeatScale));
+        const rz = Math.max(1, Math.round(d * repeatScale));
+        tex.repeat.set(rx, rz);
+        const bump = getStudBumpTexture().clone();
+        bump.needsUpdate = true;
+        bump.repeat.set(rx, rz);
         mat = new THREE.MeshStandardMaterial({
           map: tex,
-          roughness,
+          bumpMap: bump,
+          bumpScale: 0.045,
+          roughness: Math.min(0.62, roughness),
           metalness,
           transparent: opacity < 1,
           opacity,
@@ -367,9 +493,30 @@
         new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.45 })
       );
       core.position.set(x, y + 0.26, z);
-      this.mapGroup.add(base, glowRing, core);
+      const floatRing = new THREE.Mesh(
+        new THREE.TorusGeometry(radius * 0.62, 0.06, 8, 22),
+        new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.85 })
+      );
+      floatRing.rotation.x = Math.PI / 2;
+      floatRing.position.set(x, y + 0.65, z);
+      this.mapGroup.add(base, glowRing, core, floatRing);
+      this.animatedProps.push({ type: 'padRing', mesh: floatRing, baseY: y + 0.35, phase: Math.random() * 6.28 });
 
       this.jumpPads.push({ x, y, z, radius, launchVel });
+    }
+
+    update(dt, timeSec) {
+      for (const prop of this.animatedProps) {
+        if (prop.type === 'padRing') {
+          const cycle = ((timeSec * 1.4 + prop.phase) % 1.0);
+          prop.mesh.position.y = prop.baseY + cycle * 1.35;
+          prop.mesh.scale.setScalar(1.0 - cycle * 0.25);
+          prop.mesh.material.opacity = (1.0 - cycle) * 0.85;
+        } else if (prop.type === 'drift') {
+          prop.mesh.position.x += prop.speed * dt;
+          if (prop.mesh.position.x > 64) prop.mesh.position.x = -64;
+        }
+      }
     }
 
     _addRamp(xCenter, zCenter, width, length, yStart, yEnd, axis, dir, opts = {}) {

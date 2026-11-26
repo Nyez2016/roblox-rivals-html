@@ -852,6 +852,42 @@
     return group;
   }
 
+  function createFirstPersonArms() {
+    const arms = new THREE.Group();
+    const sleeveMat = new THREE.MeshStandardMaterial({ color: 0x182234, roughness: 0.55, metalness: 0.25 });
+    const gloveMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.65, metalness: 0.15 });
+    const cuffMat = new THREE.MeshStandardMaterial({
+      color: 0x2de2ff,
+      emissive: 0x2de2ff,
+      emissiveIntensity: 0.8,
+      roughness: 0.3,
+    });
+
+    // Right tactical arm holding grip
+    const rForearm = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.11, 0.38), sleeveMat);
+    rForearm.position.set(0.05, -0.14, 0.28);
+    rForearm.rotation.set(0.18, -0.1, 0);
+
+    const rCuff = new THREE.Mesh(new THREE.BoxGeometry(0.118, 0.118, 0.04), cuffMat);
+    rCuff.position.set(0.04, -0.11, 0.12);
+
+    const rHand = new THREE.Mesh(new THREE.BoxGeometry(0.095, 0.095, 0.12), gloveMat);
+    rHand.position.set(0.02, -0.09, 0.06);
+
+    // Left support glove near barrel/foregrip
+    const lHand = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.085, 0.14), gloveMat);
+    lHand.position.set(-0.08, -0.09, -0.15);
+    lHand.rotation.y = 0.25;
+
+    const lCuff = new THREE.Mesh(new THREE.BoxGeometry(0.098, 0.092, 0.035), cuffMat);
+    lCuff.position.set(-0.11, -0.1, -0.07);
+    lCuff.rotation.y = 0.25;
+
+    arms.add(rForearm, rCuff, rHand, lHand, lCuff);
+    return arms;
+  }
+
   Rivals.WEAPONS = WEAPONS;
   Rivals.createWeaponMesh = createWeaponMesh;
+  Rivals.createFirstPersonArms = createFirstPersonArms;
 })(window);
