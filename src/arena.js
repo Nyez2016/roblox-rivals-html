@@ -193,6 +193,7 @@
       this.ramps = [];
       this.jumpPads = [];
       this.ladders = [];
+      this.tempWalls = [];
       this.animatedProps = [];
       this.trainHazard = null;
       this.meshes = [];
@@ -231,6 +232,7 @@
       this.ramps = [];
       this.jumpPads = [];
       this.ladders = [];
+      this.tempWalls = [];
       this.animatedProps = [];
       this.trainHazard = null;
       this.meshes = [];
@@ -555,6 +557,7 @@
     }
 
     update(dt, timeSec, onTrainEvent = null) {
+      this.updateTempWalls(dt);
       for (const prop of this.animatedProps) {
         if (prop.type === 'padRing') {
           const cycle = ((timeSec * 1.4 + prop.phase) % 1.0);
@@ -772,6 +775,11 @@
       this._addJumpPad(-14, 0, 18, 1.8, 12.6, 0x2de2ff);
       // Launch right over the 11m Shooting Range perimeter wall from the balcony!
       this._addJumpPad(-22, balcY, 6, 2.0, 19.5, 0x38ef7d);
+      // Tall 3-Story Sniper Watchtower perched on the West Balcony (Y = 8.4)!
+      const watchY = 8.4;
+      this._addBox(-23, watchY - 0.3, 14, 6.2, 0.6, 6.2, { color: 0x334155, studColor: 0x475569 });
+      this._addBox(-23, watchY + 0.65, 11.2, 5.8, 1.3, 0.5, { color: 0x2de2ff, emissive: 0x0284c7, emissiveIntensity: 0.45 });
+      this._addLadder(-20.0, 14, balcY, watchY + 0.2, 'x', 1.25);
 
       // Far Elevated Target Gallery Platform (North back wall at Y = 3.4)
       const backY = 3.4;
@@ -875,6 +883,11 @@
       this._addBox(0, 9.2, 0, 13, 0.7, 13, { color: 0xfbbf24, studColor: 0xfde047 });
       // Center waist cover block
       this._addBox(0, 5.4, 0, 3.2, 1.6, 3.2, { color: 0xe2e8f0, studColor: 0xf8fafc });
+      // Towering Upper Cloud Citadel Peak (Y = 13.4!) reachable by ladder, Double Jump, or Launch Pads!
+      this._addLadder(0, 6.4, 4.6, 9.8, 'z', 1.2);
+      this._addFloatingIsland(0, 13.4, 0, 8.5, 8.5, 0xfbbf24, 0xfde047, 0x64748b);
+      this._addJumpPad(0, 9.55, -4.5, 1.6, 12.0, 0x38bdf8);
+      this._addJumpPad(0, 9.55, 4.5, 1.6, 12.0, 0x38bdf8);
 
       // Sweeping Floating Sky Bridges connecting Spawn Islands to Center Island
       this._addRamp(0, 12.5, 5.2, 10.5, 2.0, 4.6, 'z', -1, { baseHex: '#d97706', studHex: '#f59e0b', trimColor: 0x2de2ff });
@@ -944,6 +957,11 @@
       this._addBox(0, 11.4, 0, 16.4, 0.35, 16.4, { color: 0xfbbf24, emissive: 0xfbbf24, solid: false });
       this._addBox(-4.5, 13.6, 0, 1.6, 2.0, 4.8, { color: 0x38bdf8, studColor: 0x7dd3fc });
       this._addBox(4.5, 13.6, 0, 1.6, 2.0, 4.8, { color: 0x38bdf8, studColor: 0x7dd3fc });
+      // Stratosphere Needle Peak (Y = 18.2!) soaring above the Sky Crown!
+      this._addBox(0, 17.8, 0, 9.5, 0.8, 9.5, { color: 0x0f172a, studColor: 0x1e293b });
+      this._addBox(0, 17.2, 0, 9.8, 0.25, 9.8, { color: 0x2de2ff, emissive: 0x2de2ff, solid: false });
+      this._addJumpPad(0, 12.6, 5.6, 1.7, 13.4, 0x2de2ff);
+      this._addJumpPad(0, 12.6, -5.6, 1.7, 13.4, 0xff3e5e);
 
       // Launch pads shooting players straight up to the Sky Crown (Y=12.6) & Side Wings (Y=8.4)!
       this._addJumpPad(0, 4.0, 13, 2.1, 15.6, 0x2de2ff);
@@ -1019,6 +1037,17 @@
 
       this._addRamp(-11.5, 0, 6.2, 9.0, 0, bridgeY, 'x', 1);
       this._addRamp(11.5, 0, 6.2, 9.0, 0, bridgeY, 'x', -1);
+
+      // 2nd-Story High Sky Arch Overpass (Y = 8.2!) above the center bridge!
+      const highY = 8.2;
+      this._addBox(0, highY - 0.3, 0, 22, 0.6, 4.6, { color: 0x2a374f, studColor: 0x3b4d6d });
+      this._addBox(0, highY - 0.65, 0, 22.4, 0.2, 4.8, { color: 0x2de2ff, emissive: 0x2de2ff, solid: false });
+      this._addBox(-5.5, highY + 0.65, 0, 1.8, 1.3, 1.2, { color: 0x2de2ff, studColor: 0x7dd3fc });
+      this._addBox(5.5, highY + 0.65, 0, 1.8, 1.3, 1.2, { color: 0xff3e5e, studColor: 0xfb7185 });
+      this._addJumpPad(-18, 0, 0, 1.9, 14.8, 0x2de2ff);
+      this._addJumpPad(18, 0, 0, 1.9, 14.8, 0x2de2ff);
+      this._addLadder(-6.5, 0, bridgeY, highY + 0.2, 'x', 1.2);
+      this._addLadder(6.5, 0, bridgeY, highY + 0.2, 'x', 1.2);
 
       for (const zSign of [-1, 1]) {
         const teamAccent = zSign > 0 ? 0x2de2ff : 0xff3e5e;
@@ -1096,6 +1125,13 @@
       this._addBox(0, coreY - 0.75, 0, 13.4, 0.22, 13.4, { color: 0x38bdf8, emissive: 0x38bdf8, solid: false });
       this._addBox(0, coreY + 1.1, 0, 2.2, 2.2, 2.2, { color: 0x1e1b4b, studColor: 0x4338ca });
       this._addBox(0, coreY + 2.35, 0, 2.3, 0.25, 2.3, { color: 0xc084fc, emissive: 0xc084fc, solid: false });
+
+      // High Orbit Command Deck (Y = 12.0!) floating high above the Zero-G core!
+      const orbitY = 12.0;
+      this._addBox(0, orbitY - 0.35, 0, 11, 0.7, 11, { color: 0x1e293b, studColor: 0x334155, metalness: 0.6 });
+      this._addBox(0, orbitY - 0.75, 0, 11.4, 0.22, 11.4, { color: 0xc084fc, emissive: 0xc084fc, solid: false });
+      this._addJumpPad(-5.2, coreY, 0, 1.6, 11.2, 0xc084fc);
+      this._addJumpPad(5.2, coreY, 0, 1.6, 11.2, 0xc084fc);
 
       const padY = 4.6;
       for (const [ax, az] of [[-17, -14], [17, -14], [-17, 14], [17, 14]]) {
@@ -1197,6 +1233,10 @@
         }
         this._addRamp(px, 12.2, 5.5, 8.4, 0, deckY, 'z', -1, { baseHex: '#991b1b', studHex: '#b91c1c', trimColor: 0xfbbf24 });
         this._addRamp(px, -12.2, 5.5, 8.4, 0, deckY, 'z', 1, { baseHex: '#991b1b', studHex: '#b91c1c', trimColor: 0xfbbf24 });
+        // Climbable Ladder right up onto the Golden Pagoda Rooftop + 3rd Tier Spire (Y = 12.6)!
+        this._addLadder(px - xSign * 5.1, 0, deckY, deckY + 5.6, 'x', 1.25);
+        this._addBox(px, deckY + 8.6, 0, 5.6, 0.7, 7.6, { color: 0xf59e0b, studColor: 0xfde047 });
+        this._addJumpPad(px, deckY + 5.25, 4.2, 1.5, 11.2, 0xfbbf24);
       }
 
       this._addJumpPad(-12.5, 0, 0, 1.9, 14.2, 0x34d399);
@@ -1360,6 +1400,17 @@
       this._addRamp(0, 14.5, 4.8, 9.0, 0, trainH, 'z', -1, { baseHex: '#334155', studHex: '#475569', trimColor: 0x2de2ff });
       this._addRamp(0, -14.5, 4.8, 9.0, 0, trainH, 'z', 1, { baseHex: '#334155', studHex: '#475569', trimColor: 0xff3e5e });
 
+      // Upper Neon Skywalk Concourse (Y = 7.6!) spanning high above BOTH Express Train tracks!
+      const skywalkY = 7.6;
+      this._addBox(0, skywalkY - 0.3, 0, 38, 0.6, 5.2, { color: 0x1e293b, studColor: 0x334155 });
+      this._addBox(0, skywalkY - 0.65, 0, 38.4, 0.2, 5.4, { color: 0x00f5ff, emissive: 0x00f5ff, solid: false });
+      this._addBox(-5.5, skywalkY + 0.65, 0, 1.8, 1.3, 1.4, { color: 0xd946ef, studColor: 0xe879f9 });
+      this._addBox(5.5, skywalkY + 0.65, 0, 1.8, 1.3, 1.4, { color: 0x00f5ff, studColor: 0x7dd3fc });
+      this._addJumpPad(-16, platY, 0, 1.8, 13.0, 0x00f5ff);
+      this._addJumpPad(16, platY, 0, 1.8, 13.0, 0xd946ef);
+      this._addLadder(-18.5, 3.0, platY, skywalkY + 0.2, 'z', 1.2);
+      this._addLadder(18.5, -3.0, platY, skywalkY + 0.2, 'z', 1.2);
+
       for (const zSign of [-1, 1]) {
         // Keep Express Tracks at X = ±7.4 completely clear; place spawn cover in center!
         this._addBox(0, 1.4, zSign * 23, 6.2, 2.8, 1.4, { color: 0x2c3652, studColor: 0x3b486b });
@@ -1462,6 +1513,9 @@
       // Crane Operator Cabin perched right beside the ladder top at X = -18!
       this._addBox(-18, craneY + 2.2, 0, 4.2, 3.0, 4.0, { color: 0xd97706, studColor: 0xf59e0b });
       this._addBox(-15.85, craneY + 2.3, 0, 0.15, 1.6, 2.8, { color: 0x38bdf8, emissive: 0x38bdf8, solid: false });
+      // Upper Crane Jib Overlook (Y = 20.8!) reachable via ladder on the Operator Cabin!
+      this._addLadder(-15.7, 0, craneY + 0.7, craneY + 4.1, 'x', 1.2);
+      this._addBox(-18, craneY + 5.2, 0, 6.2, 0.7, 5.2, { color: 0xfacc15, studColor: 0xfde047 });
       // Counterweight block & glowing red crane beacon
       this._addBox(-26, craneY + 1.1, 0, 4.4, 2.4, 4.2, { color: 0x475569, studColor: 0x64748b });
       this._addBox(26, craneY + 1.0, 0, 1.2, 1.2, 1.2, { color: 0xff3e5e, emissive: 0xff3e5e, solid: false });
@@ -1569,6 +1623,11 @@
       this._addRamp(0, 7.4, 4.5, 4.8, 0, islandY, 'z', -1, { baseHex: '#34d399', studHex: '#6ee7b7', trimColor: 0xfde047 });
       this._addRamp(0, -7.4, 4.5, 4.8, 0, islandY, 'z', 1, { baseHex: '#34d399', studHex: '#6ee7b7', trimColor: 0xfde047 });
 
+      // Towering High-Dive Sky Platform (Y = 9.6!) right above the center umbrella!
+      this._addLadder(0, 3.6, islandY, 6.5, 'z', 1.2);
+      this._addBox(0, 9.6, 0, 7.0, 0.6, 12.0, { color: 0x38bdf8, studColor: 0x7dd3fc });
+      this._addJumpPad(0, islandY + 4.75, 0, 1.7, 13.0, 0xfde047);
+
       this._addJumpPad(-11, 0, 0, 1.9, 13.8, 0x22d3ee);
       this._addJumpPad(11, 0, 0, 1.9, 13.8, 0x22d3ee);
 
@@ -1608,6 +1667,40 @@
         new THREE.Vector3(-10, 0, 20),
         new THREE.Vector3(10, 0, 20),
       ];
+    }
+
+    addTemporaryWall(x, y, z, yaw, life = 12.0) {
+      // Trowel-built solid Roblox brick wall!
+      const alignX = Math.abs(Math.sin(yaw)) < 0.707;
+      const w = alignX ? 4.4 : 1.0;
+      const d = alignX ? 1.0 : 4.4;
+      const h = 3.2;
+      const cy = y + h / 2;
+      const mesh = this._addBox(x, cy, z, w, h, d, {
+        color: 0xd97706,
+        studColor: 0xf59e0b,
+        solid: true,
+      });
+      const collider = this.colliders[this.colliders.length - 1];
+      this.tempWalls.push({ mesh, collider, life });
+      return mesh;
+    }
+
+    updateTempWalls(dt) {
+      for (let i = this.tempWalls.length - 1; i >= 0; i--) {
+        const tw = this.tempWalls[i];
+        tw.life -= dt;
+        if (tw.life <= 0) {
+          this.mapGroup.remove(tw.mesh);
+          const mi = this.meshes.indexOf(tw.mesh);
+          if (mi >= 0) this.meshes.splice(mi, 1);
+          const ci = this.colliders.indexOf(tw.collider);
+          if (ci >= 0) this.colliders.splice(ci, 1);
+          tw.mesh.geometry.dispose();
+          tw.mesh.material.dispose();
+          this.tempWalls.splice(i, 1);
+        }
+      }
     }
 
     checkJumpPad(pos) {

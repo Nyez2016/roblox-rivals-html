@@ -4,6 +4,7 @@
     Arena,
     MAPS,
     WEAPONS,
+    STARTER_WEAPONS,
     createWeaponMesh,
     createFirstPersonArms,
     createPlayerAvatar,
@@ -21,7 +22,7 @@
   const TDM_SCORE_LIMIT = 25;
   const ROUND_DURATION = 90;
   const TDM_DURATION = 180;
-  const STORAGE_KEY = 'rivals_html_prefs_v3';
+  const STORAGE_KEY = 'rivals_html_prefs_v4';
   const PAINT_COLORS = [0xff5ef7, 0x2de2ff, 0x38ef7d, 0xffd447, 0xff5a36, 0xa855f7];
 
   const GRAVITY_MODES = {
@@ -56,10 +57,13 @@
       this.scene.add(this.camera);
 
       this.settings = { sensitivity: 1.0, fov: 82, autoShoot: false, highGraphics: true };
+      this.keysCurrency = 40;
+      this.unlockedWeapons = new Set(STARTER_WEAPONS || ['ar', 'handgun', 'fists', 'grenade']);
+      this.previewWeaponId = 'ar';
       this.loadoutChoice = {
         primary: 'ar',
-        secondary: 'revolver',
-        melee: 'katana',
+        secondary: 'handgun',
+        melee: 'fists',
         utility: 'grenade',
         map: 'arena',
         gravity: 'auto',
@@ -118,6 +122,10 @@
         alive: true,
         onGround: true,
         coyoteTimer: 0,
+        jumpsLeft: 2,
+        spaceWasDown: false,
+        footstepTimer: 0,
+        warhornTimer: 0,
         eyeHeight: 1.62,
         slideTimer: 0,
         slideCooldown: 0,
@@ -131,6 +139,7 @@
       this.slots = [];
       this.activeSlot = 0;
       this.fireCooldown = 0;
+      this.scopeHintTimer = 0;
       this.burstQueue = 0;
       this.burstDelay = 0;
       this.isReloading = false;
@@ -180,10 +189,24 @@
         const raw = localStorage.getItem(STORAGE_KEY);
         if (!raw) return;
         const saved = JSON.parse(raw);
-        if (saved.primary && WEAPONS[saved.primary]) this.loadoutChoice.primary = saved.primary;
-        if (saved.secondary && WEAPONS[saved.secondary]) this.loadoutChoice.secondary = saved.secondary;
-        if (saved.melee && WEAPONS[saved.melee]) this.loadoutChoice.melee = saved.melee;
-        if (saved.utility && WEAPONS[saved.utility]) this.loadoutChoice.utility = saved.utility;
+        if (typeof saved.keysCurrency === 'number' && Number.isFinite(saved.keysCurrency)) {
+          this.keysCurrency = Math.max(0, Math.floor(saved.keysCurrency));
+        }
+        if (Array.isArray(saved.unlockedWeapons)) {
+          this.unlockedWeapons = new Set([...(STARTER_WEAPONS || ['ar', 'handgun', 'fists', 'grenade']), ...saved.unlockedWeapons]);
+        }
+        if (saved.primary && WEAPONS[saved.primary] && this.unlockedWeapons.has(saved.primary)) {
+          this.loadoutChoice.primary = saved.primary;
+        }
+        if (saved.secondary && WEAPONS[saved.secondary] && this.unlockedWeapons.has(saved.secondary)) {
+          this.loadoutChoice.secondary = saved.secondary;
+        }
+        if (saved.melee && WEAPONS[saved.melee] && this.unlockedWeapons.has(saved.melee)) {
+          this.loadoutChoice.melee = saved.melee;
+        }
+        if (saved.utility && WEAPONS[saved.utility] && this.unlockedWeapons.has(saved.utility)) {
+          this.loadoutChoice.utility = saved.utility;
+        }
         if (saved.map && MAPS[saved.map]) this.loadoutChoice.map = saved.map;
         if (saved.gravity && GRAVITY_MODES[saved.gravity]) this.loadoutChoice.gravity = saved.gravity;
         if (['classic', 'assassin', 'sniper', 'randomizer', 'practice', 'range', 'twovtwo', 'tdm'].includes(saved.mode)) {
@@ -243,6 +266,8 @@
           STORAGE_KEY,
           JSON.stringify({
             ...this.loadoutChoice,
+            keysCurrency: this.keysCurrency,
+            unlockedWeapons: Array.from(this.unlockedWeapons),
             sensitivity: this.settings.sensitivity,
             fov: this.settings.fov,
             autoShoot: this.settings.autoShoot,
@@ -251,6 +276,18 @@
         );
       } catch {
         // Ignore storage failures
+      }
+    }
+
+    _awardKeys(amount, reason) {
+      if (!amount || amount <= 0) return;
+      this.keysCurrency += amount;
+      if (this.ui && this.ui.keysCount) {
+        this.ui.keysCount.textContent = String(this.keysCurrency);
+      }
+      this._savePreferences();
+      if (this.matchActive) {
+        this._pushKillFeed(`+${amount} KEYS (${reason})`);
       }
     }
 
@@ -280,10 +317,31 @@
         mapBadge: document.getElementById('map-badge'),
         gravBadge: document.getElementById('grav-badge'),
         autoShootBadge: document.getElementById('autoshoot-badge'),
+        warhornBadge: document.getElementById('warhorn-badge'),
+        scopeHint: document.getElementById('scope-hint'),
+        keysCount: document.getElementById('keys-count'),
+        profTier: document.getElementById('prof-tier'),
+        profName: document.getElementById('prof-name'),
+        profActionBtn: document.getElementById('prof-action-btn'),
+        profDesc: document.getElementById('prof-desc'),
+        profTip: document.getElementById('prof-tip'),
+        profDmgTxt: document.getElementById('prof-dmg-txt'),
+        profDmgBar: document.getElementById('prof-dmg-bar'),
+        profRofTxt: document.getElementById('prof-rof-txt'),
+        profRofBar: document.getElementById('prof-rof-bar'),
+        profRngTxt: document.getElementById('prof-rng-txt'),
+        profRngBar: document.getElementById('prof-rng-bar'),
+        profMobTxt: document.getElementById('prof-mob-txt'),
+        profMobBar: document.getElementById('prof-mob-bar'),
+        gridPrimary: document.getElementById('grid-primary'),
+        gridSecondary: document.getElementById('grid-secondary'),
+        gridMelee: document.getElementById('grid-melee'),
+        gridUtility: document.getElementById('grid-utility'),
         roundLabel: document.getElementById('round-label'),
         roundTimer: document.getElementById('round-timer'),
         hpValue: document.getElementById('hp-value'),
         hpFill: document.getElementById('hp-bar-fill'),
+        djumpFill: document.getElementById('djump-cd-fill'),
         slideFill: document.getElementById('slide-cd-fill'),
         dashFill: document.getElementById('dash-cd-fill'),
         weaponName: document.getElementById('weapon-name-hud'),
@@ -332,10 +390,6 @@
           btn.classList.toggle('active', btn.dataset[attr] === val);
         });
       };
-      syncGroup('primary', 'weapon', this.loadoutChoice.primary);
-      syncGroup('secondary', 'weapon', this.loadoutChoice.secondary);
-      syncGroup('melee', 'weapon', this.loadoutChoice.melee);
-      syncGroup('utility', 'weapon', this.loadoutChoice.utility);
       syncGroup('map', 'map', this.loadoutChoice.map);
       syncGroup('gravity', 'grav', this.loadoutChoice.gravity);
       syncGroup('mode', 'mode', this.loadoutChoice.mode);
@@ -343,6 +397,9 @@
       syncGroup('weaponSkin', 'skin', this.loadoutChoice.weaponSkin);
       syncGroup('rivalSkin', 'rskin', this.loadoutChoice.rivalSkin);
       syncGroup('killEffect', 'kfx', this.loadoutChoice.killEffect);
+
+      this._renderArmory();
+      this._showWeaponProfile(this.previewWeaponId || this.loadoutChoice.primary);
 
       this.ui.sensSlider.value = String(this.settings.sensitivity);
       this.ui.sensVal.textContent = this.settings.sensitivity.toFixed(1);
@@ -352,6 +409,198 @@
       if (this.ui.graphicsToggle) this.ui.graphicsToggle.checked = this.settings.highGraphics !== false;
       this._applyGraphicsSettings();
       this._updateAutoShootBadge();
+    }
+
+    _getWeaponShortTag(w) {
+      if (w.pierceWalls) return 'Pierces Walls';
+      if (w.scopedOnly) return 'Scope-Only 150 HS';
+      if (w.explosiveRadius) return `Blast ${w.damage} AoE`;
+      if (w.flameStream) return 'Flame Stream';
+      if (w.spawnFirePool) return 'Fire Pool';
+      if (w.scytheJump) return 'RMB Scythe Jump';
+      if (w.buildWall) return 'RMB Build Wall';
+      if (w.backstabDamage) return `${w.backstabDamage} Backstab`;
+      if (w.utilityType === 'freeze') return 'Freeze 2.2s';
+      if (w.utilityType === 'warhorn') return '+38% Speed/ROF';
+      if (w.utilityType === 'medkit') return 'Heal +50 HP';
+      if (w.utilityType === 'satchel') return '105 AoE / Jump';
+      if (w.utilityType === 'smoke') return 'Blocks AI Vision';
+      if (w.utilityType === 'flash') return 'Blinds 2.8s';
+      if (w.utilityType === 'molotov') return 'Burn Zone';
+      if (w.utilityType === 'frag') return '92 AoE / Jump';
+      if (w.pellets > 1) return `${w.pellets}x${w.damage} Pellets`;
+      if (w.slotType === 'melee') return `${w.damage} / ${w.lungeDamage} Lunge`;
+      return `${w.damage} / ${w.headDamage || w.damage} HS`;
+    }
+
+    _renderArmory() {
+      if (this.ui.keysCount) {
+        this.ui.keysCount.textContent = String(this.keysCurrency);
+      }
+
+      const grids = {
+        primary: this.ui.gridPrimary,
+        secondary: this.ui.gridSecondary,
+        melee: this.ui.gridMelee,
+        utility: this.ui.gridUtility,
+      };
+
+      for (const slotKey of Object.keys(grids)) {
+        const container = grids[slotKey];
+        if (!container) continue;
+        container.innerHTML = '';
+
+        const list = Object.values(WEAPONS).filter((w) => w.slotType === slotKey);
+        for (const w of list) {
+          const unlocked = this.unlockedWeapons.has(w.id) || (w.cost || 0) <= 0;
+          const equipped = this.loadoutChoice[slotKey] === w.id;
+          const previewing = this.previewWeaponId === w.id;
+
+          const btn = document.createElement('button');
+          btn.className = 'choice-btn';
+          if (equipped) btn.classList.add('active');
+          if (!unlocked) btn.classList.add('locked-weapon');
+          if (previewing) btn.classList.add('previewing');
+          btn.dataset.weapon = w.id;
+
+          const strong = document.createElement('strong');
+          strong.textContent = w.name;
+          const sub = document.createElement('span');
+          if (!unlocked) {
+            sub.className = 'key-tag';
+            sub.textContent = `LOCKED · ${w.cost} KEYS`;
+          } else {
+            sub.textContent = this._getWeaponShortTag(w);
+          }
+
+          btn.appendChild(strong);
+          btn.appendChild(sub);
+
+          btn.addEventListener('mouseenter', () => {
+            this._showWeaponProfile(w.id);
+          });
+
+          btn.addEventListener('click', () => {
+            this.previewWeaponId = w.id;
+            if (unlocked) {
+              this.loadoutChoice[slotKey] = w.id;
+              this._savePreferences();
+              if (this.matchActive && this.loadoutChoice.mode === 'range') {
+                this._buildLoadoutSlots();
+              }
+            }
+            this._renderArmory();
+            this._showWeaponProfile(w.id);
+          });
+
+          container.appendChild(btn);
+        }
+      }
+    }
+
+    _showWeaponProfile(weaponId) {
+      const w = WEAPONS[weaponId] || WEAPONS.ar;
+      this.previewWeaponId = w.id;
+      const unlocked = this.unlockedWeapons.has(w.id) || (w.cost || 0) <= 0;
+      const equipped = this.loadoutChoice[w.slotType] === w.id;
+
+      if (this.ui.profTier) {
+        const tier = (w.tier || 'Starter').toLowerCase();
+        this.ui.profTier.textContent = `${(w.tier || 'Starter').toUpperCase()} · ${w.slotType.toUpperCase()}`;
+        this.ui.profTier.className = `profile-tier tier-${tier}`;
+      }
+      if (this.ui.profName) this.ui.profName.textContent = w.name;
+      if (this.ui.profDesc) this.ui.profDesc.textContent = w.desc || '';
+      if (this.ui.profTip) this.ui.profTip.textContent = w.tip ? `Tip: ${w.tip}` : '';
+
+      const dmgVal = w.pellets > 1 ? w.damage * w.pellets : w.backstabDamage || w.headDamage || w.damage || 0;
+      const dmgPct = Math.min(100, Math.max(8, Math.round((dmgVal / 150) * 100)));
+      const dmgTxt =
+        w.slotType === 'utility'
+          ? w.damage > 0
+            ? `${w.damage} DMG`
+            : w.utilityType === 'medkit'
+            ? '+50 HP'
+            : 'TACTICAL'
+          : w.slotType === 'melee'
+          ? w.backstabDamage
+            ? `${w.damage} / ${w.backstabDamage} BS`
+            : `${w.damage} / ${w.lungeDamage} LNG`
+          : w.pellets > 1
+          ? `${w.pellets}x${w.damage}`
+          : `${w.damage} / ${w.headDamage || w.damage} HS`;
+
+      const rof = w.fireRate || 1;
+      const rofPct = Math.min(100, Math.max(8, Math.round((rof / 16.5) * 100)));
+      const rofTxt = `${rof.toFixed(1)} /s`;
+
+      const rng = w.range || 0;
+      const rngPct = Math.min(100, Math.max(8, Math.round((rng / 240) * 100)));
+      const rngTxt = rng > 0 ? `${rng}m` : 'SELF';
+
+      const mob = Math.round((w.moveMult || 1) * 100);
+      const mobPct = Math.min(100, Math.max(20, Math.round(((mob - 75) / 50) * 100)));
+
+      if (this.ui.profDmgTxt) this.ui.profDmgTxt.textContent = dmgTxt;
+      if (this.ui.profDmgBar) this.ui.profDmgBar.style.width = `${dmgPct}%`;
+      if (this.ui.profRofTxt) this.ui.profRofTxt.textContent = rofTxt;
+      if (this.ui.profRofBar) this.ui.profRofBar.style.width = `${rofPct}%`;
+      if (this.ui.profRngTxt) this.ui.profRngTxt.textContent = rngTxt;
+      if (this.ui.profRngBar) this.ui.profRngBar.style.width = `${rngPct}%`;
+      if (this.ui.profMobTxt) this.ui.profMobTxt.textContent = `${mob}%`;
+      if (this.ui.profMobBar) this.ui.profMobBar.style.width = `${mobPct}%`;
+
+      const btn = this.ui.profActionBtn;
+      if (btn) {
+        btn.className = 'profile-unlock-btn';
+        if (equipped) {
+          btn.textContent = 'EQUIPPED';
+          btn.classList.add('equipped');
+        } else if (unlocked) {
+          btn.textContent = 'EQUIP';
+          btn.classList.add('equip');
+        } else if (this.keysCurrency >= (w.cost || 0)) {
+          btn.textContent = `UNLOCK (${w.cost} KEYS)`;
+          btn.classList.add('buy');
+        } else {
+          btn.textContent = `NEED ${w.cost} KEYS`;
+          btn.classList.add('locked-poor');
+        }
+      }
+    }
+
+    _handleProfileAction() {
+      const w = WEAPONS[this.previewWeaponId];
+      if (!w) return;
+      const unlocked = this.unlockedWeapons.has(w.id) || (w.cost || 0) <= 0;
+      if (unlocked) {
+        this.loadoutChoice[w.slotType] = w.id;
+        this._savePreferences();
+        if (this.matchActive && this.loadoutChoice.mode === 'range') {
+          this._buildLoadoutSlots();
+        }
+        this._renderArmory();
+        this._showWeaponProfile(w.id);
+        return;
+      }
+
+      const cost = w.cost || 0;
+      if (this.keysCurrency < cost) {
+        this.sound.playDryClick();
+        return;
+      }
+
+      this.sound.unlock();
+      this.keysCurrency -= cost;
+      this.unlockedWeapons.add(w.id);
+      this.loadoutChoice[w.slotType] = w.id;
+      this.sound.playUnlock();
+      this._savePreferences();
+      if (this.matchActive && this.loadoutChoice.mode === 'range') {
+        this._buildLoadoutSlots();
+      }
+      this._renderArmory();
+      this._showWeaponProfile(w.id);
     }
 
     _createMuzzleFlash() {
@@ -379,17 +628,18 @@
         });
       });
 
+      if (this.ui.profActionBtn) {
+        this.ui.profActionBtn.addEventListener('click', () => this._handleProfileAction());
+      }
+
       document.querySelectorAll('[data-category]').forEach((group) => {
         const cat = group.dataset.category;
+        if (['primary', 'secondary', 'melee', 'utility'].includes(cat)) return;
         group.querySelectorAll('.choice-btn').forEach((btn) => {
           btn.addEventListener('click', () => {
             group.querySelectorAll('.choice-btn').forEach((b) => b.classList.remove('active'));
             btn.classList.add('active');
 
-            if (cat === 'primary') this.loadoutChoice.primary = btn.dataset.weapon;
-            if (cat === 'secondary') this.loadoutChoice.secondary = btn.dataset.weapon;
-            if (cat === 'melee') this.loadoutChoice.melee = btn.dataset.weapon;
-            if (cat === 'utility') this.loadoutChoice.utility = btn.dataset.weapon;
             if (cat === 'gravity') this.loadoutChoice.gravity = btn.dataset.grav;
             if (cat === 'mode') {
               this.loadoutChoice.mode = btn.dataset.mode;
@@ -515,6 +765,8 @@
         this.isPaused = true;
         this.ui.playBtn.textContent = 'ENTER ARENA';
         this.ui.restartBtn.classList.add('hidden');
+        this._renderArmory();
+        this._showWeaponProfile(this.previewWeaponId || this.loadoutChoice.primary);
         this.ui.menu.classList.remove('hidden');
       });
 
@@ -638,6 +890,8 @@
       this.ui.playBtn.textContent = 'RESUME';
       this.ui.restartBtn.classList.remove('hidden');
       if (this.ui.exitMenuBtn) this.ui.exitMenuBtn.classList.remove('hidden');
+      this._renderArmory();
+      this._showWeaponProfile(this.previewWeaponId || this.loadoutChoice.primary);
       this.ui.menu.classList.remove('hidden');
     }
 
@@ -658,6 +912,8 @@
       this.ui.playBtn.textContent = 'ENTER ARENA';
       this.ui.restartBtn.classList.add('hidden');
       if (this.ui.exitMenuBtn) this.ui.exitMenuBtn.classList.add('hidden');
+      this._renderArmory();
+      this._showWeaponProfile(this.previewWeaponId || this.loadoutChoice.primary);
       this.ui.menu.classList.remove('hidden');
     }
 
@@ -698,8 +954,8 @@
       }
 
       const w = this._currentWeapon();
-      // Do not auto-throw utility grenades/smoke
-      if (w.slotType === 'utility') {
+      // Do not auto-throw utility grenades/smoke, and respect Sniper scope-only lock!
+      if (w.slotType === 'utility' || (w.scopedOnly && !this.isAds)) {
         this.ui.crosshair.classList.remove('locked');
         return;
       }
@@ -947,7 +1203,7 @@
     _buildLoadoutSlots() {
       let ids;
       if (this.loadoutChoice.mode === 'assassin') {
-        ids = ['crossbow', 'kunai', 'hiddenblade', 'smoke'];
+        ids = ['crossbow', 'kunai', 'knife', 'smoke'];
       } else if (this.loadoutChoice.mode === 'sniper') {
         ids = ['sniper', 'revolver', 'katana', 'flashbang'];
       } else if (this.loadoutChoice.mode === 'randomizer') {
@@ -1031,6 +1287,11 @@
       this.player.pitch = 0;
       this.player.hp = this.player.maxHp;
       this.player.alive = true;
+      this.player.jumpsLeft = 2;
+      this.player.warhornTimer = 0;
+      this.scopeHintTimer = 0;
+      if (this.ui.scopeHint) this.ui.scopeHint.classList.add('hidden');
+      if (this.ui.warhornBadge) this.ui.warhornBadge.classList.add('hidden');
       this.player.slideTimer = 0;
       this.player.slideCooldown = 0;
       this.player.dashCooldown = 0;
@@ -1080,6 +1341,8 @@
       this.player.pitch = 0;
       this.player.hp = this.player.maxHp;
       this.player.alive = true;
+      this.player.jumpsLeft = 2;
+      this.player.warhornTimer = 0;
       this.isReloading = false;
       this._buildLoadoutSlots();
       this.ui.centerBanner.classList.add('hidden');
@@ -1251,6 +1514,21 @@
       if (this.player.lungeCooldown > 0) return;
 
       const w = this._currentWeapon();
+      if (w.buildWall) {
+        const horizFwd = new THREE.Vector3(-Math.sin(this.player.yaw), 0, -Math.cos(this.player.yaw));
+        const wx = this.player.pos.x + horizFwd.x * 3.4;
+        const wz = this.player.pos.z + horizFwd.z * 3.4;
+        const rawFloor = this.arena.getFloorHeight(wx, wz, this.player.pos.y + 0.6, 0.25);
+        const wy = rawFloor > -Infinity ? rawFloor : this.player.pos.y;
+        this.arena.addTemporaryWall(wx, wy, wz, this.player.yaw, 12.0);
+        this.player.lungeCooldown = 1.6;
+        this.slashAnim = 0.8;
+        this.sound.playShoot('trowel');
+        this._spawnParticles(new THREE.Vector3(wx, wy + 1.5, wz), 0xf59e0b, 14, 6);
+        this._pushKillFeed('TROWEL WALL BUILT (12s)');
+        return;
+      }
+
       const forward = new THREE.Vector3();
       this.camera.getWorldDirection(forward);
 
@@ -1291,8 +1569,20 @@
       const w = slot.def;
       if (!isInitialClick && !w.auto) return;
 
+      // Sniper Scope-Only Safety Lock!
+      if (w.scopedOnly && !this.isAds) {
+        if (isInitialClick) {
+          this.sound.playDryClick();
+          this.scopeHintTimer = 1.1;
+          if (this.ui.scopeHint) this.ui.scopeHint.classList.remove('hidden');
+        }
+        return;
+      }
+
+      const rofMult = this.player.warhornTimer > 0 ? 1.25 : 1.0;
+
       if (w.slotType === 'melee') {
-        this.fireCooldown = 1 / w.fireRate;
+        this.fireCooldown = 1 / (w.fireRate * rofMult);
         this._performMeleeSlash(false);
         return;
       }
@@ -1300,7 +1590,7 @@
       if (w.slotType === 'utility') {
         if (slot.ammo <= 0) return;
         if (this.loadoutChoice.mode !== 'range') slot.ammo -= 1;
-        this.fireCooldown = 1 / w.fireRate;
+        this.fireCooldown = 1 / (w.fireRate * rofMult);
         this._throwUtility(w);
         this._updateHUD();
         return;
@@ -1315,7 +1605,7 @@
         this.burstQueue = Math.min(w.burstCount, slot.ammo) - 1;
         this.burstDelay = w.burstInterval;
       }
-      this.fireCooldown = 1 / w.fireRate;
+      this.fireCooldown = 1 / (w.fireRate * rofMult);
       this._fireBullet();
     }
 
@@ -1409,6 +1699,17 @@
         }
 
         this._spawnTracer(muzzleWorld, endPoint, tracerCol, w.beamRadius || 0.02);
+
+        if (w.flameStream) {
+          const midPt = muzzleWorld.clone().lerp(endPoint, 0.45);
+          this._spawnParticles(midPt, Math.random() < 0.5 ? 0xff6b1a : 0xffd447, 3, 4.5);
+        }
+        if (w.spawnFirePool) {
+          this._spawnMolotovPool(endPoint);
+        }
+        if (w.explosiveRadius) {
+          this._explodeSplash(endPoint, w, hitSummary);
+        }
       }
 
       for (const [enemy, info] of hitSummary.entries()) {
@@ -1420,6 +1721,46 @@
         this.startReload();
       }
       this._updateHUD();
+    }
+
+    _explodeSplash(pos, weaponDef, directHits) {
+      const r = weaponDef.explosiveRadius || 5.0;
+      const isRpg = weaponDef.id === 'rpg';
+      this.sound.playExplosion();
+      this._spawnShockwave(pos, weaponDef.tracerColor || 0xff6b1a, r, 0.3);
+      this._spawnParticles(pos, weaponDef.tracerColor || 0xff6b1a, isRpg ? 24 : 12, isRpg ? 11 : 7);
+
+      for (const enemy of this.enemies) {
+        if (!enemy.alive || (directHits && directHits.has(enemy))) continue;
+        const ePos = enemy.getCenterWorldPos();
+        const d = pos.distanceTo(ePos);
+        if (d < r) {
+          const splashDmg = Math.round(weaponDef.damage * 0.85 * (1 - d / r));
+          if (splashDmg > 4) {
+            this._onPlayerHitEnemy(enemy, splashDmg, false, ePos, `${weaponDef.name} BLAST`);
+          }
+        }
+      }
+
+      // RPG Rocket Jump impulse!
+      if (isRpg && this.player.alive) {
+        const pCenter = new THREE.Vector3(this.player.pos.x, this.player.pos.y + 1.0, this.player.pos.z);
+        const jumpRadius = r + 2.2;
+        const d = pos.distanceTo(pCenter);
+        if (d < jumpRadius) {
+          const factor = Math.max(0.28, 1 - d / jumpRadius);
+          const push = new THREE.Vector3().subVectors(pCenter, pos);
+          push.y = Math.max(0.6, push.y);
+          push.normalize();
+          this.player.vel.x += push.x * 16.5 * factor;
+          this.player.vel.z += push.z * 16.5 * factor;
+          this.player.vel.y = Math.max(this.player.vel.y, 16.5 * factor + 8.5);
+          this.player.onGround = false;
+          if (this.loadoutChoice.mode !== 'range') {
+            this._damagePlayer(Math.round(14 * factor), 'OWN RPG');
+          }
+        }
+      }
     }
 
     _performMeleeSlash(isLunge) {
@@ -1466,6 +1807,55 @@
 
     _throwUtility(weaponDef) {
       this.sound.playShoot(weaponDef.id);
+
+      if (weaponDef.utilityType === 'warhorn') {
+        this.player.warhornTimer = 5.0;
+        if (this.ui.warhornBadge) this.ui.warhornBadge.classList.remove('hidden');
+        this._spawnShockwave(this.player.pos, 0xfbbf24, 5.8, 0.36);
+        this._spawnParticles(this.player.pos.clone().add(new THREE.Vector3(0, 1.4, 0)), 0xfbbf24, 14, 6);
+        this._pushKillFeed('WAR HORN: +38% SPEED & +25% FIRE RATE (5s)!');
+        return;
+      }
+
+      if (weaponDef.utilityType === 'medkit') {
+        const before = this.player.hp;
+        this.player.hp = Math.min(this.player.maxHp, this.player.hp + 50);
+        const healed = Math.round(this.player.hp - before);
+        this._spawnParticles(this.player.pos.clone().add(new THREE.Vector3(0, 1.2, 0)), 0x38ef7d, 18, 5);
+        this._pushKillFeed(healed > 0 ? `MEDKIT: +${healed} HP RESTORED!` : 'MEDKIT USED (FULL HP)');
+        this._updateHUD();
+        return;
+      }
+
+      if (weaponDef.utilityType === 'freeze') {
+        const origin = this.camera.position.clone();
+        const dir = new THREE.Vector3();
+        this.camera.getWorldDirection(dir);
+        const range = weaponDef.range || 120;
+        this.raycaster.set(origin, dir);
+        this.raycaster.far = range;
+
+        const mapHits = this.raycaster.intersectObjects(this.arena.meshes, false);
+        const botHits = this.raycaster.intersectObjects(this._getAllEnemyHitMeshes(), false);
+        const mapDist = mapHits.length > 0 ? mapHits[0].distance : range;
+        let endPoint = origin.clone().addScaledVector(dir, mapDist);
+
+        if (botHits.length > 0 && botHits[0].distance < mapDist) {
+          endPoint = botHits[0].point.clone();
+          const enemy = botHits[0].object.userData.enemyRef || this.bot;
+          if (enemy.freeze) enemy.freeze(2.2);
+          this._spawnParticles(endPoint, 0xbae6fd, 18, 7);
+          this._pushKillFeed(`${enemy.isDummy ? 'DUMMY' : enemy.name || 'TARGET'} FROZEN SOLID (2.2s)!`);
+          this._onPlayerHitEnemy(enemy, weaponDef.damage || 18, false, endPoint, 'FREEZE RAY');
+        } else {
+          this._spawnParticles(endPoint, 0x7dd3fc, 10, 5);
+        }
+
+        const muzzleWorld = origin.clone().addScaledVector(dir, 0.55);
+        this._spawnTracer(muzzleWorld, endPoint, 0x38bdf8, 0.055);
+        return;
+      }
+
       const dir = new THREE.Vector3();
       this.camera.getWorldDirection(dir);
 
@@ -1473,7 +1863,7 @@
       const vel = dir.multiplyScalar(weaponDef.utilityType === 'molotov' ? 23 : 22);
       vel.y += 5.2;
 
-      const colorMap = { frag: 0xff5a36, molotov: 0xf97316, flash: 0xe0f2fe, smoke: 0x94a3b8 };
+      const colorMap = { frag: 0xff5a36, satchel: 0xfacc15, molotov: 0xf97316, flash: 0xe0f2fe, smoke: 0x94a3b8 };
       const mesh = new THREE.Mesh(
         new THREE.OctahedronGeometry(0.16, 1),
         new THREE.MeshStandardMaterial({
@@ -1491,43 +1881,52 @@
         mesh,
         pos: start,
         vel,
-        fuse: weaponDef.utilityType === 'flash' ? 1.35 : weaponDef.utilityType === 'molotov' ? 3.5 : 1.45,
+        fuse:
+          weaponDef.utilityType === 'flash'
+            ? 1.35
+            : weaponDef.utilityType === 'molotov'
+            ? 3.5
+            : weaponDef.utilityType === 'satchel'
+            ? 1.25
+            : 1.45,
       });
     }
 
-    _explodeFrag(pos) {
+    _explodeFrag(pos, isSatchel = false) {
       this.sound.playExplosion();
-      this._spawnShockwave(pos, 0xff7b29, 8.5, 0.35);
-      this._spawnParticles(pos, 0xff7b29, 28, 12);
+      const blastRadius = isSatchel ? 9.5 : 8.5;
+      const maxDmg = isSatchel ? 105 : 92;
+      const label = isSatchel ? 'SATCHEL CHARGE' : 'FRAG GRENADE';
+      this._spawnShockwave(pos, isSatchel ? 0xfacc15 : 0xff7b29, blastRadius, 0.36);
+      this._spawnParticles(pos, isSatchel ? 0xfacc15 : 0xff7b29, 28, 12);
       this._spawnParticles(pos, 0xffe45e, 16, 8);
 
-      const blastRadius = 8.5;
       for (const enemy of this.enemies) {
         if (!enemy.alive) continue;
         const botPos = enemy.getCenterWorldPos();
         const d = pos.distanceTo(botPos);
         if (d < blastRadius) {
-          const dmg = Math.round(92 * (1 - d / blastRadius));
-          if (dmg > 4) this._onPlayerHitEnemy(enemy, dmg, false, botPos, 'FRAG GRENADE');
+          const dmg = Math.round(maxDmg * (1 - d / blastRadius));
+          if (dmg > 4) this._onPlayerHitEnemy(enemy, dmg, false, botPos, label);
         }
       }
 
       if (this.player.alive) {
         const pCenter = new THREE.Vector3(this.player.pos.x, this.player.pos.y + 1.0, this.player.pos.z);
-        const jumpRadius = 9.5;
+        const jumpRadius = isSatchel ? 10.5 : 9.5;
         const d = pos.distanceTo(pCenter);
         if (d < jumpRadius) {
-          // Supercharged Grenade Jump! Launches you sky-high (e.g., straight onto the Crane!) with light self-chip!
+          // Supercharged Grenade / Satchel Jump! Launches you sky-high with light self-chip!
           const factor = Math.max(0.25, 1 - d / jumpRadius);
           const push = new THREE.Vector3().subVectors(pCenter, pos);
           push.y = Math.max(0.55, push.y);
           push.normalize();
-          this.player.vel.x += push.x * 15.5 * factor;
-          this.player.vel.z += push.z * 15.5 * factor;
-          this.player.vel.y = Math.max(this.player.vel.y, 15.5 * factor + 8.5);
+          this.player.vel.x += push.x * (isSatchel ? 18.0 : 15.5) * factor;
+          this.player.vel.z += push.z * (isSatchel ? 18.0 : 15.5) * factor;
+          this.player.vel.y = Math.max(this.player.vel.y, (isSatchel ? 18.5 : 15.5) * factor + (isSatchel ? 9.5 : 8.5));
           this.player.onGround = false;
           if (this.loadoutChoice.mode !== 'range') {
-            this._damagePlayer(Math.round(16 * factor), 'OWN GRENADE');
+            this._damagePlayer(Math.round((isSatchel ? 14 : 16) * factor), isSatchel ? 'OWN SATCHEL' : 'OWN GRENADE');
           }
         }
       }
@@ -1686,8 +2085,16 @@
           this.playerScore = this.stats.kills;
           this.botScore = this.stats.headshots;
           this._renderScorePips();
+          if (enemy.label === 'SECRET BOSS DUMMY') {
+            this._awardKeys(20, 'BOSS DUMMY');
+          } else {
+            this._awardKeys(1, 'TARGET HIT');
+          }
           return;
         }
+
+        const isBonusKill = isHeadshot || weaponLabel.includes('WALLBANG') || weaponLabel.includes('BACKSTAB');
+        this._awardKeys(isBonusKill ? 6 : 4, isBonusKill ? 'CRIT ELIM' : 'ELIMINATION');
 
         if (this.loadoutChoice.mode === 'tdm') {
           this.playerScore += 1;
@@ -1879,8 +2286,12 @@
       this.roundEndTitle = playerWon ? 'ROUND WON' : 'ROUND LOST';
       this.roundEndSub = subtitle;
 
-      if (playerWon) this.playerScore += 1;
-      else this.botScore += 1;
+      if (playerWon) {
+        this.playerScore += 1;
+        this._awardKeys(12, 'ROUND WIN');
+      } else {
+        this.botScore += 1;
+      }
 
       this.sound.playRoundEnd(playerWon);
       this._renderScorePips();
@@ -1897,6 +2308,9 @@
         this.loadoutChoice.mode === 'tdm'
           ? this.playerScore >= this.botScore
           : this.playerScore >= WINS_TO_VICTORY;
+      if (won) {
+        this._awardKeys(40, 'MATCH VICTORY');
+      }
       this.ui.hud.classList.add('hidden');
       this.ui.centerBanner.classList.add('hidden');
       this.ui.matchEnd.classList.remove('hidden');
@@ -1905,7 +2319,7 @@
       this.ui.endBadge.classList.toggle('defeat', !won);
       this.ui.endScore.textContent = `${this.playerScore} — ${this.botScore}`;
       this.ui.endStats.innerHTML =
-        `Map: <b>${MAPS[this.arena.mapId].name}</b> &nbsp;·&nbsp; Wrap: <b>${WEAPON_SKINS[this.loadoutChoice.weaponSkin].name}</b><br>` +
+        `Map: <b>${MAPS[this.arena.mapId].name}</b> &nbsp;·&nbsp; Wrap: <b>${WEAPON_SKINS[this.loadoutChoice.weaponSkin].name}</b> &nbsp;·&nbsp; Keys: <b>${this.keysCurrency}</b><br>` +
         `Eliminations: <b>${this.stats.kills}</b> &nbsp;·&nbsp; Crits/HS: <b>${this.stats.headshots}</b> &nbsp;·&nbsp; Damage: <b>${this.stats.damageDealt}</b>`;
     }
 
@@ -2036,6 +2450,9 @@
 
       const slidePct = Math.max(0, 1 - this.player.slideCooldown / 1.6) * 100;
       const dashPct = Math.max(0, 1 - this.player.dashCooldown / 3.2) * 100;
+      if (this.ui.djumpFill) {
+        this.ui.djumpFill.style.width = this.player.jumpsLeft > 0 ? '100%' : '0%';
+      }
       this.ui.slideFill.style.width = `${slidePct}%`;
       this.ui.dashFill.style.width = `${dashPct}%`;
 
@@ -2067,14 +2484,21 @@
       p.dashCooldown = Math.max(0, p.dashCooldown - dt);
       p.lungeCooldown = Math.max(0, p.lungeCooldown - dt);
       p.padCooldown = Math.max(0, p.padCooldown - dt);
+      p.warhornTimer = Math.max(0, p.warhornTimer - dt);
+      if (this.ui.warhornBadge) {
+        this.ui.warhornBadge.classList.toggle('hidden', p.warhornTimer <= 0);
+      }
 
       const gravScale = this._getActiveGravityScale();
       const gravMode = GRAVITY_MODES[this.loadoutChoice.gravity] || GRAVITY_MODES.auto;
       const canMove = this._canPlayerAct() && !this.activeEmote;
       const w = this._currentWeapon();
       const modeSpeedBonus = this.loadoutChoice.mode === 'assassin' ? 1.12 : 1.0;
-      const baseSpeed = 9.4 * w.moveMult * modeSpeedBonus * (this.isAds ? 0.68 : 1.0);
+      const hornSpeedBonus = p.warhornTimer > 0 ? 1.38 : 1.0;
+      const baseSpeed = 9.4 * w.moveMult * modeSpeedBonus * hornSpeedBonus * (this.isAds ? 0.68 : 1.0);
       const activeLadder = canMove ? this.arena.getLadderAt(p.pos) : null;
+      const spacePressed = Boolean(this.keys['Space']) && !p.spaceWasDown;
+      p.spaceWasDown = Boolean(this.keys['Space']);
 
       if (canMove && activeLadder) {
         // Smooth Ladder Climbing! Hold W / Space to climb up, S to climb down
@@ -2096,6 +2520,7 @@
         p.slideTimer = 0;
         p.onGround = true;
         p.coyoteTimer = 0.12;
+        p.jumpsLeft = 2;
 
         if (Math.abs(climbSpeed) > 1.0) {
           p.ladderStepTimer -= dt;
@@ -2109,7 +2534,7 @@
         p.pos.z += p.vel.z * dt;
         p.pos.y += p.vel.y * dt;
 
-        // Clean gentle hop onto the Crane Boom when reaching the top of the ladder!
+        // Clean gentle hop onto the platform when reaching the top of the ladder!
         if (p.pos.y >= activeLadder.yTop - 0.15 && climbSpeed > 0) {
           p.pos.y = activeLadder.yTop + 0.05;
           p.pos.x += 1.05;
@@ -2130,15 +2555,42 @@
             p.vel.z = THREE.MathUtils.lerp(p.vel.z, input.z * baseSpeed, Math.min(1, dt * accel));
           }
 
-          if (p.onGround) p.coyoteTimer = 0.11;
-          else p.coyoteTimer = Math.max(0, p.coyoteTimer - dt);
+          if (p.onGround) {
+            p.coyoteTimer = 0.11;
+            p.jumpsLeft = 2;
+          } else {
+            p.coyoteTimer = Math.max(0, p.coyoteTimer - dt);
+          }
 
-          if (this.keys['Space'] && p.coyoteTimer > 0) {
-            p.vel.y = 8.9 * gravMode.jumpBoost;
-            p.onGround = false;
-            p.coyoteTimer = 0;
-            p.slideTimer = 0;
-            this.sound.playJump();
+          if (spacePressed) {
+            if (p.coyoteTimer > 0) {
+              p.vel.y = 8.9 * gravMode.jumpBoost;
+              p.onGround = false;
+              p.coyoteTimer = 0;
+              p.jumpsLeft = 1;
+              p.slideTimer = 0;
+              this.sound.playJump();
+            } else if (p.jumpsLeft > 0) {
+              // Mid-Air Double Jump!
+              p.vel.y = 8.7 * gravMode.jumpBoost;
+              p.onGround = false;
+              p.jumpsLeft = 0;
+              p.slideTimer = 0;
+              this.sound.playDoubleJump();
+              this._spawnShockwave(p.pos, 0x2de2ff, 2.2, 0.22);
+            }
+          }
+
+          // Realistic ground footsteps
+          const hSpeed = Math.hypot(p.vel.x, p.vel.z);
+          if (p.onGround && p.slideTimer <= 0 && hSpeed > 2.2) {
+            p.footstepTimer -= dt;
+            if (p.footstepTimer <= 0) {
+              p.footstepTimer = Math.max(0.22, 0.36 - hSpeed * 0.008);
+              this.sound.playFootstep();
+            }
+          } else {
+            p.footstepTimer = 0.08;
           }
         } else {
           p.vel.x *= Math.max(0, 1 - dt * 10);
@@ -2193,6 +2645,7 @@
         if (launch > 0) {
           p.vel.y = launch * (gravScale < 0.6 ? 0.85 : 1.08);
           p.onGround = false;
+          p.jumpsLeft = 1;
           p.padCooldown = 0.85;
           this.sound.playJumpPad();
         }
@@ -2484,6 +2937,14 @@
     }
 
     _updateEffects(dt) {
+      if (this.scopeHintTimer > 0) {
+        this.scopeHintTimer = Math.max(0, this.scopeHintTimer - dt);
+        if (this.scopeHintTimer <= 0 || this.isAds) {
+          this.scopeHintTimer = 0;
+          if (this.ui.scopeHint) this.ui.scopeHint.classList.add('hidden');
+        }
+      }
+
       if (this.hitmarkerTimer > 0) {
         this.hitmarkerTimer -= dt;
         if (this.hitmarkerTimer <= 0) {
@@ -2610,7 +3071,8 @@
           if (pr.type === 'flash') this._detonateFlashbang(pr.pos);
           else if (pr.type === 'molotov') this._spawnMolotovPool(pr.pos);
           else if (pr.type === 'smoke') this._spawnSmokeCloud(pr.pos);
-          else this._explodeFrag(pr.pos);
+          else if (pr.type === 'satchel') this._explodeFrag(pr.pos, true);
+          else this._explodeFrag(pr.pos, false);
         }
       }
 

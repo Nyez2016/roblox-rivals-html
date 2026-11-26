@@ -39,6 +39,7 @@
           <span id="map-badge">ARENA</span> · <span id="round-label">ROUND 1</span>
           <span id="grav-badge" class="grav-pill hidden">LOW-G</span>
           <span id="autoshoot-badge" class="auto-pill hidden">AUTO SHOOT</span>
+          <span id="warhorn-badge" class="horn-pill hidden">WAR HORN</span>
         </div>
         <div class="round-timer" id="round-timer">1:30</div>
       </div>
@@ -76,10 +77,11 @@
       <div id="banner-sub">GET READY</div>
     </div>
 
-    <!-- Center Reload Progress Bar -->
+    <!-- Center Reload Progress Bar & Sniper Scope Hint -->
     <div id="reload-bar-wrap" class="hidden">
       <div id="reload-bar-fill"></div>
     </div>
+    <div id="scope-hint" class="hidden">SCOPE IN (RMB) TO FIRE SNIPER</div>
 
     <!-- Rivals Emote Picker Bar (Press B) -->
     <div id="emote-bar" class="hidden">
@@ -100,6 +102,11 @@
         </div>
       </div>
       <div class="abilities-row">
+        <div class="ability-chip" id="ability-djump">
+          <span class="key-badge">2x</span>
+          <span class="ability-name">AIR JUMP</span>
+          <div class="ability-bar"><div id="djump-cd-fill"></div></div>
+        </div>
         <div class="ability-chip" id="ability-slide">
           <span class="key-badge">SHIFT</span>
           <span class="ability-name">SLIDE</span>
@@ -121,15 +128,15 @@
       </div>
       <div class="hotbar-slot" data-slot="1">
         <span class="slot-num">2</span>
-        <span class="slot-label" id="slot-1-name">REVOLVER</span>
+        <span class="slot-label" id="slot-1-name">HANDGUN</span>
       </div>
       <div class="hotbar-slot" data-slot="2">
         <span class="slot-num">3</span>
-        <span class="slot-label" id="slot-2-name">KATANA</span>
+        <span class="slot-label" id="slot-2-name">FISTS</span>
       </div>
       <div class="hotbar-slot" data-slot="3">
         <span class="slot-num">4</span>
-        <span class="slot-label" id="slot-3-name">FRAG GRENADE</span>
+        <span class="slot-label" id="slot-3-name">GRENADE</span>
       </div>
     </div>
 
@@ -149,133 +156,73 @@
   <div id="menu-overlay">
     <div class="menu-card">
       <div class="brand-header">
-        <div class="brand-tag">HTML5 ARENA · SKY, ZERO-G &amp; ASSASSIN EDITION</div>
+        <div class="brand-top-row">
+          <div class="brand-tag">ROBLOX RIVALS · FULL ARSENAL EDITION</div>
+          <div class="keys-wallet" id="keys-wallet">KEYS: <strong id="keys-count">40</strong></div>
+        </div>
         <h1 class="brand-title">ROBLOX <span>RIVALS</span></h1>
-        <p class="brand-sub">9 Maps · 23 Weapons · 17 Skins · 2v2 &amp; TDM · Wall-Piercing Railgun · Emotes</p>
+        <p class="brand-sub">39 Rivals Weapons · Key Unlocks · 9 Vertical Maps · Double Jump · Realistic Audio</p>
       </div>
 
       <!-- Menu Navigation Tabs -->
       <div class="menu-tabs">
-        <button class="tab-btn active" data-tab="loadout">LOADOUT (23)</button>
+        <button class="tab-btn active" data-tab="loadout">ARMORY &amp; PROFILES (39)</button>
         <button class="tab-btn" data-tab="maps">MAPS, GRAVITY &amp; MODES</button>
         <button class="tab-btn" data-tab="skins">SKINS &amp; KILL FX</button>
       </div>
 
-      <!-- TAB 1: LOADOUT -->
+      <!-- TAB 1: DYNAMIC ARMORY + LIVE WEAPON PROFILE INSPECTOR -->
       <div class="tab-panel" id="tab-loadout">
-        <div class="loadout-section">
-          <label class="section-label">PRIMARY (SLOT 1)</label>
-          <div class="choice-grid cols-3" data-category="primary">
-            <button class="choice-btn active" data-weapon="ar">
-              <strong>Assault Rifle</strong>
-              <span>Auto · 18 / 32 HS</span>
-            </button>
-            <button class="choice-btn" data-weapon="railgun">
-              <strong>Phase Railgun</strong>
-              <span>Pierces Walls! · 55 / 110</span>
-            </button>
-            <button class="choice-btn" data-weapon="sniper">
-              <strong>Sniper</strong>
-              <span>1-Shot HS · 75 / 150</span>
-            </button>
-            <button class="choice-btn" data-weapon="crossbow">
-              <strong>Repeating Crossbow</strong>
-              <span>Silent · 28 / 56 HS</span>
-            </button>
-            <button class="choice-btn" data-weapon="bow">
-              <strong>Frost Longbow</strong>
-              <span>1-Shot HS · Silent</span>
-            </button>
-            <button class="choice-btn" data-weapon="burst">
-              <strong>Burst Rifle</strong>
-              <span>3-Burst · 16 / 28 HS</span>
-            </button>
-            <button class="choice-btn" data-weapon="shotgun">
-              <strong>Shotgun</strong>
-              <span>8 Pellets · CQC</span>
-            </button>
-            <button class="choice-btn" data-weapon="paintball">
-              <strong>Paintball Gun</strong>
-              <span>Splat · 24 / 40 HS</span>
-            </button>
-            <button class="choice-btn" data-weapon="minigun">
-              <strong>Minigun</strong>
-              <span>60 Mag · 16.5 RPS</span>
-            </button>
+        <!-- Weapon Profile Card (updates when clicking/hovering any weapon!) -->
+        <div id="weapon-profile-card">
+          <div class="profile-head">
+            <div>
+              <span class="profile-tier" id="prof-tier">STARTER</span>
+              <h2 id="prof-name">ASSAULT RIFLE</h2>
+            </div>
+            <button id="prof-action-btn" class="profile-unlock-btn equipped">EQUIPPED</button>
+          </div>
+          <p id="prof-desc">Reliable all-range automatic rifle with controllable recoil and crisp headshot multipliers.</p>
+          <div class="profile-tip" id="prof-tip">Tip: ADS on mid-range peeks for tight laser accuracy.</div>
+          <div class="profile-stats">
+            <div class="pstat">
+              <span>DAMAGE <b id="prof-dmg-txt">18 / 32 HS</b></span>
+              <div class="pbar"><div id="prof-dmg-bar"></div></div>
+            </div>
+            <div class="pstat">
+              <span>FIRE RATE <b id="prof-rof-txt">9.2 RPS</b></span>
+              <div class="pbar"><div id="prof-rof-bar"></div></div>
+            </div>
+            <div class="pstat">
+              <span>RANGE <b id="prof-rng-txt">140m</b></span>
+              <div class="pbar"><div id="prof-rng-bar"></div></div>
+            </div>
+            <div class="pstat">
+              <span>MOBILITY <b id="prof-mob-txt">100%</b></span>
+              <div class="pbar"><div id="prof-mob-bar"></div></div>
+            </div>
           </div>
         </div>
 
-        <div class="loadout-section">
-          <label class="section-label">SECONDARY (SLOT 2)</label>
-          <div class="choice-grid cols-5" data-category="secondary">
-            <button class="choice-btn active" data-weapon="revolver">
-              <strong>Revolver</strong>
-              <span>36 / 72 HS</span>
-            </button>
-            <button class="choice-btn" data-weapon="kunai">
-              <strong>Shadow Kunai</strong>
-              <span>Silent · 34 / 78</span>
-            </button>
-            <button class="choice-btn" data-weapon="uzi">
-              <strong>Uzi</strong>
-              <span>Rapid SMG</span>
-            </button>
-            <button class="choice-btn" data-weapon="handgun">
-              <strong>Handgun</strong>
-              <span>22 / 44 HS</span>
-            </button>
-            <button class="choice-btn" data-weapon="shorty">
-              <strong>Shorty</strong>
-              <span>6 Pellets · 2 Mag</span>
-            </button>
+        <div class="armory-scroll">
+          <div class="loadout-section">
+            <label class="section-label">PRIMARY (SLOT 1 · 13 WEAPONS)</label>
+            <div class="choice-grid cols-4" id="grid-primary" data-category="primary"></div>
           </div>
-        </div>
 
-        <div class="loadout-section">
-          <label class="section-label">MELEE (SLOT 3 · RMB LUNGE / BACKSTAB)</label>
-          <div class="choice-grid cols-5" data-category="melee">
-            <button class="choice-btn active" data-weapon="katana">
-              <strong>Katana</strong>
-              <span>45 · Fast Dash</span>
-            </button>
-            <button class="choice-btn" data-weapon="hiddenblade">
-              <strong>Shadow Daggers</strong>
-              <span>105 Backstab!</span>
-            </button>
-            <button class="choice-btn" data-weapon="xiuchun">
-              <strong>Imperial Saber</strong>
-              <span>58 · 95 Backstab</span>
-            </button>
-            <button class="choice-btn" data-weapon="scythe">
-              <strong>Scythe</strong>
-              <span>54 · High Reap</span>
-            </button>
-            <button class="choice-btn" data-weapon="axe">
-              <strong>Battle Axe</strong>
-              <span>72 · Heavy Cleave</span>
-            </button>
+          <div class="loadout-section">
+            <label class="section-label">SECONDARY (SLOT 2 · 10 WEAPONS)</label>
+            <div class="choice-grid cols-5" id="grid-secondary" data-category="secondary"></div>
           </div>
-        </div>
 
-        <div class="loadout-section">
-          <label class="section-label">UTILITY (SLOT 4)</label>
-          <div class="choice-grid cols-4" data-category="utility">
-            <button class="choice-btn active" data-weapon="grenade">
-              <strong>Frag Grenade</strong>
-              <span>92 AoE Blast</span>
-            </button>
-            <button class="choice-btn" data-weapon="smoke">
-              <strong>Smoke Bomb</strong>
-              <span>Hides From Rival</span>
-            </button>
-            <button class="choice-btn" data-weapon="molotov">
-              <strong>Molotov</strong>
-              <span>Fire Pool DoT</span>
-            </button>
-            <button class="choice-btn" data-weapon="flashbang">
-              <strong>Flashbang</strong>
-              <span>Blinds Rival 2.8s</span>
-            </button>
+          <div class="loadout-section">
+            <label class="section-label">MELEE (SLOT 3 · 8 WEAPONS)</label>
+            <div class="choice-grid cols-4" id="grid-melee" data-category="melee"></div>
+          </div>
+
+          <div class="loadout-section">
+            <label class="section-label">UTILITY (SLOT 4 · 8 WEAPONS)</label>
+            <div class="choice-grid cols-4" id="grid-utility" data-category="utility"></div>
           </div>
         </div>
       </div>

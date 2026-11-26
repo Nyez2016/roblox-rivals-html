@@ -72,6 +72,7 @@
       this.padCooldown = 0;
       this.hurtFlash = 0;
       this.blindTimer = 0;
+      this.freezeTimer = 0;
       this.walkPhase = 0;
       this.deathFall = 0;
 
@@ -179,6 +180,22 @@
       this.stunRing.position.set(0, 2.28, 0);
       this.stunRing.visible = false;
 
+      // Translucent Ice Cube overlay when hit by Freeze Ray!
+      this.iceBlock = new THREE.Mesh(
+        new THREE.BoxGeometry(1.25, 2.2, 1.15),
+        new THREE.MeshStandardMaterial({
+          color: 0x38bdf8,
+          emissive: 0x0284c7,
+          emissiveIntensity: 0.45,
+          roughness: 0.12,
+          metalness: 0.2,
+          transparent: true,
+          opacity: 0.52,
+        })
+      );
+      this.iceBlock.position.set(0, 1.1, 0);
+      this.iceBlock.visible = false;
+
       this.group.add(
         this.leftLeg,
         this.rightLeg,
@@ -191,7 +208,8 @@
         visor,
         this.bambooHat,
         this.jetpack,
-        this.stunRing
+        this.stunRing,
+        this.iceBlock
       );
 
       this.hitMeshes = [
@@ -217,12 +235,12 @@
         return { long: 'sniper', mid: 'sniper', close: 'revolver' };
       }
       if (mode === 'assassin') {
-        return { long: 'bow', mid: 'crossbow', close: pick(['kunai', 'hiddenblade', 'xiuchun']) };
+        return { long: 'bow', mid: 'crossbow', close: pick(['kunai', 'knife', 'xiuchun']) };
       }
       return {
-        long: pick(['sniper', 'railgun', 'burst', 'bow', 'ar']),
-        mid: pick(['ar', 'burst', 'revolver', 'paintball', 'minigun', 'crossbow']),
-        close: pick(['shotgun', 'uzi', 'shorty', 'katana', 'scythe']),
+        long: pick(['sniper', 'railgun', 'burst', 'bow', 'energyrifle', 'ar']),
+        mid: pick(['ar', 'burst', 'revolver', 'paintball', 'gunblade', 'minigun', 'exogun', 'energypistols', 'crossbow']),
+        close: pick(['shotgun', 'uzi', 'spray', 'shorty', 'flamethrower', 'katana', 'scythe', 'chainsaw', 'knife']),
       };
     }
 
@@ -335,6 +353,12 @@
       this._redrawHealthBar();
     }
 
+    freeze(duration = 2.2) {
+      this.freezeTimer = Math.max(this.freezeTimer, duration);
+      if (this.iceBlock) this.iceBlock.visible = true;
+      this._redrawHealthBar();
+    }
+
     setVisible(vis) {
       this.group.visible = vis;
     }
@@ -362,6 +386,7 @@
       this.deathFall = 0;
       this.hurtFlash = 0;
       this.blindTimer = 0;
+      this.freezeTimer = 0;
       this.sightTimer = 0;
       this.fireTimer = 0.45;
       this.padCooldown = 0;
@@ -371,6 +396,7 @@
       this.group.position.copy(this.pos);
       this.hpSprite.visible = true;
       this.stunRing.visible = false;
+      if (this.iceBlock) this.iceBlock.visible = false;
       this._pickNewWaypoint();
       this._redrawHealthBar();
     }
@@ -397,6 +423,7 @@
         this.alive = false;
         this.hpSprite.visible = false;
         this.stunRing.visible = false;
+        if (this.iceBlock) this.iceBlock.visible = false;
         return { killed: true, hp: 0, isHeadshot };
       }
       return { killed: false, hp: this.hp, isHeadshot };
@@ -466,6 +493,13 @@
         this.deathFall = Math.min(Math.PI / 2, this.deathFall + dt * 5.2);
         this.group.rotation.x = -this.deathFall;
         this.group.position.set(this.pos.x, this.pos.y + 0.25, this.pos.z);
+        return;
+      }
+
+      if (this.freezeTimer > 0) {
+        this.freezeTimer = Math.max(0, this.freezeTimer - dt);
+        if (this.iceBlock) this.iceBlock.visible = this.freezeTimer > 0;
+        this.group.position.copy(this.pos);
         return;
       }
 
@@ -822,6 +856,10 @@
     }
 
     blind(sec = 2.0) {
+      this.blindTimer = Math.max(this.blindTimer, sec);
+    }
+
+    freeze(sec = 2.2) {
       this.blindTimer = Math.max(this.blindTimer, sec);
     }
 
