@@ -1,11 +1,14 @@
 import * as THREE from 'three';
-import { Arena } from './arena.js';
+import { Arena, MAPS } from './arena.js';
 import { WEAPONS, createWeaponMesh } from './weapons.js';
+import { WEAPON_SKINS, RIVAL_SKINS, updateAnimatedWeaponSkin } from './skins.js';
 import { RivalBot, DIFFICULTIES } from './bot.js';
 import { SoundEngine } from './audio.js';
 
 const WINS_TO_VICTORY = 5;
 const ROUND_DURATION = 90;
+const STORAGE_KEY = 'rivals_html_prefs_v2';
+const PAINT_COLORS = [0xff5ef7, 0x2de2ff, 0x38ef7d, 0xffd447, 0xff5a36, 0xa855f7];
 
 class RivalsGame {
   constructor() {
@@ -25,9 +28,24 @@ class RivalsGame {
     this.camera = new THREE.PerspectiveCamera(82, window.innerWidth / window.innerHeight, 0.08, 220);
     this.scene.add(this.camera);
 
+    // Load saved settings & loadout choices
+    this.settings = { sensitivity: 1.0, fov: 82 };
+    this.loadoutChoice = {
+      primary: 'ar',
+      secondary: 'revolver',
+      melee: 'katana',
+      utility: 'grenade',
+      map: 'arena',
+      difficulty: 'pro',
+      weaponSkin: 'default',
+      rivalSkin: 'classic',
+    };
+    this._loadPreferences();
+
     // Arena & Rival Bot
-    this.arena = new Arena(this.scene);
+    this.arena = new Arena(this.scene, this.loadoutChoice.map);
     this.bot = new RivalBot(this.scene, this.arena);
+    this.bot.applySkin(this.loadoutChoice.rivalSkin);
 
     // Viewmodel Anchor attached to camera
     this.viewmodelRoot = new THREE.Group();
@@ -35,10 +53,6 @@ class RivalsGame {
     this.weaponMesh = null;
     this.muzzleFlash = this._createMuzzleFlash();
     this.viewmodelRoot.add(this.muzzleFlash);
-
-    // Game settings & loadout
-    this.settings = { sensitivity: 1.0, fov: 82 };
-    this.loadoutChoice = { primary: 'ar', secondary: 'revolver', difficulty: 'pro' };
 
     // Match state
     this.matchActive = false;
@@ -54,7 +68,7 @@ class RivalsGame {
 
     // Player physics & state
     this.player = {
-      pos: new THREE.Vector3(0, 0, 28),
+      pos: new THREE.Vector3(0, 0, 29),
       vel: new THREE.Vector3(),
       yaw: 0,
       pitch: 0,
@@ -90,19 +104,57 @@ class RivalsGame {
     this.muzzleFlashTimer = 0;
     this.hitmarkerTimer = 0;
     this.damageFlash = 0;
+    this.blindFlash = 0;
 
     this.tracers = [];
     this.particles = [];
-    this.grenades = [];
+    this.projectiles = [];
+    this.firePools = [];
 
     this.keys = {};
     this.raycaster = new THREE.Raycaster();
     this.clock = new THREE.Clock();
 
     this._cacheUI();
+    this._syncMenuFromState();
     this._bindEvents();
     this._renderScorePips();
     this._animate();
+  }
+
+  _loadPreferences() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      if (saved.primary && WEAPONS[saved.primary]) this.loadoutChoice.primary = saved.primary;
+      if (saved.secondary && WEAPONS[saved.secondary]) this.loadoutChoice.secondary = saved.secondary;
+      if (saved.melee && WEAPONS[saved.melee]) this.loadoutChoice.melee = saved.melee;
+      if (saved.utility && WEAPONS[saved.utility]) this.loadoutChoice.utility = saved.utility;
+      if (saved.map && MAPS[saved.map]) this.loadoutChoice.map = saved.map;
+      if (saved.difficulty && DIFFICULTIES[saved.difficulty]) this.loadoutChoice.difficulty = saved.difficulty;
+      if (saved.weaponSkin && WEAPON_SKINS[saved.weaponSkin]) this.loadoutChoice.weaponSkin = saved.weaponSkin;
+      if (saved.rivalSkin && RIVAL_SKINS[saved.rivalSkin]) this.loadoutChoice.rivalSkin = saved.rivalSkin;
+      if (typeof saved.sensitivity === 'number') this.settings.sensitivity = saved.sensitivity;
+      if (typeof saved.fov === 'number') this.settings.fov = saved.fov;
+    } catch {
+      // Ignore storage failures
+    }
+  }
+
+  _savePreferences() {
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          ...this.loadoutChoice,
+          sensitivity: this.settings.sensitivity,
+          fov: this.settings.fov,
+        })
+      );
+    } catch {
+      // Ignore storage failures
+    }
   }
 
   _cacheUI() {
@@ -119,6 +171,7 @@ class RivalsGame {
       playerPips: document.getElementById('player-pips'),
       botPips: document.getElementById('bot-pips'),
       botName: document.getElementById('bot-name'),
+      mapBadge: document.getElementById('map-badge'),
       roundLabel: document.getElementById('round-label'),
       roundTimer: document.getElementById('round-timer'),
       hpValue: document.getElementById('hp-value'),
@@ -134,6 +187,7 @@ class RivalsGame {
       scopeOverlay: document.getElementById('scope-overlay'),
       damageVignette: document.getElementById('damage-vignette'),
       slideLines: document.getElementById('slide-lines'),
+      flashOverlay: document.getElementById('flash-overlay'),
       centerBanner: document.getElementById('center-banner'),
       bannerTitle: document.getElementById('banner-title'),
       bannerSub: document.getElementById('banner-sub'),
@@ -157,6 +211,29 @@ class RivalsGame {
     };
   }
 
+  _syncMenuFromState() {
+    const syncGroup = (category, attr, val) => {
+      const group = document.querySelector(`[data-category="${category}"]`);
+      if (!group) return;
+      group.querySelectorAll('.choice-btn').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset[attr] === val);
+      });
+    };
+    syncGroup('primary', 'weapon', this.loadoutChoice.primary);
+    syncGroup('secondary', 'weapon', this.loadoutChoice.secondary);
+    syncGroup('melee', 'weapon', this.loadoutChoice.melee);
+    syncGroup('utility', 'weapon', this.loadoutChoice.utility);
+    syncGroup('map', 'map', this.loadoutChoice.map);
+    syncGroup('difficulty', 'diff', this.loadoutChoice.difficulty);
+    syncGroup('weaponSkin', 'skin', this.loadoutChoice.weaponSkin);
+    syncGroup('rivalSkin', 'rskin', this.loadoutChoice.rivalSkin);
+
+    this.ui.sensSlider.value = String(this.settings.sensitivity);
+    this.ui.sensVal.textContent = this.settings.sensitivity.toFixed(1);
+    this.ui.fovSlider.value = String(this.settings.fov);
+    this.ui.fovVal.textContent = String(this.settings.fov);
+  }
+
   _createMuzzleFlash() {
     const geo = new THREE.OctahedronGeometry(0.08, 0);
     const mat = new THREE.MeshBasicMaterial({ color: 0xfff3a0, transparent: true, opacity: 0.9 });
@@ -172,16 +249,53 @@ class RivalsGame {
       this.renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    // Loadout & difficulty choice buttons
-    document.querySelectorAll('.choice-group').forEach((group) => {
+    // Menu Tabs
+    document.querySelectorAll('.tab-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const target = btn.dataset.tab;
+        document.querySelectorAll('.tab-btn').forEach((b) => b.classList.toggle('active', b === btn));
+        document.querySelectorAll('.tab-panel').forEach((p) => {
+          p.classList.toggle('hidden', p.id !== `tab-${target}`);
+        });
+      });
+    });
+
+    // Loadout, Map, Difficulty, and Skin buttons
+    document.querySelectorAll('[data-category]').forEach((group) => {
       const cat = group.dataset.category;
       group.querySelectorAll('.choice-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
           group.querySelectorAll('.choice-btn').forEach((b) => b.classList.remove('active'));
           btn.classList.add('active');
+
           if (cat === 'primary') this.loadoutChoice.primary = btn.dataset.weapon;
           if (cat === 'secondary') this.loadoutChoice.secondary = btn.dataset.weapon;
+          if (cat === 'melee') this.loadoutChoice.melee = btn.dataset.weapon;
+          if (cat === 'utility') this.loadoutChoice.utility = btn.dataset.weapon;
           if (cat === 'difficulty') this.loadoutChoice.difficulty = btn.dataset.diff;
+
+          if (cat === 'map') {
+            this.loadoutChoice.map = btn.dataset.map;
+            // Live switch map preview when in menu (or takes effect next match/round)
+            if (!this.matchActive) {
+              this.arena.loadMap(this.loadoutChoice.map);
+              this.bot.refreshWaypoints();
+            }
+          }
+
+          if (cat === 'weaponSkin') {
+            this.loadoutChoice.weaponSkin = btn.dataset.skin;
+            if (this.matchActive && this.slots.length > 0) {
+              this.switchWeapon(this.activeSlot, true);
+            }
+          }
+
+          if (cat === 'rivalSkin') {
+            this.loadoutChoice.rivalSkin = btn.dataset.rskin;
+            this.bot.applySkin(this.loadoutChoice.rivalSkin);
+          }
+
+          this._savePreferences();
         });
       });
     });
@@ -190,16 +304,18 @@ class RivalsGame {
     this.ui.sensSlider.addEventListener('input', (e) => {
       this.settings.sensitivity = parseFloat(e.target.value);
       this.ui.sensVal.textContent = this.settings.sensitivity.toFixed(1);
+      this._savePreferences();
     });
     this.ui.fovSlider.addEventListener('input', (e) => {
       this.settings.fov = parseInt(e.target.value, 10);
       this.ui.fovVal.textContent = String(this.settings.fov);
+      this._savePreferences();
     });
     this.ui.soundToggle.addEventListener('change', (e) => {
       this.sound.enabled = e.target.checked;
     });
 
-    // Menu Buttons
+    // Menu Actions
     this.ui.playBtn.addEventListener('click', () => {
       this.sound.unlock();
       if (!this.matchActive) {
@@ -230,7 +346,6 @@ class RivalsGame {
       this.ui.menu.classList.remove('hidden');
     });
 
-    // Pointer lock changes
     document.addEventListener('pointerlockchange', () => {
       const locked = document.pointerLockElement === this.renderer.domElement;
       if (!locked && this.matchActive && this.roundState !== 'match_over') {
@@ -242,7 +357,6 @@ class RivalsGame {
       }
     });
 
-    // Keyboard input
     window.addEventListener('keydown', (e) => {
       const code = e.code;
       if (['Space', 'Tab'].includes(code) && document.pointerLockElement) {
@@ -264,7 +378,6 @@ class RivalsGame {
       this.keys[e.code] = false;
     });
 
-    // Mouse look & firing
     window.addEventListener('mousemove', (e) => {
       if (document.pointerLockElement !== this.renderer.domElement) return;
       const mult = this.isAds && this._currentWeapon().scoped ? 0.35 : this.isAds ? 0.68 : 1.0;
@@ -280,8 +393,8 @@ class RivalsGame {
         this.isMouseDown = true;
         this._tryFire(true);
       } else if (e.button === 2) {
-        if (this._currentWeapon().id === 'katana') {
-          this._tryKatanaLunge();
+        if (this._currentWeapon().slotType === 'melee') {
+          this._tryMeleeLunge();
         } else {
           this.isAds = true;
         }
@@ -316,10 +429,15 @@ class RivalsGame {
     this.roundNumber = 1;
     this.stats = { kills: 0, headshots: 0, damageDealt: 0 };
 
+    if (this.arena.mapId !== this.loadoutChoice.map) {
+      this.arena.loadMap(this.loadoutChoice.map);
+    }
+
     this.ui.menu.classList.add('hidden');
     this.ui.matchEnd.classList.add('hidden');
     this.ui.hud.classList.remove('hidden');
     this.ui.botName.textContent = DIFFICULTIES[this.loadoutChoice.difficulty].name;
+    this.ui.mapBadge.textContent = MAPS[this.arena.mapId].name;
     this.ui.killFeed.innerHTML = '';
 
     this._startRound();
@@ -327,9 +445,14 @@ class RivalsGame {
   }
 
   _buildLoadoutSlots() {
-    const ids = [this.loadoutChoice.primary, this.loadoutChoice.secondary, 'katana', 'grenade'];
+    const ids = [
+      this.loadoutChoice.primary,
+      this.loadoutChoice.secondary,
+      this.loadoutChoice.melee,
+      this.loadoutChoice.utility,
+    ];
     this.slots = ids.map((id) => {
-      const def = WEAPONS[id];
+      const def = WEAPONS[id] || WEAPONS.ar;
       return {
         def,
         ammo: def.magSize,
@@ -344,7 +467,23 @@ class RivalsGame {
     this.switchWeapon(0, true);
   }
 
+  _clearRoundEntities() {
+    for (const pr of this.projectiles) this.scene.remove(pr.mesh);
+    this.projectiles = [];
+    for (const fp of this.firePools) {
+      this.scene.remove(fp.mesh);
+      fp.mesh.geometry.dispose();
+      fp.mesh.material.dispose();
+    }
+    this.firePools = [];
+  }
+
   _startRound() {
+    if (this.arena.mapId !== this.loadoutChoice.map) {
+      this.arena.loadMap(this.loadoutChoice.map);
+      this.ui.mapBadge.textContent = MAPS[this.arena.mapId].name;
+    }
+
     this.roundState = 'countdown';
     this.stateTimer = 2.6;
     this.countdownLastSec = 4;
@@ -352,13 +491,14 @@ class RivalsGame {
     this.isReloading = false;
     this.isAds = false;
     this.burstQueue = 0;
+    this.blindFlash = 0;
+    this.ui.flashOverlay.style.opacity = '0';
 
-    // Clear lingering grenades
-    for (const g of this.grenades) this.scene.remove(g.mesh);
-    this.grenades = [];
+    this._clearRoundEntities();
 
-    // Reset player at South spawn facing North (-Z)
-    this.player.pos.set((Math.random() - 0.5) * 4, 0, 29);
+    const spawns = this.arena.getSpawns();
+    this.player.pos.copy(spawns.player);
+    this.player.pos.x += (Math.random() - 0.5) * 4;
     this.player.vel.set(0, 0, 0);
     this.player.yaw = 0;
     this.player.pitch = 0;
@@ -369,13 +509,14 @@ class RivalsGame {
     this.player.dashCooldown = 0;
     this.player.lungeCooldown = 0;
 
-    // Reset Bot at North spawn
-    this.bot.reset(new THREE.Vector3((Math.random() - 0.5) * 4, 0, -29), this.loadoutChoice.difficulty);
+    const botSpawn = spawns.bot.clone();
+    botSpawn.x += (Math.random() - 0.5) * 4;
+    this.bot.reset(botSpawn, this.loadoutChoice.difficulty, this.loadoutChoice.rivalSkin);
 
     this._buildLoadoutSlots();
     this._renderScorePips();
     this._updateHUD();
-    this._showBanner(`ROUND ${this.roundNumber}`, 'DUEL STARTS IN 3...', false);
+    this._showBanner(`ROUND ${this.roundNumber}`, `${MAPS[this.arena.mapId].name} — FIGHT IN 3...`, false);
   }
 
   _currentSlot() {
@@ -384,6 +525,20 @@ class RivalsGame {
 
   _currentWeapon() {
     return this.slots[this.activeSlot]?.def || WEAPONS.ar;
+  }
+
+  _getTracerColor(weaponDef) {
+    if (weaponDef.paintSplat) {
+      return PAINT_COLORS[Math.floor(Math.random() * PAINT_COLORS.length)];
+    }
+    const skin = WEAPON_SKINS[this.loadoutChoice.weaponSkin];
+    if (skin && skin.animated) {
+      const c = new THREE.Color();
+      c.setHSL((performance.now() * 0.0004) % 1, 1.0, 0.58);
+      return c.getHex();
+    }
+    if (skin && skin.tracerColor) return skin.tracerColor;
+    return weaponDef.tracerColor;
   }
 
   switchWeapon(index, force = false) {
@@ -399,7 +554,7 @@ class RivalsGame {
     if (this.weaponMesh) {
       this.viewmodelRoot.remove(this.weaponMesh);
     }
-    this.weaponMesh = createWeaponMesh(this._currentWeapon().id);
+    this.weaponMesh = createWeaponMesh(this._currentWeapon().id, this.loadoutChoice.weaponSkin);
     this.viewmodelRoot.add(this.weaponMesh);
 
     this.ui.hotbarSlots.forEach((el, i) => {
@@ -454,15 +609,16 @@ class RivalsGame {
     this.sound.playDash();
   }
 
-  _tryKatanaLunge() {
+  _tryMeleeLunge() {
     if (this.roundState !== 'playing' || !this.player.alive) return;
     if (this.player.lungeCooldown > 0) return;
 
+    const w = this._currentWeapon();
     const forward = new THREE.Vector3();
     this.camera.getWorldDirection(forward);
-    this.player.vel.x = forward.x * 18.5;
-    this.player.vel.z = forward.z * 18.5;
-    this.player.vel.y = Math.max(4.5, forward.y * 8 + 3.2);
+    this.player.vel.x = forward.x * (w.lungePower || 18.5);
+    this.player.vel.z = forward.z * (w.lungePower || 18.5);
+    this.player.vel.y = Math.max(w.lungeLift || 4.5, forward.y * 8 + 3.2);
     this.player.onGround = false;
     this.player.lungeCooldown = 2.4;
     this.sound.playDash();
@@ -498,7 +654,7 @@ class RivalsGame {
       if (slot.ammo <= 0) return;
       slot.ammo -= 1;
       this.fireCooldown = 1 / w.fireRate;
-      this._throwGrenade();
+      this._throwUtility(w);
       this._updateHUD();
       return;
     }
@@ -524,49 +680,64 @@ class RivalsGame {
     slot.ammo -= 1;
     this.sound.playShoot(w.id);
 
-    // Visual recoil & muzzle flash
     this.recoilPitch = Math.min(0.14, this.recoilPitch + w.recoil);
     this.recoilKick = Math.min(0.16, this.recoilKick + w.recoil * 1.6 + 0.03);
     this.muzzleFlashTimer = 0.045;
     this.ui.crosshair.classList.add('spread');
     setTimeout(() => this.ui.crosshair.classList.remove('spread'), 90);
 
-    // Compute ray direction with weapon spread
     const spread = this.isAds ? w.adsSpread : w.spread;
-    const dir = new THREE.Vector3(0, 0, -1);
-    dir.x += (Math.random() - 0.5) * spread * 2;
-    dir.y += (Math.random() - 0.5) * spread * 2;
-    dir.normalize().applyQuaternion(this.camera.quaternion);
-
     const origin = this.camera.position.clone();
-    this.raycaster.set(origin, dir);
-    this.raycaster.far = w.range;
+    const pellets = w.pellets || 1;
+    const tracerCol = this._getTracerColor(w);
 
-    const mapHits = this.raycaster.intersectObjects(this.arena.meshes, false);
-    const botHits = this.raycaster.intersectObjects(this.bot.getHitMeshes(), false);
-
-    const mapDist = mapHits.length > 0 ? mapHits[0].distance : w.range;
-    let endPoint = origin.clone().addScaledVector(dir, mapDist);
-
-    if (botHits.length > 0 && botHits[0].distance < mapDist) {
-      const hit = botHits[0];
-      endPoint = hit.point.clone();
-      const isHeadshot = hit.object.userData.hitbox === 'head';
-      const dmg = isHeadshot ? w.headDamage : w.damage;
-      this._onPlayerHitBot(dmg, isHeadshot, hit.point, w.name);
-    } else if (mapHits.length > 0) {
-      this._spawnParticles(mapHits[0].point, 0xdbe7ff, 5);
-    }
-
-    // Spawn visible tracer from weapon muzzle to impact point
     const muzzleWorld = new THREE.Vector3();
     if (this.weaponMesh && this.weaponMesh.userData.muzzle) {
       muzzleWorld.copy(this.weaponMesh.userData.muzzle);
       this.weaponMesh.localToWorld(muzzleWorld);
     } else {
-      muzzleWorld.copy(origin).addScaledVector(dir, 0.5);
+      const f = new THREE.Vector3();
+      this.camera.getWorldDirection(f);
+      muzzleWorld.copy(origin).addScaledVector(f, 0.5);
     }
-    this._spawnTracer(muzzleWorld, endPoint, w.tracerColor);
+
+    let totalBotDmg = 0;
+    let anyHeadshot = false;
+    let lastBotHitPoint = null;
+
+    for (let p = 0; p < pellets; p++) {
+      const dir = new THREE.Vector3(0, 0, -1);
+      dir.x += (Math.random() - 0.5) * spread * 2;
+      dir.y += (Math.random() - 0.5) * spread * 2;
+      dir.normalize().applyQuaternion(this.camera.quaternion);
+
+      this.raycaster.set(origin, dir);
+      this.raycaster.far = w.range;
+
+      const mapHits = this.raycaster.intersectObjects(this.arena.meshes, false);
+      const botHits = this.raycaster.intersectObjects(this.bot.getHitMeshes(), false);
+
+      const mapDist = mapHits.length > 0 ? mapHits[0].distance : w.range;
+      let endPoint = origin.clone().addScaledVector(dir, mapDist);
+
+      if (botHits.length > 0 && botHits[0].distance < mapDist) {
+        const hit = botHits[0];
+        endPoint = hit.point.clone();
+        const isHeadshot = hit.object.userData.hitbox === 'head';
+        totalBotDmg += isHeadshot ? w.headDamage : w.damage;
+        if (isHeadshot) anyHeadshot = true;
+        lastBotHitPoint = endPoint;
+      } else if (mapHits.length > 0) {
+        const impactCol = w.paintSplat ? tracerCol : 0xdbe7ff;
+        this._spawnParticles(mapHits[0].point, impactCol, w.paintSplat ? 10 : pellets > 1 ? 2 : 5);
+      }
+
+      this._spawnTracer(muzzleWorld, endPoint, tracerCol);
+    }
+
+    if (totalBotDmg > 0 && lastBotHitPoint) {
+      this._onPlayerHitBot(totalBotDmg, anyHeadshot, lastBotHitPoint, w.name);
+    }
 
     if (slot.ammo === 0 && slot.reserve > 0) {
       this.startReload();
@@ -577,7 +748,7 @@ class RivalsGame {
   _performMeleeSlash(isLunge) {
     const w = this._currentWeapon();
     this.slashAnim = 1.0;
-    this.sound.playShoot('katana');
+    this.sound.playShoot(w.id);
 
     if (!this.bot.alive) return;
     const origin = this.camera.position.clone();
@@ -589,62 +760,59 @@ class RivalsGame {
     this.camera.getWorldDirection(forward);
     const dot = forward.dot(toBot.normalize());
 
-    const reach = isLunge ? w.range + 1.4 : w.range;
-    if (dist <= reach && dot > 0.45) {
-      const dmg = isLunge ? 60 : w.damage;
-      this._onPlayerHitBot(dmg, isLunge, botCenter, isLunge ? 'KATANA LUNGE' : 'KATANA');
+    const reach = isLunge ? w.range + 1.5 : w.range;
+    if (dist <= reach && dot > 0.42) {
+      const dmg = isLunge ? (w.lungeDamage || w.damage + 15) : w.damage;
+      this._onPlayerHitBot(dmg, isLunge, botCenter, isLunge ? `${w.name} LUNGE` : w.name);
     }
   }
 
-  _throwGrenade() {
-    this.sound.playShoot('grenade');
+  _throwUtility(weaponDef) {
+    this.sound.playShoot(weaponDef.id);
     const dir = new THREE.Vector3();
     this.camera.getWorldDirection(dir);
 
     const start = this.camera.position.clone().addScaledVector(dir, 0.7);
-    const vel = dir.multiplyScalar(22);
+    const vel = dir.multiplyScalar(weaponDef.utilityType === 'molotov' ? 23 : 22);
     vel.y += 5.2;
 
+    const colorMap = { frag: 0xff5a36, molotov: 0xf97316, flash: 0xe0f2fe };
     const mesh = new THREE.Mesh(
       new THREE.OctahedronGeometry(0.16, 1),
       new THREE.MeshStandardMaterial({
-        color: 0xff5a36,
-        emissive: 0xff3e20,
-        emissiveIntensity: 0.7,
-        roughness: 0.4,
+        color: colorMap[weaponDef.utilityType] || 0xff5a36,
+        emissive: colorMap[weaponDef.utilityType] || 0xff3e20,
+        emissiveIntensity: 0.75,
+        roughness: 0.35,
       })
     );
     mesh.position.copy(start);
     this.scene.add(mesh);
 
-    this.grenades.push({
+    this.projectiles.push({
+      type: weaponDef.utilityType,
       mesh,
       pos: start,
       vel,
-      fuse: 1.85,
+      fuse: weaponDef.utilityType === 'flash' ? 1.35 : weaponDef.utilityType === 'molotov' ? 3.5 : 1.85,
     });
   }
 
-  _explodeGrenade(pos) {
+  _explodeFrag(pos) {
     this.sound.playExplosion();
     this._spawnParticles(pos, 0xff7b29, 26, 12);
     this._spawnParticles(pos, 0xffe45e, 14, 8);
 
     const blastRadius = 8.5;
-
-    // Damage Bot
     if (this.bot.alive) {
       const botPos = this.bot.getCenterWorldPos();
       const d = pos.distanceTo(botPos);
       if (d < blastRadius) {
         const dmg = Math.round(92 * (1 - d / blastRadius));
-        if (dmg > 4) {
-          this._onPlayerHitBot(dmg, false, botPos, 'FRAG GRENADE');
-        }
+        if (dmg > 4) this._onPlayerHitBot(dmg, false, botPos, 'FRAG GRENADE');
       }
     }
 
-    // Self-damage + rocket-jump knockback!
     if (this.player.alive) {
       const pCenter = new THREE.Vector3(this.player.pos.x, this.player.pos.y + 1.0, this.player.pos.z);
       const d = pos.distanceTo(pCenter);
@@ -655,6 +823,58 @@ class RivalsGame {
         this.player.vel.y += 6 * factor;
         this.player.onGround = false;
         this._damagePlayer(Math.round(45 * factor), 'OWN GRENADE');
+      }
+    }
+  }
+
+  _spawnMolotovPool(pos) {
+    this.sound.playMolotovShatter();
+    this._spawnParticles(pos, 0xff6b1a, 22, 8);
+
+    const radius = 4.6;
+    const floorY = this.arena.getFloorHeight(pos.x, pos.z, pos.y + 0.5, 0.2);
+    const geo = new THREE.CylinderGeometry(radius, radius, 0.14, 24);
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xff5a1f,
+      transparent: true,
+      opacity: 0.58,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(pos.x, floorY + 0.08, pos.z);
+    this.scene.add(mesh);
+
+    this.firePools.push({
+      mesh,
+      pos: new THREE.Vector3(pos.x, floorY, pos.z),
+      radius,
+      life: 5.5,
+      tickTimer: 0,
+    });
+  }
+
+  _detonateFlashbang(pos) {
+    this.sound.playFlashbang();
+    this._spawnParticles(pos, 0xffffff, 24, 11);
+
+    const radius = 14;
+    if (this.bot.alive) {
+      const d = pos.distanceTo(this.bot.getHeadWorldPos());
+      if (d < radius) {
+        this.bot.blind(2.8);
+        this._pushKillFeed('RIVAL FLASHBANGED (2.8s)!');
+        this._onPlayerHitBot(10, false, this.bot.getHeadWorldPos(), 'FLASHBANG');
+      }
+    }
+
+    if (this.player.alive) {
+      const pEye = this.camera.position;
+      const d = pos.distanceTo(pEye);
+      if (d < radius) {
+        const toFlash = new THREE.Vector3().subVectors(pos, pEye).normalize();
+        const look = new THREE.Vector3();
+        this.camera.getWorldDirection(look);
+        const facing = Math.max(0.25, look.dot(toFlash));
+        this.blindFlash = Math.max(this.blindFlash, 1.35 * facing * (1 - d / (radius * 1.2)));
       }
     }
   }
@@ -686,7 +906,6 @@ class RivalsGame {
     const mapHits = this.raycaster.intersectObjects(this.arena.meshes, false);
     const mapDist = mapHits.length > 0 ? mapHits[0].distance : 140;
 
-    // Check closest point on ray to player cylinder
     const playerCenter = new THREE.Vector3(this.player.pos.x, this.player.pos.y + 1.05, this.player.pos.z);
     const toPlayer = new THREE.Vector3().subVectors(playerCenter, origin);
     const proj = toPlayer.dot(dir);
@@ -704,7 +923,8 @@ class RivalsGame {
       }
     }
 
-    this._spawnTracer(origin, endPoint, 0xff3e5e);
+    const rSkin = RIVAL_SKINS[this.loadoutChoice.rivalSkin] || RIVAL_SKINS.classic;
+    this._spawnTracer(origin, endPoint, rSkin.accentColor);
 
     if (hitPlayer) {
       this._damagePlayer(damage, 'RIVAL');
@@ -754,8 +974,8 @@ class RivalsGame {
     this.ui.endBadge.classList.toggle('defeat', !won);
     this.ui.endScore.textContent = `${this.playerScore} — ${this.botScore}`;
     this.ui.endStats.innerHTML =
-      `Eliminations: <b>${this.stats.kills}</b> &nbsp;·&nbsp; Headshots: <b>${this.stats.headshots}</b><br>` +
-      `Total Damage Dealt: <b>${this.stats.damageDealt}</b>`;
+      `Map: <b>${MAPS[this.arena.mapId].name}</b> &nbsp;·&nbsp; Wrap: <b>${WEAPON_SKINS[this.loadoutChoice.weaponSkin].name}</b><br>` +
+      `Eliminations: <b>${this.stats.kills}</b> &nbsp;·&nbsp; Headshots: <b>${this.stats.headshots}</b> &nbsp;·&nbsp; Damage: <b>${this.stats.damageDealt}</b>`;
   }
 
   _showBanner(title, sub, isDanger = false) {
@@ -888,7 +1108,6 @@ class RivalsGame {
         p.vel.z = THREE.MathUtils.lerp(p.vel.z, input.z * baseSpeed, Math.min(1, dt * accel));
       }
 
-      // Coyote jump
       if (p.onGround) p.coyoteTimer = 0.11;
       else p.coyoteTimer = Math.max(0, p.coyoteTimer - dt);
 
@@ -904,7 +1123,6 @@ class RivalsGame {
       p.vel.z *= Math.max(0, 1 - dt * 10);
     }
 
-    // Gravity & Integration
     p.vel.y -= 23 * dt;
     p.pos.x += p.vel.x * dt;
     p.pos.z += p.vel.z * dt;
@@ -927,20 +1145,16 @@ class RivalsGame {
       p.vel.y = 0;
     }
 
-    // Smooth crouch/slide camera eye height
     const targetEye = !p.alive ? 0.45 : p.slideTimer > 0 ? 0.96 : 1.62;
     p.eyeHeight = THREE.MathUtils.lerp(p.eyeHeight, targetEye, Math.min(1, dt * 15));
 
-    // Decay recoil
     this.recoilPitch = THREE.MathUtils.lerp(this.recoilPitch, 0, Math.min(1, dt * 12));
     this.recoilKick = THREE.MathUtils.lerp(this.recoilKick, 0, Math.min(1, dt * 14));
 
-    // Apply camera transform
     this.camera.position.set(p.pos.x, p.pos.y + p.eyeHeight, p.pos.z);
     const euler = new THREE.Euler(p.pitch + this.recoilPitch, p.yaw, 0, 'YXZ');
     this.camera.quaternion.setFromEuler(euler);
 
-    // Dynamic FOV (ADS zoom & Slide speed boost)
     const targetFov = this.isAds
       ? w.adsFov
       : p.slideTimer > 0
@@ -949,7 +1163,6 @@ class RivalsGame {
     this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, targetFov, Math.min(1, dt * 14));
     this.camera.updateProjectionMatrix();
 
-    // Sniper Scope & Slide lines overlays
     const scoped = this.isAds && w.scoped && this.roundState === 'playing';
     this.ui.scopeOverlay.classList.toggle('hidden', !scoped);
     this.ui.crosshair.classList.toggle('hidden', scoped);
@@ -960,7 +1173,6 @@ class RivalsGame {
   _updateWeaponAndViewmodel(dt) {
     this.fireCooldown = Math.max(0, this.fireCooldown - dt);
 
-    // Burst follow-up shots
     if (this.burstQueue > 0) {
       this.burstDelay -= dt;
       if (this.burstDelay <= 0) {
@@ -970,12 +1182,10 @@ class RivalsGame {
       }
     }
 
-    // Auto fire while mouse held
     if (this.isMouseDown && this.roundState === 'playing') {
       this._tryFire(false);
     }
 
-    // Reload timer
     if (this.isReloading) {
       this.reloadTimer -= dt;
       if (this.reloadTimer <= 0) {
@@ -989,8 +1199,13 @@ class RivalsGame {
       }
     }
 
-    // Viewmodel bob, sway, reload tilt & katana slash animation
     if (this.weaponMesh) {
+      // Animated Rainbow Prism wrap & Minigun rotary barrel spin
+      updateAnimatedWeaponSkin(this.weaponMesh, performance.now() * 0.001);
+      if (this.weaponMesh.userData.spinGroup && this.isMouseDown && this.roundState === 'playing') {
+        this.weaponMesh.userData.spinGroup.rotation.z += dt * 22;
+      }
+
       const speed = Math.hypot(this.player.vel.x, this.player.vel.z);
       if (speed > 0.8 && this.player.onGround) {
         this.bobPhase += dt * speed * 1.15;
@@ -1017,7 +1232,6 @@ class RivalsGame {
       }
       this.viewmodelRoot.rotation.set(rotX, rotY, this.player.slideTimer > 0 ? -0.18 : 0);
 
-      // Muzzle flash
       if (this.muzzleFlashTimer > 0) {
         this.muzzleFlashTimer -= dt;
         this.muzzleFlash.visible = true;
@@ -1032,7 +1246,6 @@ class RivalsGame {
   }
 
   _updateEffects(dt) {
-    // Hitmarker fade
     if (this.hitmarkerTimer > 0) {
       this.hitmarkerTimer -= dt;
       if (this.hitmarkerTimer <= 0) {
@@ -1040,12 +1253,18 @@ class RivalsGame {
       }
     }
 
-    // Damage vignette fade
     if (this.damageFlash > 0) {
       this.damageFlash = Math.max(0, this.damageFlash - dt);
       this.ui.damageVignette.style.opacity = String(Math.min(1, this.damageFlash * 3));
     } else {
       this.ui.damageVignette.style.opacity = '0';
+    }
+
+    if (this.blindFlash > 0) {
+      this.blindFlash = Math.max(0, this.blindFlash - dt * 0.85);
+      this.ui.flashOverlay.style.opacity = String(Math.min(0.95, this.blindFlash));
+    } else {
+      this.ui.flashOverlay.style.opacity = '0';
     }
 
     // Tracers
@@ -1077,32 +1296,78 @@ class RivalsGame {
       }
     }
 
-    // Grenades
-    for (let i = this.grenades.length - 1; i >= 0; i--) {
-      const g = this.grenades[i];
-      g.fuse -= dt;
-      g.vel.y -= 20 * dt;
-      g.pos.addScaledVector(g.vel, dt);
+    // Thrown Utility Projectiles (Frag, Molotov, Flashbang)
+    for (let i = this.projectiles.length - 1; i >= 0; i--) {
+      const pr = this.projectiles[i];
+      pr.fuse -= dt;
+      pr.vel.y -= 20 * dt;
+      pr.pos.addScaledVector(pr.vel, dt);
 
-      const hit = this.arena.isPointInsideSolid(g.pos.x, g.pos.y, g.pos.z, 0.16);
+      const hit = this.arena.isPointInsideSolid(pr.pos.x, pr.pos.y, pr.pos.z, 0.16);
       if (hit.hit) {
-        g.pos.addScaledVector(hit.normal, 0.16);
-        const dot = g.vel.dot(hit.normal);
+        if (pr.type === 'molotov') {
+          this.scene.remove(pr.mesh);
+          this.projectiles.splice(i, 1);
+          this._spawnMolotovPool(pr.pos);
+          continue;
+        }
+        pr.pos.addScaledVector(hit.normal, 0.16);
+        const dot = pr.vel.dot(hit.normal);
         if (dot < 0) {
-          g.vel.addScaledVector(hit.normal, -1.62 * dot);
-          g.vel.multiplyScalar(0.72);
-          if (g.vel.length() > 2.2) this.sound.playBounce();
+          pr.vel.addScaledVector(hit.normal, -1.62 * dot);
+          pr.vel.multiplyScalar(0.72);
+          if (pr.vel.length() > 2.2) this.sound.playBounce();
         }
       }
 
-      g.mesh.position.copy(g.pos);
-      g.mesh.rotation.x += dt * 7;
-      g.mesh.rotation.y += dt * 5;
+      pr.mesh.position.copy(pr.pos);
+      pr.mesh.rotation.x += dt * 7;
+      pr.mesh.rotation.y += dt * 5;
 
-      if (g.fuse <= 0) {
-        this.scene.remove(g.mesh);
-        this.grenades.splice(i, 1);
-        this._explodeGrenade(g.pos);
+      if (pr.fuse <= 0) {
+        this.scene.remove(pr.mesh);
+        this.projectiles.splice(i, 1);
+        if (pr.type === 'flash') this._detonateFlashbang(pr.pos);
+        else if (pr.type === 'molotov') this._spawnMolotovPool(pr.pos);
+        else this._explodeFrag(pr.pos);
+      }
+    }
+
+    // Molotov Fire Pools (Burning DoT!)
+    for (let i = this.firePools.length - 1; i >= 0; i--) {
+      const fp = this.firePools[i];
+      fp.life -= dt;
+      fp.tickTimer -= dt;
+
+      if (Math.random() < dt * 18) {
+        const a = Math.random() * Math.PI * 2;
+        const r = Math.random() * fp.radius * 0.9;
+        const flamePos = new THREE.Vector3(fp.pos.x + Math.cos(a) * r, fp.pos.y + 0.25, fp.pos.z + Math.sin(a) * r);
+        this._spawnParticles(flamePos, Math.random() < 0.5 ? 0xff6b1a : 0xffd447, 1, 2.2);
+      }
+
+      if (fp.tickTimer <= 0 && this.roundState === 'playing') {
+        fp.tickTimer = 0.42;
+        if (this.bot.alive) {
+          const dBot = Math.hypot(this.bot.pos.x - fp.pos.x, this.bot.pos.z - fp.pos.z);
+          if (dBot < fp.radius && Math.abs(this.bot.pos.y - fp.pos.y) < 1.8) {
+            this._onPlayerHitBot(14, false, this.bot.getCenterWorldPos(), 'MOLOTOV');
+          }
+        }
+        if (this.player.alive) {
+          const dP = Math.hypot(this.player.pos.x - fp.pos.x, this.player.pos.z - fp.pos.z);
+          if (dP < fp.radius && Math.abs(this.player.pos.y - fp.pos.y) < 1.8) {
+            this._damagePlayer(8, 'MOLOTOV FIRE');
+          }
+        }
+      }
+
+      fp.mesh.material.opacity = Math.min(0.6, fp.life * 0.4);
+      if (fp.life <= 0) {
+        this.scene.remove(fp.mesh);
+        fp.mesh.geometry.dispose();
+        fp.mesh.material.dispose();
+        this.firePools.splice(i, 1);
       }
     }
   }
@@ -1149,7 +1414,6 @@ class RivalsGame {
     const dt = Math.min(0.05, this.clock.getDelta());
 
     if (this.roundState === 'menu' || this.roundState === 'match_over') {
-      // Cinematic orbit camera preview over the arena while in menu
       const t = performance.now() * 0.00022;
       this.camera.position.set(Math.sin(t) * 26, 13.5, Math.cos(t) * 28);
       this.camera.lookAt(0, 2.5, 0);

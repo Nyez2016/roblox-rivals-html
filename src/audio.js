@@ -81,9 +81,26 @@ export class SoundEngine {
         this._tone('sawtooth', 190, 42, 0.24, 0.32);
         this._tone('triangle', 760, 120, 0.08, 0.16);
         break;
+      case 'shotgun':
+      case 'shorty':
+        this._noise(0.24, 720, 0.46, 'lowpass');
+        this._tone('sawtooth', 165, 36, 0.22, 0.34);
+        break;
+      case 'paintball':
+        this._noise(0.08, 1900, 0.14, 'bandpass');
+        this._tone('sine', 420, 140, 0.09, 0.22);
+        break;
+      case 'minigun':
+        this._noise(0.055, 1900, 0.18, 'bandpass');
+        this._tone('sawtooth', 290, 110, 0.05, 0.14);
+        break;
       case 'revolver':
         this._noise(0.18, 1200, 0.34, 'bandpass');
         this._tone('sawtooth', 260, 58, 0.16, 0.26);
+        break;
+      case 'handgun':
+        this._noise(0.1, 1800, 0.22, 'bandpass');
+        this._tone('triangle', 360, 110, 0.09, 0.18);
         break;
       case 'uzi':
         this._noise(0.065, 2200, 0.16, 'highpass');
@@ -94,10 +111,17 @@ export class SoundEngine {
         this._tone('triangle', 310, 95, 0.08, 0.18);
         break;
       case 'katana':
+      case 'scythe':
         this._noise(0.15, 2400, 0.22, 'bandpass');
-        this._tone('sine', 520, 180, 0.13, 0.12);
+        this._tone('sine', 520, 180, 0.13, 0.14);
+        break;
+      case 'axe':
+        this._noise(0.18, 1100, 0.28, 'lowpass');
+        this._tone('sawtooth', 240, 85, 0.16, 0.18);
         break;
       case 'grenade':
+      case 'molotov':
+      case 'flashbang':
         this._noise(0.1, 1400, 0.14, 'bandpass');
         this._tone('sine', 240, 420, 0.09, 0.09);
         break;
@@ -111,7 +135,6 @@ export class SoundEngine {
   playHit(isHeadshot = false) {
     if (!this._ready()) return;
     if (isHeadshot) {
-      // Iconic bright headshot dink
       this._tone('sine', 1650, 2150, 0.09, 0.22);
       this._tone('triangle', 2480, 1900, 0.14, 0.18, 0.025);
     } else {
@@ -157,6 +180,19 @@ export class SoundEngine {
     if (!this._ready()) return;
     this._noise(0.55, 360, 0.55, 'lowpass');
     this._tone('sawtooth', 120, 28, 0.45, 0.35);
+  }
+
+  playMolotovShatter() {
+    if (!this._ready()) return;
+    this._noise(0.16, 3600, 0.3, 'highpass');
+    this._noise(0.55, 600, 0.24, 'bandpass', 0.05);
+    this._tone('triangle', 1200, 380, 0.12, 0.16);
+  }
+
+  playFlashbang() {
+    if (!this._ready()) return;
+    this._noise(0.14, 2400, 0.42, 'highpass');
+    this._tone('sine', 3100, 2800, 0.65, 0.14);
   }
 
   playHurt() {

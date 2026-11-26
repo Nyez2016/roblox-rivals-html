@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { RIVAL_SKINS } from './skins.js';
 
 export const DIFFICULTIES = {
   rookie: {
@@ -39,14 +40,16 @@ export class RivalBot {
     this.maxHp = 100;
     this.hp = 100;
     this.alive = true;
+    this.onGround = true;
 
     this.pos = new THREE.Vector3(0, 0, -28);
     this.vel = new THREE.Vector3();
     this.yaw = 0;
 
     this.difficulty = DIFFICULTIES.pro;
+    this.skinId = 'classic';
     this.waypoints = arena.getWaypoints();
-    this.currentTarget = this.waypoints[0].clone();
+    this.currentTarget = this.waypoints[0]?.clone() || new THREE.Vector3();
 
     this.strafeDir = 1;
     this.strafeTimer = 1.0;
@@ -54,6 +57,7 @@ export class RivalBot {
     this.sightTimer = 0;
     this.jumpCooldown = 0;
     this.hurtFlash = 0;
+    this.blindTimer = 0;
     this.walkPhase = 0;
     this.deathFall = 0;
 
@@ -64,52 +68,45 @@ export class RivalBot {
   _buildAvatar() {
     this.group = new THREE.Group();
 
-    const matSkin = new THREE.MeshStandardMaterial({ color: 0xf7cf86, roughness: 0.6 });
-    const matTorso = new THREE.MeshStandardMaterial({ color: 0xe63956, roughness: 0.5, metalness: 0.1 });
-    const matLegs = new THREE.MeshStandardMaterial({ color: 0x1e2638, roughness: 0.7 });
-    const matAccent = new THREE.MeshStandardMaterial({
+    this.matSkin = new THREE.MeshStandardMaterial({ color: 0xf7cf86, roughness: 0.6 });
+    this.matTorso = new THREE.MeshStandardMaterial({ color: 0xe63956, roughness: 0.5, metalness: 0.15 });
+    this.matLegs = new THREE.MeshStandardMaterial({ color: 0x1e2638, roughness: 0.7 });
+    this.matAccent = new THREE.MeshStandardMaterial({
       color: 0xff3e5e,
       emissive: 0xff3e5e,
-      emissiveIntensity: 0.7,
+      emissiveIntensity: 0.75,
     });
-    this.bodyMaterials = [matSkin, matTorso, matLegs];
 
-    // Classic blocky Roblox character proportions (~1.9m tall)
-    // Legs
-    this.leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.72, 0.34), matLegs);
+    this.leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.72, 0.34), this.matLegs);
     this.leftLeg.position.set(-0.19, 0.36, 0);
     this.leftLeg.castShadow = true;
     this.leftLeg.userData.hitbox = 'body';
 
-    this.rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.72, 0.34), matLegs);
+    this.rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.72, 0.34), this.matLegs);
     this.rightLeg.position.set(0.19, 0.36, 0);
     this.rightLeg.castShadow = true;
     this.rightLeg.userData.hitbox = 'body';
 
-    // Torso
-    this.torso = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.76, 0.4), matTorso);
+    this.torso = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.76, 0.4), this.matTorso);
     this.torso.position.set(0, 1.1, 0);
     this.torso.castShadow = true;
     this.torso.userData.hitbox = 'body';
 
-    // Glowing Rival chest visor stripe
-    const chestStripe = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.14, 0.42), matAccent);
+    const chestStripe = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.14, 0.42), this.matAccent);
     chestStripe.position.set(0, 1.18, 0);
     chestStripe.userData.hitbox = 'body';
 
-    // Arms
-    this.leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.72, 0.3), matSkin);
+    this.leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.72, 0.3), this.matSkin);
     this.leftArm.position.set(-0.54, 1.08, 0);
     this.leftArm.castShadow = true;
     this.leftArm.userData.hitbox = 'body';
 
-    this.rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.72, 0.3), matSkin);
+    this.rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.72, 0.3), this.matSkin);
     this.rightArm.position.set(0.54, 1.16, 0.2);
     this.rightArm.rotation.x = -Math.PI * 0.45;
     this.rightArm.castShadow = true;
     this.rightArm.userData.hitbox = 'body';
 
-    // Bot Rifle attached to right arm
     this.gunMesh = new THREE.Mesh(
       new THREE.BoxGeometry(0.12, 0.14, 0.72),
       new THREE.MeshStandardMaterial({ color: 0x1a2030, metalness: 0.5, roughness: 0.35 })
@@ -117,19 +114,26 @@ export class RivalBot {
     this.gunMesh.position.set(0.54, 1.18, 0.55);
     this.gunMesh.castShadow = true;
 
-    const gunGlow = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.04, 0.5), matAccent);
+    const gunGlow = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.04, 0.5), this.matAccent);
     gunGlow.position.set(0.54, 1.22, 0.58);
 
-    // Blocky Roblox Head (Headshot Hitbox!)
-    this.headMesh = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.52, 0.54), matSkin);
+    this.headMesh = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.52, 0.54), this.matSkin);
     this.headMesh.position.set(0, 1.76, 0);
     this.headMesh.castShadow = true;
     this.headMesh.userData.hitbox = 'head';
 
-    // Cool red cyber-visor on face (+Z is forward)
-    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.14, 0.08), matAccent);
+    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.14, 0.08), this.matAccent);
     visor.position.set(0, 1.8, 0.27);
     visor.userData.hitbox = 'head';
+
+    // Flashbang stunned ring above head
+    this.stunRing = new THREE.Mesh(
+      new THREE.TorusGeometry(0.38, 0.04, 8, 18),
+      new THREE.MeshBasicMaterial({ color: 0xfff3a0 })
+    );
+    this.stunRing.rotation.x = Math.PI / 2;
+    this.stunRing.position.set(0, 2.18, 0);
+    this.stunRing.visible = false;
 
     this.group.add(
       this.leftLeg,
@@ -141,7 +145,8 @@ export class RivalBot {
       this.gunMesh,
       gunGlow,
       this.headMesh,
-      visor
+      visor,
+      this.stunRing
     );
 
     this.hitMeshes = [
@@ -155,10 +160,19 @@ export class RivalBot {
       this.rightArm,
     ];
 
-    // Floating overhead Health Bar Sprite
     this._buildHealthBar();
-
     this.scene.add(this.group);
+  }
+
+  applySkin(skinId) {
+    const skin = RIVAL_SKINS[skinId] || RIVAL_SKINS.classic;
+    this.skinId = skin.id;
+    this.matSkin.color.setHex(skin.skinColor);
+    this.matTorso.color.setHex(skin.torsoColor);
+    this.matTorso.metalness = skin.metalness;
+    this.matLegs.color.setHex(skin.legsColor);
+    this.matAccent.color.setHex(skin.accentColor);
+    this.matAccent.emissive.setHex(skin.accentColor);
   }
 
   _buildHealthBar() {
@@ -171,7 +185,7 @@ export class RivalBot {
     const spriteMat = new THREE.SpriteMaterial({ map: this.hpTex, depthTest: false });
     this.hpSprite = new THREE.Sprite(spriteMat);
     this.hpSprite.scale.set(1.35, 0.26, 1);
-    this.hpSprite.position.set(0, 2.42, 0);
+    this.hpSprite.position.set(0, 2.48, 0);
     this.group.add(this.hpSprite);
     this._redrawHealthBar();
   }
@@ -186,7 +200,7 @@ export class RivalBot {
     ctx.fillRect(0, 0, w, h);
 
     const pct = Math.max(0, this.hp / this.maxHp);
-    ctx.fillStyle = pct > 0.35 ? '#ff3e5e' : '#ff9f1c';
+    ctx.fillStyle = this.blindTimer > 0 ? '#fde047' : pct > 0.35 ? '#ff3e5e' : '#ff9f1c';
     ctx.fillRect(4, 4, Math.round((w - 8) * pct), h - 8);
 
     ctx.strokeStyle = 'rgba(255,255,255,0.45)';
@@ -196,20 +210,36 @@ export class RivalBot {
     this.hpTex.needsUpdate = true;
   }
 
-  reset(spawnPos, difficultyKey = 'pro') {
+  refreshWaypoints() {
+    this.waypoints = this.arena.getWaypoints();
+    this._pickNewWaypoint();
+  }
+
+  blind(duration = 2.8) {
+    this.blindTimer = Math.max(this.blindTimer, duration);
+    this._redrawHealthBar();
+  }
+
+  reset(spawnPos, difficultyKey = 'pro', skinId = 'classic') {
     this.difficulty = DIFFICULTIES[difficultyKey] || DIFFICULTIES.pro;
+    this.applySkin(skinId);
+    this.waypoints = this.arena.getWaypoints();
+
     this.hp = this.maxHp;
     this.alive = true;
+    this.onGround = true;
     this.pos.copy(spawnPos);
     this.vel.set(0, 0, 0);
     this.yaw = 0;
     this.deathFall = 0;
     this.hurtFlash = 0;
+    this.blindTimer = 0;
     this.sightTimer = 0;
     this.fireTimer = 0.45;
     this.group.rotation.set(0, 0, 0);
     this.group.position.copy(this.pos);
     this.hpSprite.visible = true;
+    this.stunRing.visible = false;
     this._pickNewWaypoint();
     this._redrawHealthBar();
   }
@@ -235,12 +265,14 @@ export class RivalBot {
     if (this.hp <= 0) {
       this.alive = false;
       this.hpSprite.visible = false;
+      this.stunRing.visible = false;
       return { killed: true, hp: 0, isHeadshot };
     }
     return { killed: false, hp: this.hp, isHeadshot };
   }
 
   _pickNewWaypoint() {
+    if (!this.waypoints || this.waypoints.length === 0) return;
     const idx = Math.floor(Math.random() * this.waypoints.length);
     this.currentTarget.copy(this.waypoints[idx]);
   }
@@ -259,15 +291,13 @@ export class RivalBot {
   }
 
   update(dt, playerPos, playerAlive, canFight, onBotShoot) {
-    // Hurt flash decay
     if (this.hurtFlash > 0) {
       this.hurtFlash = Math.max(0, this.hurtFlash - dt);
       const emissiveVal = this.hurtFlash > 0 ? 0.5 : 0;
-      this.torso.material.emissive.setHex(emissiveVal > 0 ? 0xffffff : 0x000000);
-      this.torso.material.emissiveIntensity = emissiveVal;
+      this.matTorso.emissive.setHex(emissiveVal > 0 ? 0xffffff : 0x000000);
+      this.matTorso.emissiveIntensity = emissiveVal;
     }
 
-    // Ragdoll fall on death
     if (!this.alive) {
       this.deathFall = Math.min(Math.PI / 2, this.deathFall + dt * 5.2);
       this.group.rotation.x = -this.deathFall;
@@ -275,8 +305,17 @@ export class RivalBot {
       return;
     }
 
+    if (this.blindTimer > 0) {
+      this.blindTimer = Math.max(0, this.blindTimer - dt);
+      this.stunRing.visible = true;
+      this.stunRing.rotation.z += dt * 8;
+      if (this.blindTimer === 0) {
+        this.stunRing.visible = false;
+        this._redrawHealthBar();
+      }
+    }
+
     if (!canFight) {
-      // Idle face player during countdown
       const dx = playerPos.x - this.pos.x;
       const dz = playerPos.z - this.pos.z;
       this.yaw = Math.atan2(dx, dz);
@@ -285,12 +324,12 @@ export class RivalBot {
       return;
     }
 
+    const isBlinded = this.blindTimer > 0;
     const playerEye = new THREE.Vector3(playerPos.x, playerPos.y + 1.55, playerPos.z);
     const toPlayer = new THREE.Vector3(playerPos.x - this.pos.x, 0, playerPos.z - this.pos.z);
     const distToPlayer = toPlayer.length();
-    const canSee = playerAlive && this._hasLineOfSight(playerEye);
+    const canSee = !isBlinded && playerAlive && this._hasLineOfSight(playerEye);
 
-    // Strafe & jump timers
     this.strafeTimer -= dt;
     if (this.strafeTimer <= 0) {
       this.strafeDir = Math.random() < 0.5 ? -1 : 1;
@@ -298,34 +337,25 @@ export class RivalBot {
     }
     this.jumpCooldown = Math.max(0, this.jumpCooldown - dt);
 
-    // Desired movement vector
     const moveDir = new THREE.Vector3();
-    if (canSee) {
+    if (isBlinded) {
+      // Stumble blindly in random slow circle
+      moveDir.set(Math.sin(performance.now() * 0.004), 0, Math.cos(performance.now() * 0.004));
+    } else if (canSee) {
       const forward = toPlayer.clone().normalize();
       const right = new THREE.Vector3(-forward.z, 0, forward.x);
-
-      // Keep competitive engagement distance (10-18m)
       if (distToPlayer > 17) moveDir.addScaledVector(forward, 0.75);
       else if (distToPlayer < 8.5) moveDir.addScaledVector(forward, -0.7);
-
-      // Strafe dodging
       moveDir.addScaledVector(right, this.strafeDir * 0.9);
 
-      // Occasional jump-peek during gunfights
       if (this.jumpCooldown <= 0 && Math.random() < dt * 0.65 && this.onGround) {
         this.vel.y = 8.4;
         this.onGround = false;
         this.jumpCooldown = 2.0;
       }
     } else {
-      // Navigate toward waypoint or flank toward player
-      const toWp = new THREE.Vector3(
-        this.currentTarget.x - this.pos.x,
-        0,
-        this.currentTarget.z - this.pos.z
-      );
+      const toWp = new THREE.Vector3(this.currentTarget.x - this.pos.x, 0, this.currentTarget.z - this.pos.z);
       if (toWp.length() < 2.2) {
-        // Alternate between pursuing player's half and random high-ground waypoint
         if (Math.random() < 0.5) {
           this.currentTarget.set(
             playerPos.x + (Math.random() - 0.5) * 14,
@@ -340,16 +370,16 @@ export class RivalBot {
       }
     }
 
+    const moveSpeed = isBlinded ? this.difficulty.speed * 0.35 : this.difficulty.speed;
     if (moveDir.lengthSq() > 0.001) {
       moveDir.normalize();
-      this.vel.x = THREE.MathUtils.lerp(this.vel.x, moveDir.x * this.difficulty.speed, Math.min(1, dt * 8));
-      this.vel.z = THREE.MathUtils.lerp(this.vel.z, moveDir.z * this.difficulty.speed, Math.min(1, dt * 8));
+      this.vel.x = THREE.MathUtils.lerp(this.vel.x, moveDir.x * moveSpeed, Math.min(1, dt * 8));
+      this.vel.z = THREE.MathUtils.lerp(this.vel.z, moveDir.z * moveSpeed, Math.min(1, dt * 8));
     } else {
       this.vel.x *= Math.max(0, 1 - dt * 8);
       this.vel.z *= Math.max(0, 1 - dt * 8);
     }
 
-    // Gravity + Floor/Ramp collision
     this.vel.y -= 23 * dt;
     this.pos.x += this.vel.x * dt;
     this.pos.z += this.vel.z * dt;
@@ -365,9 +395,10 @@ export class RivalBot {
       this.onGround = false;
     }
 
-    // Smoothly turn to face player if visible, else movement direction
     let targetYaw = this.yaw;
-    if (canSee) {
+    if (isBlinded) {
+      targetYaw = this.yaw + dt * 4.5;
+    } else if (canSee) {
       targetYaw = Math.atan2(playerPos.x - this.pos.x, playerPos.z - this.pos.z);
     } else if (Math.hypot(this.vel.x, this.vel.z) > 0.5) {
       targetYaw = Math.atan2(this.vel.x, this.vel.z);
@@ -377,7 +408,6 @@ export class RivalBot {
     while (deltaYaw < -Math.PI) deltaYaw += Math.PI * 2;
     this.yaw += deltaYaw * Math.min(1, dt * 11);
 
-    // Shooting logic
     if (canSee) {
       this.sightTimer += dt;
       this.fireTimer -= dt;
@@ -387,7 +417,6 @@ export class RivalBot {
           .applyAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw)
           .add(this.pos);
         const aimDir = new THREE.Vector3().subVectors(playerEye, muzzleWorld).normalize();
-        // Add difficulty-scaled aim inaccuracy
         aimDir.x += (Math.random() - 0.5) * this.difficulty.spread * 2;
         aimDir.y += (Math.random() - 0.5) * this.difficulty.spread * 1.6;
         aimDir.z += (Math.random() - 0.5) * this.difficulty.spread * 2;
@@ -398,7 +427,6 @@ export class RivalBot {
       this.sightTimer = Math.max(0, this.sightTimer - dt * 1.5);
     }
 
-    // Limb walk cycle animation
     const horizSpeed = Math.hypot(this.vel.x, this.vel.z);
     if (horizSpeed > 0.6 && this.onGround) {
       this.walkPhase += dt * horizSpeed * 1.55;

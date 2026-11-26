@@ -1,5 +1,36 @@
 import * as THREE from 'three';
 
+export const MAPS = {
+  arena: {
+    id: 'arena',
+    name: 'ARENA',
+    subtitle: 'Classic symmetrical bridge & sniper perches',
+    badgeColor: '#2de2ff',
+    preview: 'linear-gradient(135deg, #38bdf8, #1e3a8a)',
+  },
+  station: {
+    id: 'station',
+    name: 'NEON STATION',
+    subtitle: 'Night subway platforms & central metro car',
+    badgeColor: '#c084fc',
+    preview: 'linear-gradient(135deg, #3b0764, #06b6d4)',
+  },
+  construction: {
+    id: 'construction',
+    name: 'CONSTRUCTION',
+    subtitle: 'Sunset scaffolding towers & shipping crates',
+    badgeColor: '#fb923c',
+    preview: 'linear-gradient(135deg, #f97316, #7c2d12)',
+  },
+  splash: {
+    id: 'splash',
+    name: 'SPLASH PARK',
+    subtitle: 'Tropical pool deck, water slides & cabanas',
+    badgeColor: '#34d399',
+    preview: 'linear-gradient(135deg, #06b6d4, #34d399)',
+  },
+};
+
 function createStudTexture(baseHex, studHex, gridSize = 64) {
   const canvas = document.createElement('canvas');
   canvas.width = gridSize;
@@ -9,12 +40,10 @@ function createStudTexture(baseHex, studHex, gridSize = 64) {
   ctx.fillStyle = baseHex;
   ctx.fillRect(0, 0, gridSize, gridSize);
 
-  // Subtle tile border
   ctx.strokeStyle = 'rgba(0,0,0,0.12)';
   ctx.lineWidth = 2;
   ctx.strokeRect(1, 1, gridSize - 2, gridSize - 2);
 
-  // Classic Roblox stud highlight + shadow
   const r = gridSize * 0.24;
   const cx = gridSize / 2;
   const cy = gridSize / 2;
@@ -42,52 +71,94 @@ function createStudTexture(baseHex, studHex, gridSize = 64) {
 }
 
 export class Arena {
-  constructor(scene) {
+  constructor(scene, initialMapId = 'arena') {
     this.scene = scene;
+    this.mapGroup = new THREE.Group();
+    this.scene.add(this.mapGroup);
+
     this.colliders = [];
     this.ramps = [];
     this.meshes = [];
-
+    this.waypoints = [];
+    this.spawns = {
+      player: new THREE.Vector3(0, 0, 29),
+      bot: new THREE.Vector3(0, 0, -29),
+    };
     this.bounds = { minX: -27, maxX: 27, minZ: -35, maxZ: 35 };
+    this.mapId = initialMapId;
 
-    this._setupSkyAndLights();
-    this._buildArena();
+    this.loadMap(initialMapId);
   }
 
-  _setupSkyAndLights() {
-    this.scene.background = new THREE.Color(0x8bc6ff);
-    this.scene.fog = new THREE.Fog(0x98ceff, 48, 125);
+  loadMap(mapId) {
+    this.mapId = MAPS[mapId] ? mapId : 'arena';
 
-    const hemi = new THREE.HemisphereLight(0xdff2ff, 0x4b5568, 0.95);
-    this.scene.add(hemi);
+    // Clear previous map objects cleanly
+    while (this.mapGroup.children.length > 0) {
+      const child = this.mapGroup.children[0];
+      this.mapGroup.remove(child);
+      if (child.geometry) child.geometry.dispose();
+      if (child.material) {
+        if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose());
+        else child.material.dispose();
+      }
+    }
 
-    const sun = new THREE.DirectionalLight(0xfff7e6, 1.35);
-    sun.position.set(28, 46, 22);
+    this.colliders = [];
+    this.ramps = [];
+    this.meshes = [];
+    this.bounds = { minX: -27, maxX: 27, minZ: -35, maxZ: 35 };
+    this.spawns = {
+      player: new THREE.Vector3(0, 0, 29),
+      bot: new THREE.Vector3(0, 0, -29),
+    };
+
+    if (this.mapId === 'station') {
+      this._buildStationMap();
+    } else if (this.mapId === 'construction') {
+      this._buildConstructionMap();
+    } else if (this.mapId === 'splash') {
+      this._buildSplashMap();
+    } else {
+      this._buildClassicArenaMap();
+    }
+  }
+
+  _setLighting({ skyHex, fogHex, hemiSky, hemiGround, hemiInt, sunHex, sunInt, sunPos, clouds = true }) {
+    this.scene.background = new THREE.Color(skyHex);
+    this.scene.fog = new THREE.Fog(fogHex, 48, 128);
+
+    const hemi = new THREE.HemisphereLight(hemiSky, hemiGround, hemiInt);
+    this.mapGroup.add(hemi);
+
+    const sun = new THREE.DirectionalLight(sunHex, sunInt);
+    sun.position.set(sunPos[0], sunPos[1], sunPos[2]);
     sun.castShadow = true;
     sun.shadow.mapSize.width = 2048;
     sun.shadow.mapSize.height = 2048;
     sun.shadow.camera.near = 5;
-    sun.shadow.camera.far = 130;
-    const d = 46;
+    sun.shadow.camera.far = 135;
+    const d = 48;
     sun.shadow.camera.left = -d;
     sun.shadow.camera.right = d;
     sun.shadow.camera.top = d;
     sun.shadow.camera.bottom = -d;
     sun.shadow.bias = -0.0005;
-    this.scene.add(sun);
+    this.mapGroup.add(sun);
 
-    // Decorative sun disc & blocky Roblox clouds
-    const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.82 });
-    const cloudPositions = [
-      [-30, 32, -25, 14, 3, 7],
-      [25, 36, -10, 18, 3.5, 9],
-      [-15, 34, 28, 15, 3, 8],
-      [32, 30, 22, 12, 2.5, 7],
-    ];
-    for (const [x, y, z, w, h, dep] of cloudPositions) {
-      const c = new THREE.Mesh(new THREE.BoxGeometry(w, h, dep), cloudMat);
-      c.position.set(x, y, z);
-      this.scene.add(c);
+    if (clouds) {
+      const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.78 });
+      const cloudPositions = [
+        [-30, 32, -25, 14, 3, 7],
+        [25, 36, -10, 18, 3.5, 9],
+        [-15, 34, 28, 15, 3, 8],
+        [32, 30, 22, 12, 2.5, 7],
+      ];
+      for (const [x, y, z, w, h, dep] of cloudPositions) {
+        const c = new THREE.Mesh(new THREE.BoxGeometry(w, h, dep), cloudMat);
+        c.position.set(x, y, z);
+        this.mapGroup.add(c);
+      }
     }
   }
 
@@ -98,10 +169,12 @@ export class Arena {
       roughness = 0.65,
       metalness = 0.1,
       emissive = 0x000000,
+      emissiveIntensity = 0.85,
       solid = true,
       castShadow = true,
       receiveShadow = true,
       repeatScale = 0.5,
+      opacity = 1,
     } = options;
 
     let mat;
@@ -111,14 +184,22 @@ export class Arena {
         '#' + new THREE.Color(studColor).getHexString()
       );
       tex.repeat.set(Math.max(1, Math.round(w * repeatScale)), Math.max(1, Math.round(d * repeatScale)));
-      mat = new THREE.MeshStandardMaterial({ map: tex, roughness, metalness });
+      mat = new THREE.MeshStandardMaterial({
+        map: tex,
+        roughness,
+        metalness,
+        transparent: opacity < 1,
+        opacity,
+      });
     } else {
       mat = new THREE.MeshStandardMaterial({
         color,
         roughness,
         metalness,
         emissive,
-        emissiveIntensity: emissive ? 0.85 : 0,
+        emissiveIntensity: emissive ? emissiveIntensity : 0,
+        transparent: opacity < 1,
+        opacity,
       });
     }
 
@@ -126,8 +207,8 @@ export class Arena {
     mesh.position.set(x, y, z);
     mesh.castShadow = castShadow;
     mesh.receiveShadow = receiveShadow;
-    this.scene.add(mesh);
-    this.meshes.push(mesh);
+    this.mapGroup.add(mesh);
+    if (solid || options.shootable) this.meshes.push(mesh);
 
     if (solid) {
       this.colliders.push({
@@ -142,61 +223,51 @@ export class Arena {
     return mesh;
   }
 
-  _addRamp(xCenter, zCenter, width, length, yStart, yEnd, axis, dir, color = 0x45536b) {
-    // Visual sloped wedge built out of stepped prism mesh
+  _addRamp(xCenter, zCenter, width, length, yStart, yEnd, axis, dir, opts = {}) {
+    const baseHex = opts.baseHex || '#52617a';
+    const studHex = opts.studHex || '#637591';
+    const trimHex = opts.trimColor !== undefined ? opts.trimColor : 0x2de2ff;
+
     const height = Math.abs(yEnd - yStart);
     const slopeLen = Math.hypot(length, height);
     const angle = Math.atan2(height, length);
 
-    const tex = createStudTexture('#52617a', '#637591');
+    const tex = createStudTexture(baseHex, studHex);
     tex.repeat.set(Math.max(1, Math.round(width * 0.5)), Math.max(1, Math.round(slopeLen * 0.5)));
     const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.65, metalness: 0.1 });
 
     const slab = new THREE.Mesh(
-      new THREE.BoxGeometry(
-        axis === 'z' ? width : slopeLen,
-        0.35,
-        axis === 'z' ? slopeLen : width
-      ),
+      new THREE.BoxGeometry(axis === 'z' ? width : slopeLen, 0.35, axis === 'z' ? slopeLen : width),
       mat
     );
     slab.position.set(xCenter, (yStart + yEnd) / 2 - 0.16, zCenter);
-    if (axis === 'z') {
-      slab.rotation.x = dir > 0 ? -angle : angle;
-    } else {
-      slab.rotation.z = dir > 0 ? angle : -angle;
-    }
+    if (axis === 'z') slab.rotation.x = dir > 0 ? -angle : angle;
+    else slab.rotation.z = dir > 0 ? angle : -angle;
     slab.castShadow = true;
     slab.receiveShadow = true;
-    this.scene.add(slab);
+    this.mapGroup.add(slab);
     this.meshes.push(slab);
 
-    // Side neon edge trim
-    const trimMat = new THREE.MeshStandardMaterial({
-      color: 0x2de2ff,
-      emissive: 0x2de2ff,
-      emissiveIntensity: 0.6,
-    });
-    for (const side of [-1, 1]) {
-      const trim = new THREE.Mesh(
-        new THREE.BoxGeometry(
-          axis === 'z' ? 0.14 : slopeLen,
-          0.16,
-          axis === 'z' ? slopeLen : 0.14
-        ),
-        trimMat
-      );
-      trim.position.set(
-        xCenter + (axis === 'z' ? side * (width / 2 - 0.08) : 0),
-        (yStart + yEnd) / 2 + 0.04,
-        zCenter + (axis === 'x' ? side * (width / 2 - 0.08) : 0)
-      );
-      if (axis === 'z') {
-        trim.rotation.x = dir > 0 ? -angle : angle;
-      } else {
-        trim.rotation.z = dir > 0 ? angle : -angle;
+    if (trimHex) {
+      const trimMat = new THREE.MeshStandardMaterial({
+        color: trimHex,
+        emissive: trimHex,
+        emissiveIntensity: 0.65,
+      });
+      for (const side of [-1, 1]) {
+        const trim = new THREE.Mesh(
+          new THREE.BoxGeometry(axis === 'z' ? 0.14 : slopeLen, 0.16, axis === 'z' ? slopeLen : 0.14),
+          trimMat
+        );
+        trim.position.set(
+          xCenter + (axis === 'z' ? side * (width / 2 - 0.08) : 0),
+          (yStart + yEnd) / 2 + 0.04,
+          zCenter + (axis === 'x' ? side * (width / 2 - 0.08) : 0)
+        );
+        if (axis === 'z') trim.rotation.x = dir > 0 ? -angle : angle;
+        else trim.rotation.z = dir > 0 ? angle : -angle;
+        this.mapGroup.add(trim);
       }
-      this.scene.add(trim);
     }
 
     this.ramps.push({
@@ -211,78 +282,78 @@ export class Arena {
     });
   }
 
-  _buildArena() {
-    // 1. Main Arena Floor (Stud-textured light slate)
-    const floorTex = createStudTexture('#cfd7e6', '#dde5f2');
-    floorTex.repeat.set(28, 36);
-    const floor = new THREE.Mesh(
-      new THREE.BoxGeometry(56, 1, 72),
-      new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.72, metalness: 0.05 })
-    );
-    floor.position.set(0, -0.5, 0);
-    floor.receiveShadow = true;
-    this.scene.add(floor);
-    this.meshes.push(floor);
+  _addPerimeter(wallH, wallColor, wallStud, accentP, accentB, accentSide) {
+    this._addBox(0, wallH / 2, -36, 58, wallH, 2, { color: wallColor, studColor: wallStud });
+    this._addBox(0, wallH / 2, 36, 58, wallH, 2, { color: wallColor, studColor: wallStud });
+    this._addBox(-28, wallH / 2, 0, 2, wallH, 72, { color: wallColor, studColor: wallStud });
+    this._addBox(28, wallH / 2, 0, 2, wallH, 72, { color: wallColor, studColor: wallStud });
 
-    // Center court lane stripes (Blue vs Red Rivals aesthetic)
+    this._addBox(0, 6.5, 34.9, 52, 0.35, 0.2, { color: accentP, emissive: accentP, solid: false });
+    this._addBox(0, 6.5, -34.9, 52, 0.35, 0.2, { color: accentB, emissive: accentB, solid: false });
+    this._addBox(-26.9, 6.5, 0, 0.2, 0.35, 68, { color: accentSide, emissive: accentSide, solid: false });
+    this._addBox(26.9, 6.5, 0, 0.2, 0.35, 68, { color: accentSide, emissive: accentSide, solid: false });
+  }
+
+  // =========================================================
+  // MAP 1: CLASSIC ARENA
+  // =========================================================
+  _buildClassicArenaMap() {
+    this._setLighting({
+      skyHex: 0x8bc6ff,
+      fogHex: 0x98ceff,
+      hemiSky: 0xdff2ff,
+      hemiGround: 0x4b5568,
+      hemiInt: 0.95,
+      sunHex: 0xfff7e6,
+      sunInt: 1.35,
+      sunPos: [28, 46, 22],
+      clouds: true,
+    });
+
+    this._addBox(0, -0.5, 0, 56, 1, 72, {
+      color: 0xcfd7e6,
+      studColor: 0xdde5f2,
+      solid: false,
+      shootable: true,
+      castShadow: false,
+    });
+
+    // Lane stripes
     this._addBox(0, 0.02, 0, 54, 0.04, 0.45, { color: 0xffffff, emissive: 0xffffff, solid: false, castShadow: false });
     this._addBox(0, 0.02, 22, 54, 0.04, 0.35, { color: 0x2de2ff, emissive: 0x2de2ff, solid: false, castShadow: false });
     this._addBox(0, 0.02, -22, 54, 0.04, 0.35, { color: 0xff3e5e, emissive: 0xff3e5e, solid: false, castShadow: false });
 
-    // 2. Perimeter Arena Walls
-    const wallH = 11;
-    this._addBox(0, wallH / 2, -36, 58, wallH, 2, { color: 0x243044, studColor: 0x2d3b52 });
-    this._addBox(0, wallH / 2, 36, 58, wallH, 2, { color: 0x243044, studColor: 0x2d3b52 });
-    this._addBox(-28, wallH / 2, 0, 2, wallH, 72, { color: 0x2a364c, studColor: 0x34435d });
-    this._addBox(28, wallH / 2, 0, 2, wallH, 72, { color: 0x2a364c, studColor: 0x34435d });
+    this._addPerimeter(11, 0x243044, 0x2d3b52, 0x2de2ff, 0xff3e5e, 0x3b82f6);
 
-    // Glowing arena wall accents (Player Cyan side vs Rival Red side)
-    this._addBox(0, 6.5, 34.9, 52, 0.35, 0.2, { color: 0x2de2ff, emissive: 0x2de2ff, solid: false });
-    this._addBox(0, 6.5, -34.9, 52, 0.35, 0.2, { color: 0xff3e5e, emissive: 0xff3e5e, solid: false });
-    this._addBox(-26.9, 6.5, 0, 0.2, 0.35, 68, { color: 0x5ea3ff, emissive: 0x3b82f6, solid: false });
-    this._addBox(26.9, 6.5, 0, 0.2, 0.35, 68, { color: 0x5ea3ff, emissive: 0x3b82f6, solid: false });
-
-    // 3. Center Elevated Bridge / Platform (Classic Rivals Arena centerpiece)
     const bridgeY = 3.6;
     this._addBox(0, bridgeY - 0.3, 0, 14, 0.6, 8, { color: 0x3e4c63, studColor: 0x4b5b76 });
-    // Center bridge waist-high cover blocks
     this._addBox(-3.5, bridgeY + 0.65, 0, 2.2, 1.3, 1.1, { color: 0xffb830, studColor: 0xffca5c });
     this._addBox(3.5, bridgeY + 0.65, 0, 2.2, 1.3, 1.1, { color: 0xffb830, studColor: 0xffca5c });
 
-    // Bridge support pillars
-    this._addBox(-6, bridgeY / 2 - 0.3, -3.2, 1.4, bridgeY - 0.6, 1.4, { color: 0x263144 });
-    this._addBox(6, bridgeY / 2 - 0.3, -3.2, 1.4, bridgeY - 0.6, 1.4, { color: 0x263144 });
-    this._addBox(-6, bridgeY / 2 - 0.3, 3.2, 1.4, bridgeY - 0.6, 1.4, { color: 0x263144 });
-    this._addBox(6, bridgeY / 2 - 0.3, 3.2, 1.4, bridgeY - 0.6, 1.4, { color: 0x263144 });
+    for (const [px, pz] of [[-6, -3.2], [6, -3.2], [-6, 3.2], [6, 3.2]]) {
+      this._addBox(px, bridgeY / 2 - 0.3, pz, 1.4, bridgeY - 0.6, 1.4, { color: 0x263144 });
+    }
 
-    // Two wide ramps climbing to the center bridge from Left (-X) and Right (+X)
     this._addRamp(-11.5, 0, 6.2, 9.0, 0, bridgeY, 'x', 1);
     this._addRamp(11.5, 0, 6.2, 9.0, 0, bridgeY, 'x', -1);
 
-    // 4. Symmetrical Side High-Ground Sniper Platforms + Ramps
-    for (const side of [-1, 1]) {
-      const zSign = side; // +1 Player side, -1 Bot side
+    for (const zSign of [-1, 1]) {
       const teamAccent = zSign > 0 ? 0x2de2ff : 0xff3e5e;
       const wallTint = zSign > 0 ? 0x2e4a69 : 0x633344;
       const wallStud = zSign > 0 ? 0x395c82 : 0x7a3f54;
 
-      // Spawn barrier cover right ahead of spawn
       this._addBox(0, 1.5, zSign * 21, 7.5, 3.0, 1.4, { color: wallTint, studColor: wallStud });
       this._addBox(0, 3.1, zSign * 21, 7.6, 0.2, 1.5, { color: teamAccent, emissive: teamAccent, solid: false });
 
-      // Mid-lane angled/offset tall pillars for peeking
       this._addBox(-11, 2.4, zSign * 13, 3.2, 4.8, 3.2, { color: 0x425069, studColor: 0x51627f });
       this._addBox(11, 2.4, zSign * 13, 3.2, 4.8, 3.2, { color: 0x425069, studColor: 0x51627f });
 
-      // Jumpable wooden/orange Roblox crates near mid-lanes
       this._addBox(-5.5, 0.9, zSign * 11, 2.2, 1.8, 2.2, { color: 0xd98a3c, studColor: 0xe69e53 });
       this._addBox(5.5, 0.9, zSign * 11, 2.2, 1.8, 2.2, { color: 0xd98a3c, studColor: 0xe69e53 });
 
-      // Flank corridor cover walls
       this._addBox(-20, 1.75, zSign * 18, 4.5, 3.5, 1.6, { color: 0x3d4b63, studColor: 0x4d5e7a });
       this._addBox(20, 1.75, zSign * 18, 4.5, 3.5, 1.6, { color: 0x3d4b63, studColor: 0x4d5e7a });
 
-      // Back corner elevated sniper perches
       const perchY = 2.8;
       this._addBox(-21, perchY / 2, zSign * 29, 9, perchY, 8, { color: 0x39475e, studColor: 0x465773 });
       this._addRamp(-13, zSign * 29, 4.6, 7.2, 0, perchY, 'x', -1);
@@ -291,14 +362,333 @@ export class Arena {
       this._addRamp(13, zSign * 29, 4.6, 7.2, 0, perchY, 'x', 1);
     }
 
-    // Center under-bridge cover crate
     this._addBox(0, 0.85, 0, 2.6, 1.7, 2.6, { color: 0xd98a3c, studColor: 0xe69e53 });
+
+    this.waypoints = [
+      new THREE.Vector3(0, 3.6, 0),
+      new THREE.Vector3(-16, 0, 0),
+      new THREE.Vector3(16, 0, 0),
+      new THREE.Vector3(-8, 0, -16),
+      new THREE.Vector3(8, 0, -16),
+      new THREE.Vector3(-8, 0, 16),
+      new THREE.Vector3(8, 0, 16),
+      new THREE.Vector3(-21, 2.8, -29),
+      new THREE.Vector3(21, 2.8, -29),
+      new THREE.Vector3(-18, 0, -8),
+      new THREE.Vector3(18, 0, -8),
+      new THREE.Vector3(-18, 0, 8),
+      new THREE.Vector3(18, 0, 8),
+    ];
+  }
+
+  // =========================================================
+  // MAP 2: NEON STATION (Cyberpunk Night Subway)
+  // =========================================================
+  _buildStationMap() {
+    this._setLighting({
+      skyHex: 0x0b1024,
+      fogHex: 0x101733,
+      hemiSky: 0x7dd3fc,
+      hemiGround: 0x1e1b4b,
+      hemiInt: 0.78,
+      sunHex: 0xd8b4fe,
+      sunInt: 1.05,
+      sunPos: [-22, 42, 18],
+      clouds: false,
+    });
+
+    // Dark slate track bed floor
+    this._addBox(0, -0.5, 0, 56, 1, 72, {
+      color: 0x1d2438,
+      studColor: 0x26304a,
+      solid: false,
+      shootable: true,
+      castShadow: false,
+    });
+
+    // Glowing rail tracks running down center (-Z to +Z)
+    for (const rx of [-2.4, 2.4]) {
+      this._addBox(rx, 0.03, 0, 0.28, 0.06, 68, { color: 0x00f5ff, emissive: 0x00f5ff, solid: false, castShadow: false });
+    }
+
+    this._addPerimeter(13, 0x151b2e, 0x1d2640, 0x00f5ff, 0xf43f5e, 0xc084fc);
+
+    // Overhead station neon arch ribs
+    for (const z of [-24, -8, 8, 24]) {
+      this._addBox(0, 12.2, z, 54, 0.65, 1.1, { color: 0x1c233b, solid: false });
+      this._addBox(0, 11.75, z, 42, 0.22, 0.35, {
+        color: z % 16 === 0 ? 0x00f5ff : 0xd946ef,
+        emissive: z % 16 === 0 ? 0x00f5ff : 0xd946ef,
+        solid: false,
+      });
+    }
+
+    // Two long elevated side station platforms (Left & Right)
+    const platY = 2.4;
+    this._addBox(-19.5, platY / 2, 0, 15, platY, 54, { color: 0x2b344d, studColor: 0x364261 });
+    this._addBox(19.5, platY / 2, 0, 15, platY, 54, { color: 0x2b344d, studColor: 0x364261 });
+
+    // Glowing yellow/cyan platform safety strips
+    this._addBox(-12.2, platY + 0.03, 0, 0.45, 0.06, 54, { color: 0xfacc15, emissive: 0xfacc15, solid: false });
+    this._addBox(12.2, platY + 0.03, 0, 0.45, 0.06, 54, { color: 0xfacc15, emissive: 0xfacc15, solid: false });
+
+    // 4 ramps climbing onto the left & right station platforms
+    for (const zSign of [-1, 1]) {
+      this._addRamp(-19.5, zSign * 30.2, 7.0, 6.4, 0, platY, 'z', -zSign, {
+        baseHex: '#2c3652',
+        studHex: '#3b486b',
+        trimColor: 0x00f5ff,
+      });
+      this._addRamp(19.5, zSign * 30.2, 7.0, 6.4, 0, platY, 'z', -zSign, {
+        baseHex: '#2c3652',
+        studHex: '#3b486b',
+        trimColor: 0xd946ef,
+      });
+    }
+
+    // Side platform ticket kiosks & benches for cover
+    for (const xSign of [-1, 1]) {
+      for (const z of [-14, 0, 14]) {
+        this._addBox(xSign * 18.5, platY + 1.6, z, 2.8, 3.2, 2.8, { color: 0x1e2942, studColor: 0x2a3859 });
+        this._addBox(xSign * 18.5, platY + 3.25, z, 2.9, 0.18, 2.9, {
+          color: xSign > 0 ? 0xd946ef : 0x00f5ff,
+          emissive: xSign > 0 ? 0xd946ef : 0x00f5ff,
+          solid: false,
+        });
+      }
+    }
+
+    // Central Parked Neon Metro Train Car! (climbable via end ramps!)
+    const trainH = 3.4;
+    this._addBox(0, trainH / 2, 0, 5.8, trainH, 20, { color: 0x334155, studColor: 0x475569 });
+    // Train glowing windows & headlights
+    this._addBox(2.96, 2.1, 0, 0.1, 1.0, 16, { color: 0x38bdf8, emissive: 0x38bdf8, solid: false });
+    this._addBox(-2.96, 2.1, 0, 0.1, 1.0, 16, { color: 0x38bdf8, emissive: 0x38bdf8, solid: false });
+    this._addBox(0, 1.0, 10.05, 4.4, 0.5, 0.15, { color: 0x2de2ff, emissive: 0x2de2ff, solid: false });
+    this._addBox(0, 1.0, -10.05, 4.4, 0.5, 0.15, { color: 0xff3e5e, emissive: 0xff3e5e, solid: false });
+    // Ramps onto train roof from both ends
+    this._addRamp(0, 14.5, 4.8, 9.0, 0, trainH, 'z', -1, {
+      baseHex: '#334155',
+      studHex: '#475569',
+      trimColor: 0x2de2ff,
+    });
+    this._addRamp(0, -14.5, 4.8, 9.0, 0, trainH, 'z', 1, {
+      baseHex: '#334155',
+      studHex: '#475569',
+      trimColor: 0xff3e5e,
+    });
+
+    // Spawn cover barriers
+    for (const zSign of [-1, 1]) {
+      this._addBox(-7.5, 1.4, zSign * 22, 4.2, 2.8, 1.4, { color: 0x2c3652, studColor: 0x3b486b });
+      this._addBox(7.5, 1.4, zSign * 22, 4.2, 2.8, 1.4, { color: 0x2c3652, studColor: 0x3b486b });
+    }
+
+    this.waypoints = [
+      new THREE.Vector3(0, trainH, 0),
+      new THREE.Vector3(-19, platY, 0),
+      new THREE.Vector3(19, platY, 0),
+      new THREE.Vector3(-19, platY, -18),
+      new THREE.Vector3(19, platY, -18),
+      new THREE.Vector3(-19, platY, 18),
+      new THREE.Vector3(19, platY, 18),
+      new THREE.Vector3(-7, 0, 0),
+      new THREE.Vector3(7, 0, 0),
+      new THREE.Vector3(0, 0, 21),
+      new THREE.Vector3(0, 0, -21),
+    ];
+  }
+
+  // =========================================================
+  // MAP 3: CONSTRUCTION (Sunset Scaffolding & Containers)
+  // =========================================================
+  _buildConstructionMap() {
+    this._setLighting({
+      skyHex: 0xff9e64,
+      fogHex: 0xf9a875,
+      hemiSky: 0xffe4b5,
+      hemiGround: 0x5c3a21,
+      hemiInt: 0.92,
+      sunHex: 0xffd18c,
+      sunInt: 1.4,
+      sunPos: [-35, 30, -25],
+      clouds: true,
+    });
+
+    // Concrete rooftop slab
+    this._addBox(0, -0.5, 0, 56, 1, 72, {
+      color: 0x9aa3b0,
+      studColor: 0xaab4c2,
+      solid: false,
+      shootable: true,
+      castShadow: false,
+    });
+
+    this._addPerimeter(10, 0x3f4756, 0x4e586b, 0xfacc15, 0xf97316, 0xfbbf24);
+
+    // Overhead decorative yellow tower crane boom
+    this._addBox(-24, 15, -28, 2.4, 30, 2.4, { color: 0xeab308, solid: false });
+    this._addBox(0, 24, -20, 52, 1.6, 1.8, { color: 0xeab308, solid: false });
+
+    // Central Elevated Steel Scaffolding Tower (height 4.8!)
+    const towerY = 4.8;
+    this._addBox(0, towerY - 0.3, 0, 12, 0.6, 12, { color: 0xd97706, studColor: 0xf59e0b });
+    for (const [px, pz] of [[-5.4, -5.4], [5.4, -5.4], [-5.4, 5.4], [5.4, 5.4]]) {
+      this._addBox(px, towerY / 2 - 0.3, pz, 0.9, towerY - 0.6, 0.9, { color: 0xca8a04 });
+    }
+    // Waist cover on scaffolding deck
+    this._addBox(0, towerY + 0.65, -5.4, 5.5, 1.3, 0.7, { color: 0x475569 });
+    this._addBox(0, towerY + 0.65, 5.4, 5.5, 1.3, 0.7, { color: 0x475569 });
+
+    // 2 long diagonal/north-south ramps to mid scaffolding
+    this._addRamp(-11.5, 0, 5.0, 11.0, 0, towerY, 'x', 1, {
+      baseHex: '#b45309',
+      studHex: '#d97706',
+      trimColor: 0xfacc15,
+    });
+    this._addRamp(11.5, 0, 5.0, 11.0, 0, towerY, 'x', -1, {
+      baseHex: '#b45309',
+      studHex: '#d97706',
+      trimColor: 0xfacc15,
+    });
+
+    // Colorful Shipping Containers around the yard (climbable roofs via ramps!)
+    const contH = 3.2;
+    this._addBox(-16, contH / 2, -14, 5.2, contH, 12, { color: 0xb91c1c, studColor: 0xdc2626 });
+    this._addBox(16, contH / 2, 14, 5.2, contH, 12, { color: 0x1d4ed8, studColor: 0x2563eb });
+    this._addBox(16, contH / 2, -14, 5.2, contH, 12, { color: 0x0f766e, studColor: 0x14b8a6 });
+    this._addBox(-16, contH / 2, 14, 5.2, contH, 12, { color: 0xb45309, studColor: 0xd97706 });
+
+    // Ramps onto shipping containers
+    this._addRamp(-16, -23.5, 4.4, 7.0, 0, contH, 'z', 1, { baseHex: '#64748b', studHex: '#94a3b8', trimColor: 0xfacc15 });
+    this._addRamp(16, 23.5, 4.4, 7.0, 0, contH, 'z', -1, { baseHex: '#64748b', studHex: '#94a3b8', trimColor: 0xfacc15 });
+
+    // Concrete jersey barriers & cinderblock stacks
+    for (const zSign of [-1, 1]) {
+      this._addBox(0, 1.3, zSign * 19, 8.5, 2.6, 1.6, { color: 0x64748b, studColor: 0x78879c });
+      this._addBox(-6.5, 1.1, zSign * 11, 2.8, 2.2, 2.8, { color: 0xd97706, studColor: 0xf59e0b });
+      this._addBox(6.5, 1.1, zSign * 11, 2.8, 2.2, 2.8, { color: 0xd97706, studColor: 0xf59e0b });
+    }
+
+    this.waypoints = [
+      new THREE.Vector3(0, towerY, 0),
+      new THREE.Vector3(-16, contH, -14),
+      new THREE.Vector3(16, contH, 14),
+      new THREE.Vector3(-18, 0, 0),
+      new THREE.Vector3(18, 0, 0),
+      new THREE.Vector3(0, 0, 14),
+      new THREE.Vector3(0, 0, -14),
+      new THREE.Vector3(-9, 0, -23),
+      new THREE.Vector3(9, 0, -23),
+      new THREE.Vector3(-9, 0, 23),
+      new THREE.Vector3(9, 0, 23),
+    ];
+  }
+
+  // =========================================================
+  // MAP 4: SPLASH PARK (Tropical Pool & Water Slides)
+  // =========================================================
+  _buildSplashMap() {
+    this._setLighting({
+      skyHex: 0x56d8ff,
+      fogHex: 0x7ce8ff,
+      hemiSky: 0xe0fbff,
+      hemiGround: 0x38bdf8,
+      hemiInt: 1.05,
+      sunHex: 0xfffbe6,
+      sunInt: 1.38,
+      sunPos: [30, 50, 16],
+      clouds: true,
+    });
+
+    // Sunlit sandy poolside tile deck
+    this._addBox(0, -0.5, 0, 56, 1, 72, {
+      color: 0xf3e5ab,
+      studColor: 0xfaefc0,
+      solid: false,
+      shootable: true,
+      castShadow: false,
+    });
+
+    // Shallow glowing turquoise central swimming pool surface (walkable!)
+    this._addBox(0, 0.03, 0, 30, 0.06, 36, {
+      color: 0x06b6d4,
+      emissive: 0x22d3ee,
+      emissiveIntensity: 0.35,
+      solid: false,
+      castShadow: false,
+    });
+    // Pool lane markers
+    this._addBox(-5, 0.05, 0, 0.25, 0.05, 34, { color: 0xffffff, solid: false, castShadow: false });
+    this._addBox(5, 0.05, 0, 0.25, 0.05, 34, { color: 0xffffff, solid: false, castShadow: false });
+
+    this._addPerimeter(10, 0x0ea5e9, 0x38bdf8, 0x34d399, 0xfb7185, 0xfde047);
+
+    // Center Floating Pool Island Deck
+    const islandY = 1.4;
+    this._addBox(0, islandY / 2, 0, 10, islandY, 10, { color: 0xfbbf24, studColor: 0xfcd34d });
+    // Beach umbrella pole & canopy cover in the center
+    this._addBox(0, islandY + 2.2, 0, 0.6, 4.4, 0.6, { color: 0xffffff });
+    this._addBox(0, islandY + 4.5, 0, 7.5, 0.5, 7.5, { color: 0xf43f5e, studColor: 0xfb7185 });
+    // Mini ramps onto island
+    this._addRamp(0, 7.4, 4.5, 4.8, 0, islandY, 'z', -1, { baseHex: '#34d399', studHex: '#6ee7b7', trimColor: 0xfde047 });
+    this._addRamp(0, -7.4, 4.5, 4.8, 0, islandY, 'z', 1, { baseHex: '#34d399', studHex: '#6ee7b7', trimColor: 0xfde047 });
+
+    // Dual Side Water Slide Towers (Left & Right)
+    const slideY = 4.2;
+    for (const xSign of [-1, 1]) {
+      const col = xSign > 0 ? 0xf43f5e : 0x8b5cf6;
+      const stud = xSign > 0 ? 0xfb7185 : 0xa78bfa;
+      this._addBox(xSign * 21, slideY / 2, 0, 8, slideY, 10, { color: col, studColor: stud });
+      // Long sweeping water slide ramps going North and South!
+      this._addRamp(xSign * 21, 10.5, 5.2, 11.0, 0, slideY, 'z', -1, {
+        baseHex: xSign > 0 ? '#fb7185' : '#a78bfa',
+        studHex: '#ffffff',
+        trimColor: 0x38bdf8,
+      });
+      this._addRamp(xSign * 21, -10.5, 5.2, 11.0, 0, slideY, 'z', 1, {
+        baseHex: xSign > 0 ? '#fb7185' : '#a78bfa',
+        studHex: '#ffffff',
+        trimColor: 0x38bdf8,
+      });
+    }
+
+    // Colorful Poolside Cabanas & Inflatable Floatie Cover Blocks
+    for (const zSign of [-1, 1]) {
+      this._addBox(0, 1.4, zSign * 22, 8.0, 2.8, 1.5, { color: 0x10b981, studColor: 0x34d399 });
+      this._addBox(-10, 1.1, zSign * 14, 3.2, 2.2, 3.2, { color: 0xfb7185, studColor: 0xfda4af });
+      this._addBox(10, 1.1, zSign * 14, 3.2, 2.2, 3.2, { color: 0x38bdf8, studColor: 0x7dd3fc });
+      this._addBox(-19, 1.6, zSign * 24, 5.5, 3.2, 3.2, { color: 0xf59e0b, studColor: 0xfbbf24 });
+      this._addBox(19, 1.6, zSign * 24, 5.5, 3.2, 3.2, { color: 0xf59e0b, studColor: 0xfbbf24 });
+    }
+
+    this.waypoints = [
+      new THREE.Vector3(0, islandY, 0),
+      new THREE.Vector3(-21, slideY, 0),
+      new THREE.Vector3(21, slideY, 0),
+      new THREE.Vector3(-12, 0, 0),
+      new THREE.Vector3(12, 0, 0),
+      new THREE.Vector3(-10, 0, -20),
+      new THREE.Vector3(10, 0, -20),
+      new THREE.Vector3(-10, 0, 20),
+      new THREE.Vector3(10, 0, 20),
+    ];
+  }
+
+  getSpawns() {
+    return {
+      player: this.spawns.player.clone(),
+      bot: this.spawns.bot.clone(),
+    };
+  }
+
+  getWaypoints() {
+    return this.waypoints;
   }
 
   getFloorHeight(x, z, feetY, radius = 0.45) {
     let highest = 0;
 
-    // Check top surfaces of solid AABB boxes
     for (const c of this.colliders) {
       if (
         x + radius > c.minX &&
@@ -312,7 +702,6 @@ export class Arena {
       }
     }
 
-    // Check smooth ramps
     for (const r of this.ramps) {
       if (
         x + radius * 0.6 > r.minX &&
@@ -321,11 +710,8 @@ export class Arena {
         z - radius * 0.6 < r.maxZ
       ) {
         let t = 0;
-        if (r.axis === 'x') {
-          t = (x - r.minX) / (r.maxX - r.minX);
-        } else {
-          t = (z - r.minZ) / (r.maxZ - r.minZ);
-        }
+        if (r.axis === 'x') t = (x - r.minX) / (r.maxX - r.minX);
+        else t = (z - r.minZ) / (r.maxZ - r.minZ);
         t = Math.max(0, Math.min(1, t));
         if (r.dir < 0) t = 1 - t;
         const rampY = r.yStart + t * (r.yEnd - r.yStart);
@@ -339,12 +725,10 @@ export class Arena {
   }
 
   resolveHorizontal(pos, radius = 0.48, height = 1.8) {
-    // Keep within arena bounds
     pos.x = Math.max(this.bounds.minX + radius, Math.min(this.bounds.maxX - radius, pos.x));
     pos.z = Math.max(this.bounds.minZ + radius, Math.min(this.bounds.maxZ - radius, pos.z));
 
     for (const c of this.colliders) {
-      // Skip boxes clearly below feet (steppable/standing on) or above head
       if (c.maxY <= pos.y + 0.48 || c.minY >= pos.y + height - 0.05) continue;
 
       if (
@@ -413,28 +797,10 @@ export class Arena {
         else if (m === dy1) normal.set(0, -1, 0);
         else if (m === dy2) normal.set(0, 1, 0);
         else if (m === dz1) normal.set(0, 0, -1);
-        else if (m === dz2) normal.set(0, 0, 1);
+        else normal.set(0, 0, 1);
         return { hit: true, normal };
       }
     }
     return { hit: false, normal: null };
-  }
-
-  getWaypoints() {
-    return [
-      new THREE.Vector3(0, 3.6, 0),       // Center bridge
-      new THREE.Vector3(-16, 0, 0),       // Left ramp entry
-      new THREE.Vector3(16, 0, 0),        // Right ramp entry
-      new THREE.Vector3(-8, 0, -16),      // North-left lane
-      new THREE.Vector3(8, 0, -16),       // North-right lane
-      new THREE.Vector3(-8, 0, 16),       // South-left lane
-      new THREE.Vector3(8, 0, 16),        // South-right lane
-      new THREE.Vector3(-21, 2.8, -29),   // North-left perch
-      new THREE.Vector3(21, 2.8, -29),    // North-right perch
-      new THREE.Vector3(-18, 0, -8),      // Left flank mid
-      new THREE.Vector3(18, 0, -8),       // Right flank mid
-      new THREE.Vector3(-18, 0, 8),       // Left flank south
-      new THREE.Vector3(18, 0, 8),        // Right flank south
-    ];
   }
 }

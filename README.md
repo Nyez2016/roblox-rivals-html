@@ -6,15 +6,21 @@ Play live on GitHub Pages: **[https://nyez2016.github.io/roblox-rivals-html/](ht
 
 ## Features
 
-- **First-to-5 1v1 Arena Duels**: Classic competitive round format with between-round loadout customization and round countdowns.
-- **Roblox-Inspired Movement**: Fast strafing, jumping, momentum **Slide Boost** (`Shift` or `C`), and quick **Dash** (`E` or `Q`).
-- **Rivals Loadout System**:
-  - **Primary**: Assault Rifle, Burst Rifle, or Sniper (one-shot headshot + scope zoom)
-  - **Secondary**: Revolver or Uzi
-  - **Melee**: Katana (faster movement + right-click lunge slash)
-  - **Utility**: Frag Grenade with physics bounce & blast radius
-- **Smart Rival Bot AI**: Blocky Roblox-style opponent with distinct head/body hitboxes, strafing, high-ground navigation, cover peeking, and selectable difficulty (`Rookie`, `Pro`, `Nemesis`).
-- **Zero External Assets**: Procedurally generated Roblox stud textures and synthesized Web Audio sound effects (gunshots, headshot dings, slides, explosions).
+- **4 Playable Arena Maps** *(with live 3D menu preview)*:
+  - **Arena (Classic)** — Symmetrical bridge, side ramps, sniper perches, and stud crates
+  - **Neon Station** — Cyberpunk nighttime subway platforms & climbable central metro train
+  - **Construction** — Sunset rooftop scaffolding tower, overhead crane & shipping containers
+  - **Splash Park** — Tropical pool island, twin water slides & colorful cabanas
+- **16 Weapons Across All 4 Loadout Slots**:
+  - **Primary (6)**: Assault Rifle, Sniper (1-shot headshot + scope), Burst Rifle, Shotgun (8-pellet spread), Paintball Gun (colorful paint splats), Minigun (rotary barrels, 60-round drum)
+  - **Secondary (4)**: Revolver, Uzi, Handgun, Shorty (sawed-off 6-pellet pocket shotgun)
+  - **Melee (3)**: Katana (fast dash lunge), Scythe (high upward reap dash), Battle Axe (heavy cleave)
+  - **Utility (3)**: Frag Grenade (bouncing AoE blast), Molotov (shattering fire pool DoT), Flashbang (blinds & stuns Rival Bot)
+- **12 Skins & Wraps**:
+  - **8 Weapon Wraps** *(also customize tracer colors)*: Standard, Cyber Neon, 24K Gold, Sakura, Crimson Dragon, Cosmic Galaxy, Toxic Emerald, and animated **Rainbow Prism**
+  - **4 Rival Avatar Skins**: Red Rival, Shadow Ninja, Golden Champ, Frost Knight
+- **Roblox-Inspired Movement**: Fast strafing, jumping, momentum **Slide Boost** (`Shift` or `C`), quick **Dash** (`E` or `Q`), and melee **RMB Lunge**.
+- **Saved Preferences**: Loadout, map, skins, sensitivity, and FOV are automatically saved in `localStorage`.
 
 ## Controls
 
@@ -22,14 +28,14 @@ Play live on GitHub Pages: **[https://nyez2016.github.io/roblox-rivals-html/](ht
 |---|---|
 | `W A S D` | Move |
 | `Mouse` | Aim |
-| `Left Click` | Shoot / Melee Slash / Throw Grenade |
-| `Right Click` | Aim Down Sights (ADS) / Katana Lunge |
+| `Left Click` | Shoot / Melee Slash / Throw Utility |
+| `Right Click` | Aim Down Sights (ADS) / Melee Lunge |
 | `Space` | Jump |
 | `Shift` or `C` | Slide Boost |
 | `E` or `Q` | Quick Dash |
 | `1` `2` `3` `4` / Scroll | Switch Weapon |
 | `R` | Reload |
-| `Esc` | Pause / Settings & Loadout |
+| `Esc` | Pause / Loadout, Maps & Skins Menu |
 
 ## Run Locally
 
@@ -49,13 +55,14 @@ Then open [http://localhost:8000](http://localhost:8000) in your browser.
 
 ```text
 roblox-rivals-html/
-├── index.html       # Entry point, HUD, loadout menu & settings UI
+├── index.html       # Entry point, HUD & tabbed Loadout / Maps / Skins menu
 ├── styles.css       # Rivals-inspired esports HUD & overlay styling
 ├── src/
-│   ├── game.js      # Main Three.js loop, player physics, shooting & round state
-│   ├── arena.js     # Procedural Roblox stud arena geometry & collision engine
-│   ├── weapons.js   # Weapon stats, viewmodel builders & recoil profiles
-│   ├── bot.js       # Blocky rival avatar model & tactical combat AI
+│   ├── game.js      # Main Three.js loop, player physics, combat, Molotov/Flash & round state
+│   ├── arena.js     # 4 procedural Roblox stud-textured maps & collision engine
+│   ├── weapons.js   # 16 weapons, stats & 3D viewmodel builders
+│   ├── skins.js     # 8 weapon wraps (including procedural Galaxy/Sakura/Prism) & 4 Rival skins
+│   ├── bot.js       # Blocky rival avatar, skin support, flashbang stun & tactical AI
 │   └── audio.js     # Web Audio API procedural SFX synthesizer
 ├── LICENSE
 └── README.md
