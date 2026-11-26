@@ -184,6 +184,21 @@
       this._noise(0.22, 2200, 0.14, 'bandpass');
     }
 
+    playTrainHorn() {
+      if (!this._ready()) return;
+      // Deep futuristic dual-tone subway express horn
+      this._tone('sawtooth', 185, 180, 0.55, 0.18, 0);
+      this._tone('sawtooth', 233, 228, 0.55, 0.16, 0);
+      this._tone('sawtooth', 185, 178, 0.45, 0.16, 0.62);
+      this._tone('sawtooth', 233, 226, 0.45, 0.14, 0.62);
+    }
+
+    playTrainWhoosh() {
+      if (!this._ready()) return;
+      this._noise(0.85, 420, 0.42, 'bandpass');
+      this._tone('sawtooth', 130, 52, 0.75, 0.22);
+    }
+
     playSmokePop() {
       if (!this._ready()) return;
       this._noise(0.55, 900, 0.26, 'bandpass');

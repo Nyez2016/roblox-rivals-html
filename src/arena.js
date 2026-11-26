@@ -193,6 +193,7 @@
       this.ramps = [];
       this.jumpPads = [];
       this.animatedProps = [];
+      this.trainHazard = null;
       this.meshes = [];
       this.waypoints = [];
       this.hasFloor = true;
@@ -229,6 +230,7 @@
       this.ramps = [];
       this.jumpPads = [];
       this.animatedProps = [];
+      this.trainHazard = null;
       this.meshes = [];
       this.bounds = { minX: -27, maxX: 27, minZ: -35, maxZ: 35 };
       this.spawns = {
@@ -505,7 +507,7 @@
       this.jumpPads.push({ x, y, z, radius, launchVel });
     }
 
-    update(dt, timeSec) {
+    update(dt, timeSec, onTrainEvent = null) {
       for (const prop of this.animatedProps) {
         if (prop.type === 'padRing') {
           const cycle = ((timeSec * 1.4 + prop.phase) % 1.0);
@@ -517,6 +519,61 @@
           if (prop.mesh.position.x > 64) prop.mesh.position.x = -64;
         }
       }
+
+      // Live Speeding Express Train in Neon Station!
+      if (this.trainHazard) {
+        const th = this.trainHazard;
+        if (th.state === 'idle') {
+          th.timer -= dt;
+          if (th.timer <= 0) {
+            th.state = 'warning';
+            th.timer = 1.85;
+            th.laneIndex = th.laneIndex === 0 ? 1 : 0; // Alternate West (-7.4) & East (+7.4) tracks
+            th.laneX = th.laneIndex === 0 ? -7.4 : 7.4;
+            th.dirZ = th.laneIndex === 0 ? 1 : -1;
+            th.z = th.dirZ > 0 ? -54 : 54;
+            if (onTrainEvent) onTrainEvent('warning', th.laneIndex === 0 ? 'WEST TRACK' : 'EAST TRACK');
+          }
+        } else if (th.state === 'warning') {
+          th.timer -= dt;
+          const blink = Math.floor(timeSec * 12) % 2 === 0;
+          const lights = th.laneIndex === 0 ? th.westLights : th.eastLights;
+          for (const l of lights) l.material.emissiveIntensity = blink ? 1.8 : 0.1;
+          if (th.timer <= 0) {
+            th.state = 'passing';
+            th.group.visible = true;
+            th.group.position.set(th.laneX, 0, th.z);
+            th.group.rotation.y = th.dirZ > 0 ? 0 : Math.PI;
+            if (onTrainEvent) onTrainEvent('pass', th.laneIndex === 0 ? 'WEST TRACK' : 'EAST TRACK');
+          }
+        } else if (th.state === 'passing') {
+          th.z += th.dirZ * th.speed * dt;
+          th.group.position.set(th.laneX, 0, th.z);
+          const lights = th.laneIndex === 0 ? th.westLights : th.eastLights;
+          for (const l of lights) l.material.emissiveIntensity = 1.6;
+
+          if ((th.dirZ > 0 && th.z > 56) || (th.dirZ < 0 && th.z < -56)) {
+            th.state = 'idle';
+            th.timer = 6.5 + Math.random() * 2.5;
+            th.group.visible = false;
+            for (const l of [...th.westLights, ...th.eastLights]) l.material.emissiveIntensity = 0.15;
+          }
+        }
+      }
+    }
+
+    checkTrainHit(pos, radius = 0.45, height = 1.8) {
+      const th = this.trainHazard;
+      if (!th || th.state !== 'passing') return false;
+      const halfW = 2.05;
+      const halfL = 13.0;
+      const trainH = 3.7;
+      return (
+        Math.abs(pos.x - th.laneX) < halfW + radius &&
+        Math.abs(pos.z - th.z) < halfL + radius &&
+        pos.y < trainH &&
+        pos.y + height > 0.1
+      );
     }
 
     _addRamp(xCenter, zCenter, width, length, yStart, yEnd, axis, dir, opts = {}) {
@@ -1150,9 +1207,69 @@
         castShadow: false,
       });
 
-      for (const rx of [-2.4, 2.4]) {
-        this._addBox(rx, 0.03, 0, 0.28, 0.06, 68, { color: 0x00f5ff, emissive: 0x00f5ff, solid: false, castShadow: false });
+      // Glowing Express Rail Tracks on West (-7.4) & East (+7.4) lanes!
+      const westLights = [];
+      const eastLights = [];
+      for (const [laneX, arr] of [[-7.4, westLights], [7.4, eastLights]]) {
+        this._addBox(laneX - 1.35, 0.04, 0, 0.24, 0.08, 68, { color: 0x00f5ff, emissive: 0x00f5ff, solid: false, castShadow: false });
+        this._addBox(laneX + 1.35, 0.04, 0, 0.24, 0.08, 68, { color: 0x00f5ff, emissive: 0x00f5ff, solid: false, castShadow: false });
+        // Warning danger strips that flash red when Express Train is incoming!
+        for (const wz of [-24, -12, 0, 12, 24]) {
+          const warn = this._addBox(laneX, 0.05, wz, 2.5, 0.06, 0.9, {
+            color: 0xff2a4b,
+            emissive: 0xff2a4b,
+            emissiveIntensity: 0.15,
+            solid: false,
+            castShadow: false,
+          });
+          arr.push(warn);
+        }
+        // Dark Tunnel Arches on North & South Walls where the train enters/exits
+        this._addBox(laneX, 2.2, -34.8, 4.8, 4.4, 0.5, { color: 0x05070e, solid: false });
+        this._addBox(laneX, 2.2, 34.8, 4.8, 4.4, 0.5, { color: 0x05070e, solid: false });
       }
+
+      // Build the Live Speeding Neon Express Train!
+      const trainGroup = new THREE.Group();
+      const tBody = new THREE.Mesh(
+        new THREE.BoxGeometry(4.1, 3.6, 26),
+        new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.65, roughness: 0.25 })
+      );
+      tBody.position.set(0, 1.85, 0);
+      tBody.castShadow = true;
+      const tStripe = new THREE.Mesh(
+        new THREE.BoxGeometry(4.22, 0.45, 25.4),
+        new THREE.MeshStandardMaterial({ color: 0xff2a55, emissive: 0xff2a55, emissiveIntensity: 1.2 })
+      );
+      tStripe.position.set(0, 2.2, 0);
+      const tWindows = new THREE.Mesh(
+        new THREE.BoxGeometry(4.18, 0.95, 22),
+        new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x38bdf8, emissiveIntensity: 0.95 })
+      );
+      tWindows.position.set(0, 2.85, 0);
+      const tHeadlight = new THREE.Mesh(
+        new THREE.BoxGeometry(3.4, 0.75, 0.3),
+        new THREE.MeshBasicMaterial({ color: 0xfff8c5 })
+      );
+      tHeadlight.position.set(0, 1.15, 13.05);
+      const tLight = new THREE.PointLight(0xff3e5e, 3.5, 18);
+      tLight.position.set(0, 2.2, 13.5);
+      trainGroup.add(tBody, tStripe, tWindows, tHeadlight, tLight);
+      trainGroup.visible = false;
+      this.mapGroup.add(trainGroup);
+
+      this.trainHazard = {
+        group: trainGroup,
+        westLights,
+        eastLights,
+        state: 'idle',
+        timer: 4.5,
+        laneIndex: 0,
+        laneX: -7.4,
+        dirZ: 1,
+        z: -54,
+        speed: 54,
+      };
 
       this._addPerimeter(13, 0x151b2e, 0x1d2640, 0x00f5ff, 0xf43f5e, 0xc084fc);
 
@@ -1197,8 +1314,8 @@
       this._addRamp(0, -14.5, 4.8, 9.0, 0, trainH, 'z', 1, { baseHex: '#334155', studHex: '#475569', trimColor: 0xff3e5e });
 
       for (const zSign of [-1, 1]) {
-        this._addBox(-7.5, 1.4, zSign * 22, 4.2, 2.8, 1.4, { color: 0x2c3652, studColor: 0x3b486b });
-        this._addBox(7.5, 1.4, zSign * 22, 4.2, 2.8, 1.4, { color: 0x2c3652, studColor: 0x3b486b });
+        // Keep Express Tracks at X = ±7.4 completely clear; place spawn cover in center!
+        this._addBox(0, 1.4, zSign * 23, 6.2, 2.8, 1.4, { color: 0x2c3652, studColor: 0x3b486b });
       }
 
       this.waypoints = [
@@ -1259,10 +1376,20 @@
       this._addBox(0, 2.2, 0, 24, 1.2, 1.4, { color: 0x334155, solid: false });
       this._addBox(0, 2.2, 16, 24, 1.2, 1.4, { color: 0x334155, solid: false });
 
-      // Towering Yellow Construction Crane + Hanging Cables
-      this._addBox(-24, 16, -24, 2.4, 34, 2.4, { color: 0xeab308, solid: false });
-      this._addBox(0, 27, -14, 54, 1.6, 1.8, { color: 0xeab308, solid: false });
-      this._addBox(0, 27, 14, 54, 1.6, 1.8, { color: 0xeab308, solid: false });
+      // Towering Walkable Yellow Construction Crane! (Grenade Jump / Scythe Jump right onto the Crane Boom!)
+      const craneY = 15.6;
+      this._addBox(-24, 11.5, -18, 2.8, 24, 2.8, { color: 0xeab308, studColor: 0xfacc15 });
+      // Solid walkable main crane boom right above center scaffolding (top at Y = 16.3!)
+      this._addBox(0, craneY, 0, 54, 1.4, 3.6, { color: 0xeab308, studColor: 0xfacc15 });
+      // Crane Operator Cabin perched on the boom!
+      this._addBox(-14, craneY + 2.2, 0, 4.2, 3.0, 4.0, { color: 0xd97706, studColor: 0xf59e0b });
+      this._addBox(-11.85, craneY + 2.3, 0, 0.15, 1.6, 2.8, { color: 0x38bdf8, emissive: 0x38bdf8, solid: false });
+      // Counterweight block & glowing crane beacon
+      this._addBox(-26, craneY + 1.1, 0, 4.4, 2.4, 4.2, { color: 0x475569, studColor: 0x64748b });
+      this._addBox(26, craneY + 1.0, 0, 1.2, 1.2, 1.2, { color: 0xff3e5e, emissive: 0xff3e5e, solid: false });
+      // Upper decorative secondary crane strut for hanging wing cables
+      this._addBox(0, 25, -10, 52, 1.2, 1.4, { color: 0xca8a04, solid: false });
+      this._addBox(0, 25, 10, 52, 1.2, 1.4, { color: 0xca8a04, solid: false });
 
       // Central Elevated Steel Scaffolding Tower (Y = 8.8!)
       const towerY = 8.8;
@@ -1283,8 +1410,8 @@
         const wx = xSign * 22;
         this._addBox(wx, wingY - 0.4, 0, 11, 0.8, 22, { color: 0x475569, studColor: 0x64748b });
         // Vertical steel crane cables going up to crane booms
-        this._addBox(wx, 17, -9, 0.25, 19, 0.25, { color: 0x1e293b, solid: false });
-        this._addBox(wx, 17, 9, 0.25, 19, 0.25, { color: 0x1e293b, solid: false });
+        this._addBox(wx, 16, -10, 0.25, 18, 0.25, { color: 0x1e293b, solid: false });
+        this._addBox(wx, 16, 10, 0.25, 18, 0.25, { color: 0x1e293b, solid: false });
         // Shipping container perched on each airborne steel wing!
         this._addBox(wx + xSign * 1.4, wingY + 1.5, 0, 4.6, 3.0, 10, {
           color: xSign > 0 ? 0x1d4ed8 : 0xb91c1c,

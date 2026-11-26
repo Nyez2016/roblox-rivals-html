@@ -1138,11 +1138,21 @@
       const w = this._currentWeapon();
       const forward = new THREE.Vector3();
       this.camera.getWorldDirection(forward);
-      this.player.vel.x = forward.x * (w.lungePower || 18.5);
-      this.player.vel.z = forward.z * (w.lungePower || 18.5);
-      this.player.vel.y = Math.max(w.lungeLift || 4.5, forward.y * 8 + 3.2);
+
+      if (w.scytheJump) {
+        // High-flying Scythe Jump: look up + RMB to soar straight onto cranes & rooftops!
+        this.player.vel.x = forward.x * (w.lungePower || 22.0);
+        this.player.vel.z = forward.z * (w.lungePower || 22.0);
+        this.player.vel.y = Math.max(w.lungeLift || 13.5, forward.y * 19.5 + 9.2);
+        this._spawnShockwave(this.player.pos, 0xc084fc, 3.2, 0.28);
+      } else {
+        this.player.vel.x = forward.x * (w.lungePower || 18.5);
+        this.player.vel.z = forward.z * (w.lungePower || 18.5);
+        this.player.vel.y = Math.max(w.lungeLift || 4.5, forward.y * 8 + 3.2);
+      }
+
       this.player.onGround = false;
-      this.player.lungeCooldown = 2.2;
+      this.player.lungeCooldown = w.lungeCooldown || 2.2;
       this.sound.playDash();
       this._performMeleeSlash(true);
     }
@@ -1339,7 +1349,7 @@
         mesh,
         pos: start,
         vel,
-        fuse: weaponDef.utilityType === 'flash' ? 1.35 : weaponDef.utilityType === 'molotov' ? 3.5 : 1.85,
+        fuse: weaponDef.utilityType === 'flash' ? 1.35 : weaponDef.utilityType === 'molotov' ? 3.5 : 1.45,
       });
     }
 
@@ -1362,14 +1372,21 @@
 
       if (this.player.alive) {
         const pCenter = new THREE.Vector3(this.player.pos.x, this.player.pos.y + 1.0, this.player.pos.z);
+        const jumpRadius = 9.5;
         const d = pos.distanceTo(pCenter);
-        if (d < blastRadius) {
-          const factor = 1 - d / blastRadius;
-          const push = new THREE.Vector3().subVectors(pCenter, pos).normalize();
-          this.player.vel.addScaledVector(push, 14 * factor);
-          this.player.vel.y += 6 * factor;
+        if (d < jumpRadius) {
+          // Supercharged Grenade Jump! Launches you sky-high (e.g., straight onto the Crane!) with light self-chip!
+          const factor = Math.max(0.25, 1 - d / jumpRadius);
+          const push = new THREE.Vector3().subVectors(pCenter, pos);
+          push.y = Math.max(0.55, push.y);
+          push.normalize();
+          this.player.vel.x += push.x * 15.5 * factor;
+          this.player.vel.z += push.z * 15.5 * factor;
+          this.player.vel.y = Math.max(this.player.vel.y, 15.5 * factor + 8.5);
           this.player.onGround = false;
-          this._damagePlayer(Math.round(45 * factor), 'OWN GRENADE');
+          if (this.loadoutChoice.mode !== 'range') {
+            this._damagePlayer(Math.round(16 * factor), 'OWN GRENADE');
+          }
         }
       }
     }
@@ -1662,7 +1679,13 @@
         return;
       }
 
-      this._endRound(false, source === 'SKY VOID' ? 'FELL INTO THE SKY VOID' : 'YOU WERE ELIMINATED');
+      const msg =
+        source === 'SKY VOID'
+          ? 'FELL INTO THE SKY VOID'
+          : source === 'EXPRESS TRAIN'
+          ? 'SQUASHED BY THE EXPRESS TRAIN!'
+          : 'YOU WERE ELIMINATED';
+      this._endRound(false, msg);
     }
 
     _damagePlayer(amount, source) {
@@ -2318,7 +2341,16 @@
       requestAnimationFrame(() => this._animate());
       const dt = Math.min(0.05, this.clock.getDelta());
       const nowSec = performance.now() * 0.001;
-      this.arena.update(dt, nowSec);
+      const isPlaying = this.roundState === 'playing' && !this.isPaused;
+      this.arena.update(dt, nowSec, (evtType, laneLabel) => {
+        if (!isPlaying) return;
+        if (evtType === 'warning') {
+          this.sound.playTrainHorn();
+          this._pushKillFeed(`EXPRESS TRAIN INCOMING (${laneLabel})!`);
+        } else if (evtType === 'pass') {
+          this.sound.playTrainWhoosh();
+        }
+      });
 
       if (this.roundState === 'menu' || this.roundState === 'match_over') {
         if (this.fpArms) this.fpArms.visible = false;
@@ -2407,6 +2439,52 @@
               }
             }
           );
+        }
+
+        // Check Neon Station Express Train Squash Hazard!
+        if (this.roundState === 'playing' && this.arena.trainHazard) {
+          if (this.player.alive && this.arena.checkTrainHit(this.player.pos, 0.45, 1.8)) {
+            this.player.hp = 0;
+            this.sound.playExplosion();
+            this._spawnShockwave(this.player.pos, 0xff2a55, 6.0, 0.3);
+            this._spawnParticles(this.player.pos, 0xff2a55, 22, 12);
+            this._updateHUD();
+            this._handlePlayerDeath('EXPRESS TRAIN');
+          }
+          for (const enemy of this.enemies) {
+            if (enemy.alive && !enemy.isDummy && this.arena.checkTrainHit(enemy.pos, 0.48, 1.9)) {
+              enemy.takeDamage(999, false);
+              this.sound.playExplosion();
+              this._spawnShockwave(enemy.pos, 0xff2a55, 5.5, 0.3);
+              this._spawnParticles(enemy.getCenterWorldPos(), 0xff2a55, 22, 12);
+              this._pushKillFeed(`${enemy.name || 'RIVAL'} SQUASHED BY EXPRESS TRAIN!`);
+              if (this.loadoutChoice.mode === 'tdm') {
+                this.playerScore += 1;
+                enemy.respawnTimer = 2.4;
+                this._renderScorePips();
+                if (this.playerScore >= TDM_SCORE_LIMIT) this._finishMatch();
+              } else if (this._getAliveEnemyCount() === 0 && this.loadoutChoice.mode !== 'range') {
+                this._endRound(true, 'RIVAL SQUASHED BY EXPRESS TRAIN!');
+              }
+            }
+          }
+          for (const ally of this.allies) {
+            if (ally.alive && this.arena.checkTrainHit(ally.pos, 0.48, 1.9)) {
+              ally.takeDamage(999, false);
+              this.sound.playExplosion();
+              this._spawnShockwave(ally.pos, 0x2de2ff, 5.5, 0.3);
+              this._spawnParticles(ally.getCenterWorldPos(), 0x2de2ff, 20, 12);
+              this._pushKillFeed(`${ally.name} SQUASHED BY EXPRESS TRAIN!`);
+              if (this.loadoutChoice.mode === 'tdm') {
+                this.botScore += 1;
+                ally.respawnTimer = 2.4;
+                this._renderScorePips();
+                if (this.botScore >= TDM_SCORE_LIMIT) this._finishMatch();
+              } else if (!this.player.alive && this._getAliveAllyCount() === 0) {
+                this._endRound(false, 'BLUE TEAM ELIMINATED');
+              }
+            }
+          }
         }
 
         this._updateEffects(dt);

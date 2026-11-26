@@ -13,8 +13,8 @@ Play live on GitHub Pages: **[https://nyez2016.github.io/roblox-rivals-html/](ht
   - **Cloud Spire** — Multi-tier airborne sky citadel with glass walkways, floating monoliths, and open-air sky edges
   - **Orbital Zero-G** — Deep space station with starfield, ringed planet, **0.36x low gravity**, and 4 Anti-Gravity Jump Pads
   - **Jade Courtyard** — Eastern palace with lotus pond, central Jade Arch Bridge, climbable Vermilion Pagoda rooftops, hanging lanterns, stone archways, bamboo groves, and 2 Wind Jump Pads
-  - **Neon Station** — Cyberpunk nighttime subway platforms & climbable central metro train
-  - **Construction** — High-altitude airborne skyscraper construction site floating over clouds & city skyline with suspended steel platforms, crane cables, hoist launch pads, and open-air drops
+  - **Neon Station** — Cyberpunk nighttime subway platforms, climbable central metro train, and a **live speeding Express Train** that flashes warning lights and squashes anyone caught on the tracks
+  - **Construction** — High-altitude airborne skyscraper construction site floating over clouds & city skyline with suspended steel platforms, **walkable yellow Crane Boom** (reachable via Grenade Jump or Scythe Jump!), hoist launch pads, and open-air drops
   - **Splash Park** — Tropical pool island, twin water slides & water geyser launch pads
 - **Auto Shoot Mode**: Toggle **Auto Shoot** in Settings or press `F` mid-match to automatically fire whenever your crosshair locks onto a target!
 - **Gravity System**: Switch between `Map Default`, `Earth 1.0x`, `Lunar Low-G (0.38x)`, and `Zero-G Bounce (0.22x)` on any map.
