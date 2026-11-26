@@ -35,7 +35,10 @@
         <span class="team-score" id="player-score">0</span>
       </div>
       <div class="round-center">
-        <div class="round-label"><span id="map-badge">ARENA</span> · <span id="round-label">ROUND 1</span></div>
+        <div class="round-label">
+          <span id="map-badge">ARENA</span> · <span id="round-label">ROUND 1</span>
+          <span id="grav-badge" class="grav-pill hidden">LOW-G</span>
+        </div>
         <div class="round-timer" id="round-timer">1:30</div>
       </div>
       <div class="team-block bot-team">
@@ -131,23 +134,23 @@
   <div id="menu-overlay">
     <div class="menu-card">
       <div class="brand-header">
-        <div class="brand-tag">HTML5 ARENA EDITION</div>
+        <div class="brand-tag">HTML5 ARENA · ZERO-G &amp; ASSASSIN EDITION</div>
         <h1 class="brand-title">ROBLOX <span>RIVALS</span></h1>
-        <p class="brand-sub">4 Maps · 16 Weapons · 12 Skins & Wraps — First to 5 Wins</p>
+        <p class="brand-sub">6 Maps · 22 Weapons · 17 Skins · Anti-Gravity · Kill Effects</p>
       </div>
 
       <!-- Menu Navigation Tabs -->
       <div class="menu-tabs">
-        <button class="tab-btn active" data-tab="loadout">LOADOUT</button>
-        <button class="tab-btn" data-tab="maps">MAPS &amp; BOT</button>
-        <button class="tab-btn" data-tab="skins">SKINS &amp; WRAPS</button>
+        <button class="tab-btn active" data-tab="loadout">LOADOUT (22)</button>
+        <button class="tab-btn" data-tab="maps">MAPS, GRAVITY &amp; MODES</button>
+        <button class="tab-btn" data-tab="skins">SKINS &amp; KILL FX</button>
       </div>
 
       <!-- TAB 1: LOADOUT -->
       <div class="tab-panel" id="tab-loadout">
         <div class="loadout-section">
           <label class="section-label">PRIMARY (SLOT 1)</label>
-          <div class="choice-grid cols-3" data-category="primary">
+          <div class="choice-grid cols-4" data-category="primary">
             <button class="choice-btn active" data-weapon="ar">
               <strong>Assault Rifle</strong>
               <span>Auto · 18 / 32 HS</span>
@@ -156,17 +159,25 @@
               <strong>Sniper</strong>
               <span>1-Shot HS · 75 / 150</span>
             </button>
+            <button class="choice-btn" data-weapon="crossbow">
+              <strong>诸葛连弩 Crossbow</strong>
+              <span>Silent · 28 / 56 HS</span>
+            </button>
+            <button class="choice-btn" data-weapon="bow">
+              <strong>寒霜长弓 Longbow</strong>
+              <span>1-Shot HS · Silent</span>
+            </button>
             <button class="choice-btn" data-weapon="burst">
               <strong>Burst Rifle</strong>
               <span>3-Burst · 16 / 28 HS</span>
             </button>
             <button class="choice-btn" data-weapon="shotgun">
               <strong>Shotgun</strong>
-              <span>8 Pellets · High CQC</span>
+              <span>8 Pellets · CQC</span>
             </button>
             <button class="choice-btn" data-weapon="paintball">
               <strong>Paintball Gun</strong>
-              <span>Fast Splat · 24 / 40 HS</span>
+              <span>Splat · 24 / 40 HS</span>
             </button>
             <button class="choice-btn" data-weapon="minigun">
               <strong>Minigun</strong>
@@ -177,10 +188,14 @@
 
         <div class="loadout-section">
           <label class="section-label">SECONDARY (SLOT 2)</label>
-          <div class="choice-grid cols-4" data-category="secondary">
+          <div class="choice-grid cols-5" data-category="secondary">
             <button class="choice-btn active" data-weapon="revolver">
               <strong>Revolver</strong>
               <span>36 / 72 HS</span>
+            </button>
+            <button class="choice-btn" data-weapon="kunai">
+              <strong>暗影飞刀 Kunai</strong>
+              <span>Silent · 34 / 78</span>
             </button>
             <button class="choice-btn" data-weapon="uzi">
               <strong>Uzi</strong>
@@ -197,108 +212,190 @@
           </div>
         </div>
 
-        <div class="loadout-split">
-          <div class="loadout-section">
-            <label class="section-label">MELEE (SLOT 3 · RMB LUNGE)</label>
-            <div class="choice-grid cols-3" data-category="melee">
-              <button class="choice-btn active" data-weapon="katana">
-                <strong>Katana</strong>
-                <span>45 · Fast Dash</span>
-              </button>
-              <button class="choice-btn" data-weapon="scythe">
-                <strong>Scythe</strong>
-                <span>54 · High Reap</span>
-              </button>
-              <button class="choice-btn" data-weapon="axe">
-                <strong>Battle Axe</strong>
-                <span>72 · Heavy Cleave</span>
-              </button>
-            </div>
+        <div class="loadout-section">
+          <label class="section-label">MELEE (SLOT 3 · RMB LUNGE / BACKSTAB)</label>
+          <div class="choice-grid cols-5" data-category="melee">
+            <button class="choice-btn active" data-weapon="katana">
+              <strong>Katana</strong>
+              <span>45 · Fast Dash</span>
+            </button>
+            <button class="choice-btn" data-weapon="hiddenblade">
+              <strong>暗影双匕 Daggers</strong>
+              <span>105 Backstab!</span>
+            </button>
+            <button class="choice-btn" data-weapon="xiuchun">
+              <strong>绣春刀 Saber</strong>
+              <span>58 · 95 Backstab</span>
+            </button>
+            <button class="choice-btn" data-weapon="scythe">
+              <strong>Scythe</strong>
+              <span>54 · High Reap</span>
+            </button>
+            <button class="choice-btn" data-weapon="axe">
+              <strong>Battle Axe</strong>
+              <span>72 · Heavy Cleave</span>
+            </button>
           </div>
+        </div>
 
-          <div class="loadout-section">
-            <label class="section-label">UTILITY (SLOT 4)</label>
-            <div class="choice-grid cols-3" data-category="utility">
-              <button class="choice-btn active" data-weapon="grenade">
-                <strong>Frag</strong>
-                <span>92 AoE Blast</span>
-              </button>
-              <button class="choice-btn" data-weapon="molotov">
-                <strong>Molotov</strong>
-                <span>Fire Pool DoT</span>
-              </button>
-              <button class="choice-btn" data-weapon="flashbang">
-                <strong>Flashbang</strong>
-                <span>Blinds Rival</span>
-              </button>
-            </div>
+        <div class="loadout-section">
+          <label class="section-label">UTILITY (SLOT 4)</label>
+          <div class="choice-grid cols-4" data-category="utility">
+            <button class="choice-btn active" data-weapon="grenade">
+              <strong>Frag Grenade</strong>
+              <span>92 AoE Blast</span>
+            </button>
+            <button class="choice-btn" data-weapon="smoke">
+              <strong>烟雾弹 Smoke</strong>
+              <span>Hides From Rival</span>
+            </button>
+            <button class="choice-btn" data-weapon="molotov">
+              <strong>Molotov</strong>
+              <span>Fire Pool DoT</span>
+            </button>
+            <button class="choice-btn" data-weapon="flashbang">
+              <strong>Flashbang</strong>
+              <span>Blinds Rival 2.8s</span>
+            </button>
           </div>
         </div>
       </div>
 
-      <!-- TAB 2: MAPS & BOT -->
+      <!-- TAB 2: MAPS, GRAVITY & MODES -->
       <div class="tab-panel hidden" id="tab-maps">
         <div class="loadout-section">
-          <label class="section-label">SELECT ARENA MAP (LIVE PREVIEW)</label>
-          <div class="choice-grid cols-2" data-category="map">
+          <label class="section-label">SELECT ARENA MAP (LIVE 3D PREVIEW)</label>
+          <div class="choice-grid cols-3" data-category="map">
             <button class="choice-btn map-card active" data-map="arena">
               <span class="map-swatch" style="background: linear-gradient(135deg, #38bdf8, #1e3a8a);"></span>
               <div>
                 <strong>Arena (Classic)</strong>
-                <span>Symmetrical bridge, side ramps &amp; sniper perches</span>
+                <span>Bridge &amp; perches</span>
+              </div>
+            </button>
+            <button class="choice-btn map-card" data-map="orbital">
+              <span class="map-swatch" style="background: linear-gradient(135deg, #0f172a, #a855f7, #38bdf8);"></span>
+              <div>
+                <strong>宇宙反重力 Orbital</strong>
+                <span>0.36x 低重力 + 弹射板</span>
+              </div>
+            </button>
+            <button class="choice-btn map-card" data-map="jade">
+              <span class="map-swatch" style="background: linear-gradient(135deg, #b91c1c, #f59e0b, #10b981);"></span>
+              <div>
+                <strong>丹阙古阁 Jade</strong>
+                <span>中国风 · 飞檐荷桥灯笼</span>
               </div>
             </button>
             <button class="choice-btn map-card" data-map="station">
               <span class="map-swatch" style="background: linear-gradient(135deg, #3b0764, #06b6d4);"></span>
               <div>
                 <strong>Neon Station</strong>
-                <span>Nighttime cyberpunk subway platforms &amp; metro train</span>
+                <span>Subway &amp; metro car</span>
               </div>
             </button>
             <button class="choice-btn map-card" data-map="construction">
               <span class="map-swatch" style="background: linear-gradient(135deg, #f97316, #7c2d12);"></span>
               <div>
                 <strong>Construction</strong>
-                <span>Sunset scaffolding tower &amp; climbable containers</span>
+                <span>Scaffolding &amp; crates</span>
               </div>
             </button>
             <button class="choice-btn map-card" data-map="splash">
               <span class="map-swatch" style="background: linear-gradient(135deg, #06b6d4, #34d399);"></span>
               <div>
                 <strong>Splash Park</strong>
-                <span>Tropical pool island, twin water slides &amp; cabanas</span>
+                <span>Slides &amp; geysers</span>
               </div>
             </button>
           </div>
         </div>
 
         <div class="loadout-section">
-          <label class="section-label">RIVAL BOT DIFFICULTY</label>
-          <div class="choice-grid cols-3" data-category="difficulty">
-            <button class="choice-btn center-text" data-diff="rookie">
-              <strong>Rookie</strong>
-              <span>Relaxed aim &amp; speed</span>
+          <label class="section-label">GRAVITY SYSTEM (重力模式)</label>
+          <div class="choice-grid cols-4" data-category="gravity">
+            <button class="choice-btn center-text active" data-grav="auto">
+              <strong>Map Default</strong>
+              <span>Space=Low-G</span>
             </button>
-            <button class="choice-btn center-text active" data-diff="pro">
-              <strong>Pro</strong>
-              <span>Balanced competitive duel</span>
+            <button class="choice-btn center-text" data-grav="normal">
+              <strong>Earth 1.0x</strong>
+              <span>Standard</span>
             </button>
-            <button class="choice-btn center-text" data-diff="nemesis">
-              <strong>Nemesis</strong>
-              <span>Fast strafe &amp; sharp aim</span>
+            <button class="choice-btn center-text" data-grav="low">
+              <strong>月球低重力</strong>
+              <span>0.38x Floaty</span>
             </button>
+            <button class="choice-btn center-text" data-grav="antigrav">
+              <strong>反重力弹跳</strong>
+              <span>0.22x Super Air</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="loadout-split">
+          <div class="loadout-section">
+            <label class="section-label">GAME MODE (玩法模式)</label>
+            <div class="choice-grid cols-2" data-category="mode">
+              <button class="choice-btn center-text active" data-mode="classic">
+                <strong>Classic Duel</strong>
+                <span>Custom Loadout</span>
+              </button>
+              <button class="choice-btn center-text" data-mode="assassin">
+                <strong>古代暗杀 Assassin</strong>
+                <span>连弩/飞刀/双匕/烟雾</span>
+              </button>
+              <button class="choice-btn center-text" data-mode="sniper">
+                <strong>Sniper Only</strong>
+                <span>1-Shot HS Duel</span>
+              </button>
+              <button class="choice-btn center-text" data-mode="randomizer">
+                <strong>Randomizer</strong>
+                <span>Random Each Round</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="loadout-section">
+            <label class="section-label">RIVAL BOT DIFFICULTY</label>
+            <div class="choice-grid cols-3" data-category="difficulty">
+              <button class="choice-btn center-text" data-diff="rookie">
+                <strong>Rookie</strong>
+                <span>Relaxed</span>
+              </button>
+              <button class="choice-btn center-text active" data-diff="pro">
+                <strong>Pro</strong>
+                <span>Balanced</span>
+              </button>
+              <button class="choice-btn center-text" data-diff="nemesis">
+                <strong>Nemesis</strong>
+                <span>Sharp Aim</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- TAB 3: SKINS & WRAPS -->
+      <!-- TAB 3: SKINS & KILL FX -->
       <div class="tab-panel hidden" id="tab-skins">
         <div class="loadout-section">
-          <label class="section-label">WEAPON WRAP / SKIN (INCLUDES TRACERS)</label>
+          <label class="section-label">WEAPON WRAP / SKIN (11 WRAPS)</label>
           <div class="choice-grid cols-4" data-category="weaponSkin">
             <button class="choice-btn skin-btn active" data-skin="default">
               <span class="skin-swatch" style="background: linear-gradient(135deg, #2b354a, #2de2ff);"></span>
               <strong>Standard</strong>
+            </button>
+            <button class="choice-btn skin-btn" data-skin="porcelain">
+              <span class="skin-swatch" style="background: linear-gradient(135deg, #f8fafc, #2563eb);"></span>
+              <strong>青花瓷 Porcelain</strong>
+            </button>
+            <button class="choice-btn skin-btn" data-skin="jadedragon">
+              <span class="skin-swatch" style="background: linear-gradient(135deg, #0a1f18, #10b981);"></span>
+              <strong>玄铁青龙 Jade</strong>
+            </button>
+            <button class="choice-btn skin-btn" data-skin="starlight">
+              <span class="skin-swatch" style="background: linear-gradient(135deg, #e2e8f0, #f59e0b, #38bdf8);"></span>
+              <strong>星际漫步 Orbital</strong>
             </button>
             <button class="choice-btn skin-btn" data-skin="cyber">
               <span class="skin-swatch" style="background: linear-gradient(135deg, #0d1324, #00f5ff);"></span>
@@ -332,23 +429,57 @@
         </div>
 
         <div class="loadout-section">
-          <label class="section-label">RIVAL AVATAR SKIN</label>
-          <div class="choice-grid cols-4" data-category="rivalSkin">
+          <label class="section-label">RIVAL AVATAR SKIN (6 SKINS)</label>
+          <div class="choice-grid cols-6" data-category="rivalSkin">
             <button class="choice-btn skin-btn active" data-rskin="classic">
               <span class="skin-swatch" style="background: linear-gradient(135deg, #e63956, #1e2638);"></span>
               <strong>Red Rival</strong>
             </button>
+            <button class="choice-btn skin-btn" data-rskin="assassin">
+              <span class="skin-swatch" style="background: linear-gradient(135deg, #7f1d1d, #1c1917, #fbbf24);"></span>
+              <strong>锦衣暗卫</strong>
+            </button>
+            <button class="choice-btn skin-btn" data-rskin="astronaut">
+              <span class="skin-swatch" style="background: linear-gradient(135deg, #f8fafc, #f59e0b);"></span>
+              <strong>宇航员</strong>
+            </button>
             <button class="choice-btn skin-btn" data-rskin="shadow">
               <span class="skin-swatch" style="background: linear-gradient(135deg, #111420, #a855f7);"></span>
-              <strong>Shadow Ninja</strong>
+              <strong>Shadow</strong>
             </button>
             <button class="choice-btn skin-btn" data-rskin="golden">
               <span class="skin-swatch" style="background: linear-gradient(135deg, #f59e0b, #fef08a);"></span>
-              <strong>Golden Champ</strong>
+              <strong>Golden</strong>
             </button>
             <button class="choice-btn skin-btn" data-rskin="frost">
               <span class="skin-swatch" style="background: linear-gradient(135deg, #38bdf8, #e0f2fe);"></span>
-              <strong>Frost Knight</strong>
+              <strong>Frost</strong>
+            </button>
+          </div>
+        </div>
+
+        <div class="loadout-section">
+          <label class="section-label">KILL EFFECT (击杀特效)</label>
+          <div class="choice-grid cols-5" data-category="killEffect">
+            <button class="choice-btn center-text active" data-kfx="classic">
+              <strong>Classic</strong>
+              <span>Ragdoll</span>
+            </button>
+            <button class="choice-btn center-text" data-kfx="lightning">
+              <strong>金色雷击</strong>
+              <span>Sky Thunder</span>
+            </button>
+            <button class="choice-btn center-text" data-kfx="sakura">
+              <strong>樱花散落</strong>
+              <span>Blossom Burst</span>
+            </button>
+            <button class="choice-btn center-text" data-kfx="blackhole">
+              <strong>黑洞吞噬</strong>
+              <span>Void Vortex</span>
+            </button>
+            <button class="choice-btn center-text" data-kfx="pixel">
+              <strong>像素解体</strong>
+              <span>Voxel Shatter</span>
             </button>
           </div>
         </div>

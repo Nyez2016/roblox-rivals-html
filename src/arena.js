@@ -3,810 +3,1031 @@
   const THREE = global.THREE;
 
   const MAPS = {
-  arena: {
-    id: 'arena',
-    name: 'ARENA',
-    subtitle: 'Classic symmetrical bridge & sniper perches',
-    badgeColor: '#2de2ff',
-    preview: 'linear-gradient(135deg, #38bdf8, #1e3a8a)',
-  },
-  station: {
-    id: 'station',
-    name: 'NEON STATION',
-    subtitle: 'Night subway platforms & central metro car',
-    badgeColor: '#c084fc',
-    preview: 'linear-gradient(135deg, #3b0764, #06b6d4)',
-  },
-  construction: {
-    id: 'construction',
-    name: 'CONSTRUCTION',
-    subtitle: 'Sunset scaffolding towers & shipping crates',
-    badgeColor: '#fb923c',
-    preview: 'linear-gradient(135deg, #f97316, #7c2d12)',
-  },
-  splash: {
-    id: 'splash',
-    name: 'SPLASH PARK',
-    subtitle: 'Tropical pool deck, water slides & cabanas',
-    badgeColor: '#34d399',
-    preview: 'linear-gradient(135deg, #06b6d4, #34d399)',
-  },
-};
+    arena: {
+      id: 'arena',
+      name: 'ARENA',
+      subtitle: 'Classic symmetrical bridge & sniper perches',
+      gravityScale: 1.0,
+    },
+    orbital: {
+      id: 'orbital',
+      name: 'ORBITAL ZERO-G',
+      subtitle: '宇宙反重力空间站 · 0.36x 低重力 + 4个弹射板',
+      gravityScale: 0.36,
+    },
+    jade: {
+      id: 'jade',
+      name: 'JADE COURTYARD',
+      subtitle: '丹阙古阁 · 飞檐楼阁、荷花拱桥、红灯笼与竹林',
+      gravityScale: 1.0,
+    },
+    station: {
+      id: 'station',
+      name: 'NEON STATION',
+      subtitle: 'Night subway platforms & central metro car',
+      gravityScale: 1.0,
+    },
+    construction: {
+      id: 'construction',
+      name: 'CONSTRUCTION',
+      subtitle: 'Sunset scaffolding towers & shipping crates',
+      gravityScale: 1.0,
+    },
+    splash: {
+      id: 'splash',
+      name: 'SPLASH PARK',
+      subtitle: 'Tropical pool deck, water slides & geysers',
+      gravityScale: 1.0,
+    },
+  };
 
-function createStudTexture(baseHex, studHex, gridSize = 64) {
-  const canvas = document.createElement('canvas');
-  canvas.width = gridSize;
-  canvas.height = gridSize;
-  const ctx = canvas.getContext('2d');
+  function createStudTexture(baseHex, studHex, gridSize = 64) {
+    const canvas = document.createElement('canvas');
+    canvas.width = gridSize;
+    canvas.height = gridSize;
+    const ctx = canvas.getContext('2d');
 
-  ctx.fillStyle = baseHex;
-  ctx.fillRect(0, 0, gridSize, gridSize);
+    ctx.fillStyle = baseHex;
+    ctx.fillRect(0, 0, gridSize, gridSize);
 
-  ctx.strokeStyle = 'rgba(0,0,0,0.12)';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(1, 1, gridSize - 2, gridSize - 2);
+    ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(1, 1, gridSize - 2, gridSize - 2);
 
-  const r = gridSize * 0.24;
-  const cx = gridSize / 2;
-  const cy = gridSize / 2;
+    const r = gridSize * 0.24;
+    const cx = gridSize / 2;
+    const cy = gridSize / 2;
 
-  ctx.beginPath();
-  ctx.arc(cx + 2, cy + 2, r, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(0,0,0,0.22)';
-  ctx.fill();
+    ctx.beginPath();
+    ctx.arc(cx + 2, cy + 2, r, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    ctx.fill();
 
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fillStyle = studHex;
-  ctx.fill();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = studHex;
+    ctx.fill();
 
-  ctx.beginPath();
-  ctx.arc(cx - r * 0.25, cy - r * 0.25, r * 0.32, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(255,255,255,0.22)';
-  ctx.fill();
+    ctx.beginPath();
+    ctx.arc(cx - r * 0.25, cy - r * 0.25, r * 0.32, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    ctx.fill();
 
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  if ('SRGBColorSpace' in THREE) tex.colorSpace = THREE.SRGBColorSpace;
-  else if ('sRGBEncoding' in THREE) tex.encoding = THREE.sRGBEncoding;
-  return tex;
-}
-
-class Arena {
-  constructor(scene, initialMapId = 'arena') {
-    this.scene = scene;
-    this.mapGroup = new THREE.Group();
-    this.scene.add(this.mapGroup);
-
-    this.colliders = [];
-    this.ramps = [];
-    this.meshes = [];
-    this.waypoints = [];
-    this.spawns = {
-      player: new THREE.Vector3(0, 0, 29),
-      bot: new THREE.Vector3(0, 0, -29),
-    };
-    this.bounds = { minX: -27, maxX: 27, minZ: -35, maxZ: 35 };
-    this.mapId = initialMapId;
-
-    this.loadMap(initialMapId);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    if ('SRGBColorSpace' in THREE) tex.colorSpace = THREE.SRGBColorSpace;
+    else if ('sRGBEncoding' in THREE) tex.encoding = THREE.sRGBEncoding;
+    return tex;
   }
 
-  loadMap(mapId) {
-    this.mapId = MAPS[mapId] ? mapId : 'arena';
+  class Arena {
+    constructor(scene, initialMapId = 'arena') {
+      this.scene = scene;
+      this.mapGroup = new THREE.Group();
+      this.scene.add(this.mapGroup);
 
-    // Clear previous map objects cleanly
-    while (this.mapGroup.children.length > 0) {
-      const child = this.mapGroup.children[0];
-      this.mapGroup.remove(child);
-      if (child.geometry) child.geometry.dispose();
-      if (child.material) {
-        if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose());
-        else child.material.dispose();
+      this.colliders = [];
+      this.ramps = [];
+      this.jumpPads = [];
+      this.meshes = [];
+      this.waypoints = [];
+      this.spawns = {
+        player: new THREE.Vector3(0, 0, 29),
+        bot: new THREE.Vector3(0, 0, -29),
+      };
+      this.bounds = { minX: -27, maxX: 27, minZ: -35, maxZ: 35 };
+      this.mapId = initialMapId;
+
+      this.loadMap(initialMapId);
+    }
+
+    getDefaultGravityScale() {
+      return MAPS[this.mapId]?.gravityScale ?? 1.0;
+    }
+
+    loadMap(mapId) {
+      this.mapId = MAPS[mapId] ? mapId : 'arena';
+
+      while (this.mapGroup.children.length > 0) {
+        const child = this.mapGroup.children[0];
+        this.mapGroup.remove(child);
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) {
+          if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose());
+          else child.material.dispose();
+        }
+      }
+
+      this.colliders = [];
+      this.ramps = [];
+      this.jumpPads = [];
+      this.meshes = [];
+      this.bounds = { minX: -27, maxX: 27, minZ: -35, maxZ: 35 };
+      this.spawns = {
+        player: new THREE.Vector3(0, 0, 29),
+        bot: new THREE.Vector3(0, 0, -29),
+      };
+
+      if (this.mapId === 'orbital') {
+        this._buildOrbitalMap();
+      } else if (this.mapId === 'jade') {
+        this._buildJadeCourtyardMap();
+      } else if (this.mapId === 'station') {
+        this._buildStationMap();
+      } else if (this.mapId === 'construction') {
+        this._buildConstructionMap();
+      } else if (this.mapId === 'splash') {
+        this._buildSplashMap();
+      } else {
+        this._buildClassicArenaMap();
       }
     }
 
-    this.colliders = [];
-    this.ramps = [];
-    this.meshes = [];
-    this.bounds = { minX: -27, maxX: 27, minZ: -35, maxZ: 35 };
-    this.spawns = {
-      player: new THREE.Vector3(0, 0, 29),
-      bot: new THREE.Vector3(0, 0, -29),
-    };
+    _setLighting({ skyHex, fogHex, hemiSky, hemiGround, hemiInt, sunHex, sunInt, sunPos, clouds = true, stars = false }) {
+      this.scene.background = new THREE.Color(skyHex);
+      this.scene.fog = new THREE.Fog(fogHex, 52, 145);
 
-    if (this.mapId === 'station') {
-      this._buildStationMap();
-    } else if (this.mapId === 'construction') {
-      this._buildConstructionMap();
-    } else if (this.mapId === 'splash') {
-      this._buildSplashMap();
-    } else {
-      this._buildClassicArenaMap();
-    }
-  }
+      const hemi = new THREE.HemisphereLight(hemiSky, hemiGround, hemiInt);
+      this.mapGroup.add(hemi);
 
-  _setLighting({ skyHex, fogHex, hemiSky, hemiGround, hemiInt, sunHex, sunInt, sunPos, clouds = true }) {
-    this.scene.background = new THREE.Color(skyHex);
-    this.scene.fog = new THREE.Fog(fogHex, 48, 128);
+      const sun = new THREE.DirectionalLight(sunHex, sunInt);
+      sun.position.set(sunPos[0], sunPos[1], sunPos[2]);
+      sun.castShadow = true;
+      sun.shadow.mapSize.width = 2048;
+      sun.shadow.mapSize.height = 2048;
+      sun.shadow.camera.near = 5;
+      sun.shadow.camera.far = 140;
+      const d = 48;
+      sun.shadow.camera.left = -d;
+      sun.shadow.camera.right = d;
+      sun.shadow.camera.top = d;
+      sun.shadow.camera.bottom = -d;
+      sun.shadow.bias = -0.0005;
+      this.mapGroup.add(sun);
 
-    const hemi = new THREE.HemisphereLight(hemiSky, hemiGround, hemiInt);
-    this.mapGroup.add(hemi);
+      if (clouds) {
+        const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.78 });
+        const cloudPositions = [
+          [-30, 32, -25, 14, 3, 7],
+          [25, 36, -10, 18, 3.5, 9],
+          [-15, 34, 28, 15, 3, 8],
+          [32, 30, 22, 12, 2.5, 7],
+        ];
+        for (const [x, y, z, w, h, dep] of cloudPositions) {
+          const c = new THREE.Mesh(new THREE.BoxGeometry(w, h, dep), cloudMat);
+          c.position.set(x, y, z);
+          this.mapGroup.add(c);
+        }
+      }
 
-    const sun = new THREE.DirectionalLight(sunHex, sunInt);
-    sun.position.set(sunPos[0], sunPos[1], sunPos[2]);
-    sun.castShadow = true;
-    sun.shadow.mapSize.width = 2048;
-    sun.shadow.mapSize.height = 2048;
-    sun.shadow.camera.near = 5;
-    sun.shadow.camera.far = 135;
-    const d = 48;
-    sun.shadow.camera.left = -d;
-    sun.shadow.camera.right = d;
-    sun.shadow.camera.top = d;
-    sun.shadow.camera.bottom = -d;
-    sun.shadow.bias = -0.0005;
-    this.mapGroup.add(sun);
+      if (stars) {
+        // Deep space starfield + ringed alien planet!
+        const starPositions = [];
+        for (let i = 0; i < 420; i++) {
+          const theta = Math.random() * Math.PI * 2;
+          const phi = Math.random() * Math.PI * 0.48;
+          const r = 85 + Math.random() * 35;
+          starPositions.push(
+            Math.sin(phi) * Math.cos(theta) * r,
+            Math.cos(phi) * r + 6,
+            Math.sin(phi) * Math.sin(theta) * r
+          );
+        }
+        const starGeo = new THREE.BufferGeometry();
+        starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
+        const starMat = new THREE.PointsMaterial({ color: 0xe0f2fe, size: 0.9, sizeAttenuation: true });
+        this.mapGroup.add(new THREE.Points(starGeo, starMat));
 
-    if (clouds) {
-      const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.78 });
-      const cloudPositions = [
-        [-30, 32, -25, 14, 3, 7],
-        [25, 36, -10, 18, 3.5, 9],
-        [-15, 34, 28, 15, 3, 8],
-        [32, 30, 22, 12, 2.5, 7],
-      ];
-      for (const [x, y, z, w, h, dep] of cloudPositions) {
-        const c = new THREE.Mesh(new THREE.BoxGeometry(w, h, dep), cloudMat);
-        c.position.set(x, y, z);
-        this.mapGroup.add(c);
+        const planet = new THREE.Mesh(
+          new THREE.SphereGeometry(11, 20, 16),
+          new THREE.MeshStandardMaterial({ color: 0x6366f1, emissive: 0x312e81, roughness: 0.7 })
+        );
+        planet.position.set(-42, 38, -56);
+        const ring = new THREE.Mesh(
+          new THREE.TorusGeometry(17, 1.3, 8, 36),
+          new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.55 })
+        );
+        ring.rotation.set(1.2, 0.35, 0);
+        ring.position.copy(planet.position);
+        this.mapGroup.add(planet, ring);
       }
     }
-  }
 
-  _addBox(x, y, z, w, h, d, options = {}) {
-    const {
-      color = 0xd6dde8,
-      studColor = null,
-      roughness = 0.65,
-      metalness = 0.1,
-      emissive = 0x000000,
-      emissiveIntensity = 0.85,
-      solid = true,
-      castShadow = true,
-      receiveShadow = true,
-      repeatScale = 0.5,
-      opacity = 1,
-    } = options;
+    _addBox(x, y, z, w, h, d, options = {}) {
+      const {
+        color = 0xd6dde8,
+        studColor = null,
+        roughness = 0.65,
+        metalness = 0.1,
+        emissive = 0x000000,
+        emissiveIntensity = 0.85,
+        solid = true,
+        castShadow = true,
+        receiveShadow = true,
+        repeatScale = 0.5,
+        opacity = 1,
+      } = options;
 
-    let mat;
-    if (studColor) {
-      const tex = createStudTexture(
-        '#' + new THREE.Color(color).getHexString(),
-        '#' + new THREE.Color(studColor).getHexString()
+      let mat;
+      if (studColor) {
+        const tex = createStudTexture(
+          '#' + new THREE.Color(color).getHexString(),
+          '#' + new THREE.Color(studColor).getHexString()
+        );
+        tex.repeat.set(Math.max(1, Math.round(w * repeatScale)), Math.max(1, Math.round(d * repeatScale)));
+        mat = new THREE.MeshStandardMaterial({
+          map: tex,
+          roughness,
+          metalness,
+          transparent: opacity < 1,
+          opacity,
+        });
+      } else {
+        mat = new THREE.MeshStandardMaterial({
+          color,
+          roughness,
+          metalness,
+          emissive,
+          emissiveIntensity: emissive ? emissiveIntensity : 0,
+          transparent: opacity < 1,
+          opacity,
+        });
+      }
+
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+      mesh.position.set(x, y, z);
+      mesh.castShadow = castShadow;
+      mesh.receiveShadow = receiveShadow;
+      this.mapGroup.add(mesh);
+      if (solid || options.shootable) this.meshes.push(mesh);
+
+      if (solid) {
+        this.colliders.push({
+          minX: x - w / 2,
+          maxX: x + w / 2,
+          minY: y - h / 2,
+          maxY: y + h / 2,
+          minZ: z - d / 2,
+          maxZ: z + d / 2,
+        });
+      }
+      return mesh;
+    }
+
+    _addJumpPad(x, y, z, radius = 2.0, launchVel = 15.5, colorHex = 0xa855f7) {
+      const base = new THREE.Mesh(
+        new THREE.CylinderGeometry(radius, radius * 1.12, 0.25, 18),
+        new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.6, roughness: 0.3 })
       );
-      tex.repeat.set(Math.max(1, Math.round(w * repeatScale)), Math.max(1, Math.round(d * repeatScale)));
-      mat = new THREE.MeshStandardMaterial({
-        map: tex,
-        roughness,
-        metalness,
-        transparent: opacity < 1,
-        opacity,
-      });
-    } else {
-      mat = new THREE.MeshStandardMaterial({
-        color,
-        roughness,
-        metalness,
-        emissive,
-        emissiveIntensity: emissive ? emissiveIntensity : 0,
-        transparent: opacity < 1,
-        opacity,
-      });
+      base.position.set(x, y + 0.12, z);
+      const glowRing = new THREE.Mesh(
+        new THREE.TorusGeometry(radius * 0.8, 0.12, 8, 22),
+        new THREE.MeshStandardMaterial({ color: colorHex, emissive: colorHex, emissiveIntensity: 1.0 })
+      );
+      glowRing.rotation.x = Math.PI / 2;
+      glowRing.position.set(x, y + 0.28, z);
+      const core = new THREE.Mesh(
+        new THREE.CylinderGeometry(radius * 0.62, radius * 0.62, 0.08, 16),
+        new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.45 })
+      );
+      core.position.set(x, y + 0.26, z);
+      this.mapGroup.add(base, glowRing, core);
+
+      this.jumpPads.push({ x, y, z, radius, launchVel });
     }
 
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
-    mesh.position.set(x, y, z);
-    mesh.castShadow = castShadow;
-    mesh.receiveShadow = receiveShadow;
-    this.mapGroup.add(mesh);
-    if (solid || options.shootable) this.meshes.push(mesh);
+    _addRamp(xCenter, zCenter, width, length, yStart, yEnd, axis, dir, opts = {}) {
+      const baseHex = opts.baseHex || '#52617a';
+      const studHex = opts.studHex || '#637591';
+      const trimHex = opts.trimColor !== undefined ? opts.trimColor : 0x2de2ff;
 
-    if (solid) {
-      this.colliders.push({
-        minX: x - w / 2,
-        maxX: x + w / 2,
-        minY: y - h / 2,
-        maxY: y + h / 2,
-        minZ: z - d / 2,
-        maxZ: z + d / 2,
-      });
-    }
-    return mesh;
-  }
+      const height = Math.abs(yEnd - yStart);
+      const slopeLen = Math.hypot(length, height);
+      const angle = Math.atan2(height, length);
 
-  _addRamp(xCenter, zCenter, width, length, yStart, yEnd, axis, dir, opts = {}) {
-    const baseHex = opts.baseHex || '#52617a';
-    const studHex = opts.studHex || '#637591';
-    const trimHex = opts.trimColor !== undefined ? opts.trimColor : 0x2de2ff;
+      const tex = createStudTexture(baseHex, studHex);
+      tex.repeat.set(Math.max(1, Math.round(width * 0.5)), Math.max(1, Math.round(slopeLen * 0.5)));
+      const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.65, metalness: 0.1 });
 
-    const height = Math.abs(yEnd - yStart);
-    const slopeLen = Math.hypot(length, height);
-    const angle = Math.atan2(height, length);
+      const slab = new THREE.Mesh(
+        new THREE.BoxGeometry(axis === 'z' ? width : slopeLen, 0.35, axis === 'z' ? slopeLen : width),
+        mat
+      );
+      slab.position.set(xCenter, (yStart + yEnd) / 2 - 0.16, zCenter);
+      if (axis === 'z') slab.rotation.x = dir > 0 ? -angle : angle;
+      else slab.rotation.z = dir > 0 ? angle : -angle;
+      slab.castShadow = true;
+      slab.receiveShadow = true;
+      this.mapGroup.add(slab);
+      this.meshes.push(slab);
 
-    const tex = createStudTexture(baseHex, studHex);
-    tex.repeat.set(Math.max(1, Math.round(width * 0.5)), Math.max(1, Math.round(slopeLen * 0.5)));
-    const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.65, metalness: 0.1 });
-
-    const slab = new THREE.Mesh(
-      new THREE.BoxGeometry(axis === 'z' ? width : slopeLen, 0.35, axis === 'z' ? slopeLen : width),
-      mat
-    );
-    slab.position.set(xCenter, (yStart + yEnd) / 2 - 0.16, zCenter);
-    if (axis === 'z') slab.rotation.x = dir > 0 ? -angle : angle;
-    else slab.rotation.z = dir > 0 ? angle : -angle;
-    slab.castShadow = true;
-    slab.receiveShadow = true;
-    this.mapGroup.add(slab);
-    this.meshes.push(slab);
-
-    if (trimHex) {
-      const trimMat = new THREE.MeshStandardMaterial({
-        color: trimHex,
-        emissive: trimHex,
-        emissiveIntensity: 0.65,
-      });
-      for (const side of [-1, 1]) {
-        const trim = new THREE.Mesh(
-          new THREE.BoxGeometry(axis === 'z' ? 0.14 : slopeLen, 0.16, axis === 'z' ? slopeLen : 0.14),
-          trimMat
-        );
-        trim.position.set(
-          xCenter + (axis === 'z' ? side * (width / 2 - 0.08) : 0),
-          (yStart + yEnd) / 2 + 0.04,
-          zCenter + (axis === 'x' ? side * (width / 2 - 0.08) : 0)
-        );
-        if (axis === 'z') trim.rotation.x = dir > 0 ? -angle : angle;
-        else trim.rotation.z = dir > 0 ? angle : -angle;
-        this.mapGroup.add(trim);
+      if (trimHex) {
+        const trimMat = new THREE.MeshStandardMaterial({
+          color: trimHex,
+          emissive: trimHex,
+          emissiveIntensity: 0.65,
+        });
+        for (const side of [-1, 1]) {
+          const trim = new THREE.Mesh(
+            new THREE.BoxGeometry(axis === 'z' ? 0.14 : slopeLen, 0.16, axis === 'z' ? slopeLen : 0.14),
+            trimMat
+          );
+          trim.position.set(
+            xCenter + (axis === 'z' ? side * (width / 2 - 0.08) : 0),
+            (yStart + yEnd) / 2 + 0.04,
+            zCenter + (axis === 'x' ? side * (width / 2 - 0.08) : 0)
+          );
+          if (axis === 'z') trim.rotation.x = dir > 0 ? -angle : angle;
+          else trim.rotation.z = dir > 0 ? angle : -angle;
+          this.mapGroup.add(trim);
+        }
       }
+
+      this.ramps.push({
+        minX: xCenter - (axis === 'z' ? width / 2 : length / 2),
+        maxX: xCenter + (axis === 'z' ? width / 2 : length / 2),
+        minZ: zCenter - (axis === 'z' ? length / 2 : width / 2),
+        maxZ: zCenter + (axis === 'z' ? length / 2 : width / 2),
+        yStart,
+        yEnd,
+        axis,
+        dir,
+      });
     }
 
-    this.ramps.push({
-      minX: xCenter - (axis === 'z' ? width / 2 : length / 2),
-      maxX: xCenter + (axis === 'z' ? width / 2 : length / 2),
-      minZ: zCenter - (axis === 'z' ? length / 2 : width / 2),
-      maxZ: zCenter + (axis === 'z' ? length / 2 : width / 2),
-      yStart,
-      yEnd,
-      axis,
-      dir,
-    });
-  }
+    _addPerimeter(wallH, wallColor, wallStud, accentP, accentB, accentSide) {
+      this._addBox(0, wallH / 2, -36, 58, wallH, 2, { color: wallColor, studColor: wallStud });
+      this._addBox(0, wallH / 2, 36, 58, wallH, 2, { color: wallColor, studColor: wallStud });
+      this._addBox(-28, wallH / 2, 0, 2, wallH, 72, { color: wallColor, studColor: wallStud });
+      this._addBox(28, wallH / 2, 0, 2, wallH, 72, { color: wallColor, studColor: wallStud });
 
-  _addPerimeter(wallH, wallColor, wallStud, accentP, accentB, accentSide) {
-    this._addBox(0, wallH / 2, -36, 58, wallH, 2, { color: wallColor, studColor: wallStud });
-    this._addBox(0, wallH / 2, 36, 58, wallH, 2, { color: wallColor, studColor: wallStud });
-    this._addBox(-28, wallH / 2, 0, 2, wallH, 72, { color: wallColor, studColor: wallStud });
-    this._addBox(28, wallH / 2, 0, 2, wallH, 72, { color: wallColor, studColor: wallStud });
-
-    this._addBox(0, 6.5, 34.9, 52, 0.35, 0.2, { color: accentP, emissive: accentP, solid: false });
-    this._addBox(0, 6.5, -34.9, 52, 0.35, 0.2, { color: accentB, emissive: accentB, solid: false });
-    this._addBox(-26.9, 6.5, 0, 0.2, 0.35, 68, { color: accentSide, emissive: accentSide, solid: false });
-    this._addBox(26.9, 6.5, 0, 0.2, 0.35, 68, { color: accentSide, emissive: accentSide, solid: false });
-  }
-
-  // =========================================================
-  // MAP 1: CLASSIC ARENA
-  // =========================================================
-  _buildClassicArenaMap() {
-    this._setLighting({
-      skyHex: 0x8bc6ff,
-      fogHex: 0x98ceff,
-      hemiSky: 0xdff2ff,
-      hemiGround: 0x4b5568,
-      hemiInt: 0.95,
-      sunHex: 0xfff7e6,
-      sunInt: 1.35,
-      sunPos: [28, 46, 22],
-      clouds: true,
-    });
-
-    this._addBox(0, -0.5, 0, 56, 1, 72, {
-      color: 0xcfd7e6,
-      studColor: 0xdde5f2,
-      solid: false,
-      shootable: true,
-      castShadow: false,
-    });
-
-    // Lane stripes
-    this._addBox(0, 0.02, 0, 54, 0.04, 0.45, { color: 0xffffff, emissive: 0xffffff, solid: false, castShadow: false });
-    this._addBox(0, 0.02, 22, 54, 0.04, 0.35, { color: 0x2de2ff, emissive: 0x2de2ff, solid: false, castShadow: false });
-    this._addBox(0, 0.02, -22, 54, 0.04, 0.35, { color: 0xff3e5e, emissive: 0xff3e5e, solid: false, castShadow: false });
-
-    this._addPerimeter(11, 0x243044, 0x2d3b52, 0x2de2ff, 0xff3e5e, 0x3b82f6);
-
-    const bridgeY = 3.6;
-    this._addBox(0, bridgeY - 0.3, 0, 14, 0.6, 8, { color: 0x3e4c63, studColor: 0x4b5b76 });
-    this._addBox(-3.5, bridgeY + 0.65, 0, 2.2, 1.3, 1.1, { color: 0xffb830, studColor: 0xffca5c });
-    this._addBox(3.5, bridgeY + 0.65, 0, 2.2, 1.3, 1.1, { color: 0xffb830, studColor: 0xffca5c });
-
-    for (const [px, pz] of [[-6, -3.2], [6, -3.2], [-6, 3.2], [6, 3.2]]) {
-      this._addBox(px, bridgeY / 2 - 0.3, pz, 1.4, bridgeY - 0.6, 1.4, { color: 0x263144 });
+      this._addBox(0, Math.min(6.5, wallH - 1.5), 34.9, 52, 0.35, 0.2, { color: accentP, emissive: accentP, solid: false });
+      this._addBox(0, Math.min(6.5, wallH - 1.5), -34.9, 52, 0.35, 0.2, { color: accentB, emissive: accentB, solid: false });
+      this._addBox(-26.9, Math.min(6.5, wallH - 1.5), 0, 0.2, 0.35, 68, { color: accentSide, emissive: accentSide, solid: false });
+      this._addBox(26.9, Math.min(6.5, wallH - 1.5), 0, 0.2, 0.35, 68, { color: accentSide, emissive: accentSide, solid: false });
     }
 
-    this._addRamp(-11.5, 0, 6.2, 9.0, 0, bridgeY, 'x', 1);
-    this._addRamp(11.5, 0, 6.2, 9.0, 0, bridgeY, 'x', -1);
+    // =========================================================
+    // MAP 1: CLASSIC ARENA
+    // =========================================================
+    _buildClassicArenaMap() {
+      this._setLighting({
+        skyHex: 0x8bc6ff,
+        fogHex: 0x98ceff,
+        hemiSky: 0xdff2ff,
+        hemiGround: 0x4b5568,
+        hemiInt: 0.95,
+        sunHex: 0xfff7e6,
+        sunInt: 1.35,
+        sunPos: [28, 46, 22],
+        clouds: true,
+      });
 
-    for (const zSign of [-1, 1]) {
-      const teamAccent = zSign > 0 ? 0x2de2ff : 0xff3e5e;
-      const wallTint = zSign > 0 ? 0x2e4a69 : 0x633344;
-      const wallStud = zSign > 0 ? 0x395c82 : 0x7a3f54;
-
-      this._addBox(0, 1.5, zSign * 21, 7.5, 3.0, 1.4, { color: wallTint, studColor: wallStud });
-      this._addBox(0, 3.1, zSign * 21, 7.6, 0.2, 1.5, { color: teamAccent, emissive: teamAccent, solid: false });
-
-      this._addBox(-11, 2.4, zSign * 13, 3.2, 4.8, 3.2, { color: 0x425069, studColor: 0x51627f });
-      this._addBox(11, 2.4, zSign * 13, 3.2, 4.8, 3.2, { color: 0x425069, studColor: 0x51627f });
-
-      this._addBox(-5.5, 0.9, zSign * 11, 2.2, 1.8, 2.2, { color: 0xd98a3c, studColor: 0xe69e53 });
-      this._addBox(5.5, 0.9, zSign * 11, 2.2, 1.8, 2.2, { color: 0xd98a3c, studColor: 0xe69e53 });
-
-      this._addBox(-20, 1.75, zSign * 18, 4.5, 3.5, 1.6, { color: 0x3d4b63, studColor: 0x4d5e7a });
-      this._addBox(20, 1.75, zSign * 18, 4.5, 3.5, 1.6, { color: 0x3d4b63, studColor: 0x4d5e7a });
-
-      const perchY = 2.8;
-      this._addBox(-21, perchY / 2, zSign * 29, 9, perchY, 8, { color: 0x39475e, studColor: 0x465773 });
-      this._addRamp(-13, zSign * 29, 4.6, 7.2, 0, perchY, 'x', -1);
-
-      this._addBox(21, perchY / 2, zSign * 29, 9, perchY, 8, { color: 0x39475e, studColor: 0x465773 });
-      this._addRamp(13, zSign * 29, 4.6, 7.2, 0, perchY, 'x', 1);
-    }
-
-    this._addBox(0, 0.85, 0, 2.6, 1.7, 2.6, { color: 0xd98a3c, studColor: 0xe69e53 });
-
-    this.waypoints = [
-      new THREE.Vector3(0, 3.6, 0),
-      new THREE.Vector3(-16, 0, 0),
-      new THREE.Vector3(16, 0, 0),
-      new THREE.Vector3(-8, 0, -16),
-      new THREE.Vector3(8, 0, -16),
-      new THREE.Vector3(-8, 0, 16),
-      new THREE.Vector3(8, 0, 16),
-      new THREE.Vector3(-21, 2.8, -29),
-      new THREE.Vector3(21, 2.8, -29),
-      new THREE.Vector3(-18, 0, -8),
-      new THREE.Vector3(18, 0, -8),
-      new THREE.Vector3(-18, 0, 8),
-      new THREE.Vector3(18, 0, 8),
-    ];
-  }
-
-  // =========================================================
-  // MAP 2: NEON STATION (Cyberpunk Night Subway)
-  // =========================================================
-  _buildStationMap() {
-    this._setLighting({
-      skyHex: 0x0b1024,
-      fogHex: 0x101733,
-      hemiSky: 0x7dd3fc,
-      hemiGround: 0x1e1b4b,
-      hemiInt: 0.78,
-      sunHex: 0xd8b4fe,
-      sunInt: 1.05,
-      sunPos: [-22, 42, 18],
-      clouds: false,
-    });
-
-    // Dark slate track bed floor
-    this._addBox(0, -0.5, 0, 56, 1, 72, {
-      color: 0x1d2438,
-      studColor: 0x26304a,
-      solid: false,
-      shootable: true,
-      castShadow: false,
-    });
-
-    // Glowing rail tracks running down center (-Z to +Z)
-    for (const rx of [-2.4, 2.4]) {
-      this._addBox(rx, 0.03, 0, 0.28, 0.06, 68, { color: 0x00f5ff, emissive: 0x00f5ff, solid: false, castShadow: false });
-    }
-
-    this._addPerimeter(13, 0x151b2e, 0x1d2640, 0x00f5ff, 0xf43f5e, 0xc084fc);
-
-    // Overhead station neon arch ribs
-    for (const z of [-24, -8, 8, 24]) {
-      this._addBox(0, 12.2, z, 54, 0.65, 1.1, { color: 0x1c233b, solid: false });
-      this._addBox(0, 11.75, z, 42, 0.22, 0.35, {
-        color: z % 16 === 0 ? 0x00f5ff : 0xd946ef,
-        emissive: z % 16 === 0 ? 0x00f5ff : 0xd946ef,
+      this._addBox(0, -0.5, 0, 56, 1, 72, {
+        color: 0xcfd7e6,
+        studColor: 0xdde5f2,
         solid: false,
+        shootable: true,
+        castShadow: false,
       });
+
+      this._addBox(0, 0.02, 0, 54, 0.04, 0.45, { color: 0xffffff, emissive: 0xffffff, solid: false, castShadow: false });
+      this._addBox(0, 0.02, 22, 54, 0.04, 0.35, { color: 0x2de2ff, emissive: 0x2de2ff, solid: false, castShadow: false });
+      this._addBox(0, 0.02, -22, 54, 0.04, 0.35, { color: 0xff3e5e, emissive: 0xff3e5e, solid: false, castShadow: false });
+
+      this._addPerimeter(11, 0x243044, 0x2d3b52, 0x2de2ff, 0xff3e5e, 0x3b82f6);
+
+      const bridgeY = 3.6;
+      this._addBox(0, bridgeY - 0.3, 0, 14, 0.6, 8, { color: 0x3e4c63, studColor: 0x4b5b76 });
+      this._addBox(-3.5, bridgeY + 0.65, 0, 2.2, 1.3, 1.1, { color: 0xffb830, studColor: 0xffca5c });
+      this._addBox(3.5, bridgeY + 0.65, 0, 2.2, 1.3, 1.1, { color: 0xffb830, studColor: 0xffca5c });
+
+      for (const [px, pz] of [[-6, -3.2], [6, -3.2], [-6, 3.2], [6, 3.2]]) {
+        this._addBox(px, bridgeY / 2 - 0.3, pz, 1.4, bridgeY - 0.6, 1.4, { color: 0x263144 });
+      }
+
+      this._addRamp(-11.5, 0, 6.2, 9.0, 0, bridgeY, 'x', 1);
+      this._addRamp(11.5, 0, 6.2, 9.0, 0, bridgeY, 'x', -1);
+
+      for (const zSign of [-1, 1]) {
+        const teamAccent = zSign > 0 ? 0x2de2ff : 0xff3e5e;
+        const wallTint = zSign > 0 ? 0x2e4a69 : 0x633344;
+        const wallStud = zSign > 0 ? 0x395c82 : 0x7a3f54;
+
+        this._addBox(0, 1.5, zSign * 21, 7.5, 3.0, 1.4, { color: wallTint, studColor: wallStud });
+        this._addBox(0, 3.1, zSign * 21, 7.6, 0.2, 1.5, { color: teamAccent, emissive: teamAccent, solid: false });
+
+        this._addBox(-11, 2.4, zSign * 13, 3.2, 4.8, 3.2, { color: 0x425069, studColor: 0x51627f });
+        this._addBox(11, 2.4, zSign * 13, 3.2, 4.8, 3.2, { color: 0x425069, studColor: 0x51627f });
+
+        this._addBox(-5.5, 0.9, zSign * 11, 2.2, 1.8, 2.2, { color: 0xd98a3c, studColor: 0xe69e53 });
+        this._addBox(5.5, 0.9, zSign * 11, 2.2, 1.8, 2.2, { color: 0xd98a3c, studColor: 0xe69e53 });
+
+        this._addBox(-20, 1.75, zSign * 18, 4.5, 3.5, 1.6, { color: 0x3d4b63, studColor: 0x4d5e7a });
+        this._addBox(20, 1.75, zSign * 18, 4.5, 3.5, 1.6, { color: 0x3d4b63, studColor: 0x4d5e7a });
+
+        const perchY = 2.8;
+        this._addBox(-21, perchY / 2, zSign * 29, 9, perchY, 8, { color: 0x39475e, studColor: 0x465773 });
+        this._addRamp(-13, zSign * 29, 4.6, 7.2, 0, perchY, 'x', -1);
+
+        this._addBox(21, perchY / 2, zSign * 29, 9, perchY, 8, { color: 0x39475e, studColor: 0x465773 });
+        this._addRamp(13, zSign * 29, 4.6, 7.2, 0, perchY, 'x', 1);
+      }
+
+      this._addBox(0, 0.85, 0, 2.6, 1.7, 2.6, { color: 0xd98a3c, studColor: 0xe69e53 });
+
+      this.waypoints = [
+        new THREE.Vector3(0, 3.6, 0),
+        new THREE.Vector3(-16, 0, 0),
+        new THREE.Vector3(16, 0, 0),
+        new THREE.Vector3(-8, 0, -16),
+        new THREE.Vector3(8, 0, -16),
+        new THREE.Vector3(-8, 0, 16),
+        new THREE.Vector3(8, 0, 16),
+        new THREE.Vector3(-21, 2.8, -29),
+        new THREE.Vector3(21, 2.8, -29),
+        new THREE.Vector3(-18, 0, -8),
+        new THREE.Vector3(18, 0, -8),
+      ];
     }
 
-    // Two long elevated side station platforms (Left & Right)
-    const platY = 2.4;
-    this._addBox(-19.5, platY / 2, 0, 15, platY, 54, { color: 0x2b344d, studColor: 0x364261 });
-    this._addBox(19.5, platY / 2, 0, 15, platY, 54, { color: 0x2b344d, studColor: 0x364261 });
-
-    // Glowing yellow/cyan platform safety strips
-    this._addBox(-12.2, platY + 0.03, 0, 0.45, 0.06, 54, { color: 0xfacc15, emissive: 0xfacc15, solid: false });
-    this._addBox(12.2, platY + 0.03, 0, 0.45, 0.06, 54, { color: 0xfacc15, emissive: 0xfacc15, solid: false });
-
-    // 4 ramps climbing onto the left & right station platforms
-    for (const zSign of [-1, 1]) {
-      this._addRamp(-19.5, zSign * 30.2, 7.0, 6.4, 0, platY, 'z', -zSign, {
-        baseHex: '#2c3652',
-        studHex: '#3b486b',
-        trimColor: 0x00f5ff,
+    // =========================================================
+    // MAP 2: ORBITAL ZERO-G (宇宙反重力空间站)
+    // =========================================================
+    _buildOrbitalMap() {
+      this._setLighting({
+        skyHex: 0x050816,
+        fogHex: 0x070c21,
+        hemiSky: 0x93c5fd,
+        hemiGround: 0x1e1b4b,
+        hemiInt: 0.85,
+        sunHex: 0xe0f2fe,
+        sunInt: 1.25,
+        sunPos: [30, 48, 25],
+        clouds: false,
+        stars: true,
       });
-      this._addRamp(19.5, zSign * 30.2, 7.0, 6.4, 0, platY, 'z', -zSign, {
-        baseHex: '#2c3652',
-        studHex: '#3b486b',
-        trimColor: 0xd946ef,
+
+      // Space station metallic lunar floor deck
+      this._addBox(0, -0.5, 0, 56, 1, 72, {
+        color: 0x1e293b,
+        studColor: 0x334155,
+        metalness: 0.4,
+        roughness: 0.5,
+        solid: false,
+        shootable: true,
+        castShadow: false,
       });
+
+      // Glowing forcefield low perimeter walls so you can see the starry cosmos!
+      this._addPerimeter(6.5, 0x172033, 0x24324d, 0x38bdf8, 0xf43f5e, 0xa855f7);
+      // Translucent upper energy forcefield glass
+      this._addBox(0, 10, -35.5, 56, 7, 0.2, { color: 0xa855f7, emissive: 0xa855f7, emissiveIntensity: 0.25, opacity: 0.14, solid: false });
+      this._addBox(0, 10, 35.5, 56, 7, 0.2, { color: 0x38bdf8, emissive: 0x38bdf8, emissiveIntensity: 0.25, opacity: 0.14, solid: false });
+
+      // Central Anti-Gravity Core Floating Platform (High in the air: Y = 6.2!)
+      const coreY = 6.2;
+      this._addBox(0, coreY - 0.35, 0, 13, 0.7, 13, { color: 0x334155, studColor: 0x475569, metalness: 0.5 });
+      this._addBox(0, coreY - 0.75, 0, 13.4, 0.22, 13.4, { color: 0x38bdf8, emissive: 0x38bdf8, solid: false });
+      // Floating central holographic energy crystal
+      this._addBox(0, coreY + 1.1, 0, 2.2, 2.2, 2.2, { color: 0x1e1b4b, studColor: 0x4338ca });
+      this._addBox(0, coreY + 2.35, 0, 2.3, 0.25, 2.3, { color: 0xc084fc, emissive: 0xc084fc, solid: false });
+
+      // 4 Floating Mid-Air Asteroid / Sci-Fi Pads around the station (Y = 4.6)
+      const padY = 4.6;
+      for (const [ax, az] of [[-17, -14], [17, -14], [-17, 14], [17, 14]]) {
+        this._addBox(ax, padY - 0.4, az, 9.5, 0.8, 9.5, { color: 0x475569, studColor: 0x64748b });
+        this._addBox(ax, padY - 0.85, az, 9.8, 0.2, 9.8, { color: 0xa855f7, emissive: 0xa855f7, solid: false });
+        // Low energy shield cover on each floating pad
+        this._addBox(ax, padY + 0.85, az > 0 ? az - 3.8 : az + 3.8, 4.2, 1.7, 0.6, {
+          color: 0x38bdf8,
+          emissive: 0x0284c7,
+          emissiveIntensity: 0.45,
+          opacity: 0.78,
+        });
+      }
+
+      // 4 Anti-Gravity Jump Pads on the floor launching players straight up to the floating platforms!
+      this._addJumpPad(-17, 0, 0, 2.2, 13.5, 0xa855f7);
+      this._addJumpPad(17, 0, 0, 2.2, 13.5, 0xa855f7);
+      this._addJumpPad(0, 0, 15, 2.2, 14.2, 0x38bdf8);
+      this._addJumpPad(0, 0, -15, 2.2, 14.2, 0xf43f5e);
+
+      // Floor space crates & lunar boulders for lower-level cover
+      for (const zSign of [-1, 1]) {
+        this._addBox(0, 1.4, zSign * 23, 8.0, 2.8, 1.4, { color: 0x334155, studColor: 0x475569 });
+        this._addBox(-9.5, 1.2, zSign * 10, 3.0, 2.4, 3.0, { color: 0x4338ca, studColor: 0x6366f1 });
+        this._addBox(9.5, 1.2, zSign * 10, 3.0, 2.4, 3.0, { color: 0x4338ca, studColor: 0x6366f1 });
+      }
+
+      this.waypoints = [
+        new THREE.Vector3(0, coreY, 0),
+        new THREE.Vector3(-17, padY, -14),
+        new THREE.Vector3(17, padY, -14),
+        new THREE.Vector3(-17, padY, 14),
+        new THREE.Vector3(17, padY, 14),
+        new THREE.Vector3(-17, 0, 0),
+        new THREE.Vector3(17, 0, 0),
+        new THREE.Vector3(0, 0, 15),
+        new THREE.Vector3(0, 0, -15),
+      ];
     }
 
-    // Side platform ticket kiosks & benches for cover
-    for (const xSign of [-1, 1]) {
-      for (const z of [-14, 0, 14]) {
-        this._addBox(xSign * 18.5, platY + 1.6, z, 2.8, 3.2, 2.8, { color: 0x1e2942, studColor: 0x2a3859 });
-        this._addBox(xSign * 18.5, platY + 3.25, z, 2.9, 0.18, 2.9, {
-          color: xSign > 0 ? 0xd946ef : 0x00f5ff,
-          emissive: xSign > 0 ? 0xd946ef : 0x00f5ff,
+    // =========================================================
+    // MAP 3: JADE COURTYARD (中国风 · 丹阙古阁)
+    // =========================================================
+    _buildJadeCourtyardMap() {
+      this._setLighting({
+        skyHex: 0xff8a65,
+        fogHex: 0xf4a27e,
+        hemiSky: 0xffe8c2,
+        hemiGround: 0x3d241b,
+        hemiInt: 0.96,
+        sunHex: 0xffd580,
+        sunInt: 1.4,
+        sunPos: [-32, 36, -24],
+        clouds: true,
+      });
+
+      // 青石古砖庭院地面 (Ancient Jade Stone Courtyard)
+      this._addBox(0, -0.5, 0, 56, 1, 72, {
+        color: 0xb7c0b8,
+        studColor: 0xcad3cb,
+        solid: false,
+        shootable: true,
+        castShadow: false,
+      });
+
+      // 中央荷花水池 (Central Lotus Pond — shallow walkable!)
+      this._addBox(0, 0.03, 0, 26, 0.06, 22, {
+        color: 0x0d9488,
+        emissive: 0x14b8a6,
+        emissiveIntensity: 0.22,
+        solid: false,
+        castShadow: false,
+      });
+      // Floating lotus pads & pink lotus blossoms
+      for (const [lx, lz] of [[-8, -6], [8, -6], [-9, 6], [9, 6], [-4, -8], [5, 8]]) {
+        this._addBox(lx, 0.08, lz, 2.2, 0.08, 2.2, { color: 0x15803d, solid: false, castShadow: false });
+        this._addBox(lx, 0.22, lz, 0.7, 0.28, 0.7, { color: 0xf472b6, emissive: 0xf43f5e, emissiveIntensity: 0.4, solid: false, castShadow: false });
+      }
+
+      // 宫墙围栏 (Crimson Palace Perimeter Wall + Gold Roof Trim)
+      this._addPerimeter(10.5, 0x7f1d1d, 0x991b1b, 0xfbbf24, 0xfbbf24, 0xf59e0b);
+
+      // 中央玉石拱桥 (Central Jade Arch Bridge spanning the lotus pond!)
+      const bridgeY = 2.6;
+      this._addBox(0, bridgeY - 0.25, 0, 7.6, 0.5, 11, { color: 0xe2e8f0, studColor: 0xf1f5f9 });
+      // Red lacquered bridge side railings
+      this._addBox(-3.6, bridgeY + 0.55, 0, 0.35, 1.1, 11, { color: 0xb91c1c });
+      this._addBox(3.6, bridgeY + 0.55, 0, 0.35, 1.1, 11, { color: 0xb91c1c });
+      // Bridge North & South ramps
+      this._addRamp(0, 9.2, 7.2, 7.5, 0, bridgeY, 'z', -1, { baseHex: '#cbd5e1', studHex: '#e2e8f0', trimColor: 0xb91c1c });
+      this._addRamp(0, -9.2, 7.2, 7.5, 0, bridgeY, 'z', 1, { baseHex: '#cbd5e1', studHex: '#e2e8f0', trimColor: 0xb91c1c });
+
+      // 东西双侧朱红飞檐亭阁 (East & West Climbable Pagoda Pavilions — 飞檐走壁!)
+      const deckY = 3.8;
+      for (const xSign of [-1, 1]) {
+        const px = xSign * 20;
+        // Raised stone pagoda foundation
+        this._addBox(px, deckY / 2, 0, 10, deckY, 16, { color: 0x64748b, studColor: 0x7c8ca3 });
+        // 4 Vermilion wooden pillars supporting golden pagoda roof
+        for (const [dx, dz] of [[-4, -6.5], [4, -6.5], [-4, 6.5], [4, 6.5]]) {
+          this._addBox(px + dx, deckY + 2.3, dz, 0.9, 4.6, 0.9, { color: 0xb91c1c });
+        }
+        // Golden Glazed-Tile Pagoda Roof (2 tiers!)
+        this._addBox(px, deckY + 4.9, 0, 12.2, 0.7, 18.2, { color: 0xd97706, studColor: 0xf59e0b });
+        this._addBox(px, deckY + 5.7, 0, 8.6, 0.9, 13.4, { color: 0xf59e0b, studColor: 0xfbbf24 });
+        // Glowing Red Lanterns hanging under the eaves!
+        for (const lz of [-6.5, 0, 6.5]) {
+          this._addBox(px - xSign * 4.9, deckY + 3.6, lz, 0.7, 0.95, 0.7, {
+            color: 0xff2a2a,
+            emissive: 0xff3b1f,
+            emissiveIntensity: 1.0,
+            solid: false,
+          });
+        }
+        // Sweeping ramps up to the pagoda deck from North & South
+        this._addRamp(px, 12.2, 5.5, 8.4, 0, deckY, 'z', -1, { baseHex: '#991b1b', studHex: '#b91c1c', trimColor: 0xfbbf24 });
+        this._addRamp(px, -12.2, 5.5, 8.4, 0, deckY, 'z', 1, { baseHex: '#991b1b', studHex: '#b91c1c', trimColor: 0xfbbf24 });
+      }
+
+      // 2 Qi Wind Launch Pads to leap right onto the golden pagoda rooftops (轻功飞檐!)
+      this._addJumpPad(-12.5, 0, 0, 1.9, 14.2, 0x34d399);
+      this._addJumpPad(12.5, 0, 0, 1.9, 14.2, 0x34d399);
+
+      // 南北石牌坊 & 翠竹掩体 (North/South Stone Paifang Archways + Bamboo Grove Cover)
+      for (const zSign of [-1, 1]) {
+        // Paifang Archway pillars + lintel + gold roof
+        this._addBox(-5.2, 2.8, zSign * 22, 1.3, 5.6, 1.3, { color: 0xb91c1c });
+        this._addBox(5.2, 2.8, zSign * 22, 1.3, 5.6, 1.3, { color: 0xb91c1c });
+        this._addBox(0, 5.8, zSign * 22, 13.5, 1.0, 1.8, { color: 0xd97706, studColor: 0xf59e0b });
+        // Low stone screen wall (影壁) right behind spawn
+        this._addBox(0, 1.35, zSign * 22, 5.2, 2.7, 1.1, { color: 0x7f1d1d, studColor: 0x991b1b });
+
+        // Bamboo grove cover clusters (翠竹)
+        for (const bx of [-10, 10]) {
+          this._addBox(bx, 2.1, zSign * 16, 2.4, 4.2, 2.4, { color: 0x15803d, studColor: 0x22c55e });
+        }
+        // Courtyard stone lanterns / cover blocks
+        this._addBox(-17, 1.4, zSign * 24, 3.6, 2.8, 2.4, { color: 0x64748b, studColor: 0x94a3b8 });
+        this._addBox(17, 1.4, zSign * 24, 3.6, 2.8, 2.4, { color: 0x64748b, studColor: 0x94a3b8 });
+      }
+
+      this.waypoints = [
+        new THREE.Vector3(0, bridgeY, 0),
+        new THREE.Vector3(-20, deckY, 0),
+        new THREE.Vector3(20, deckY, 0),
+        new THREE.Vector3(-20, deckY + 5.25, 0),
+        new THREE.Vector3(20, deckY + 5.25, 0),
+        new THREE.Vector3(-12.5, 0, 0),
+        new THREE.Vector3(12.5, 0, 0),
+        new THREE.Vector3(-9, 0, -21),
+        new THREE.Vector3(9, 0, -21),
+        new THREE.Vector3(-9, 0, 21),
+        new THREE.Vector3(9, 0, 21),
+      ];
+    }
+
+    // =========================================================
+    // MAP 4: NEON STATION
+    // =========================================================
+    _buildStationMap() {
+      this._setLighting({
+        skyHex: 0x0b1024,
+        fogHex: 0x101733,
+        hemiSky: 0x7dd3fc,
+        hemiGround: 0x1e1b4b,
+        hemiInt: 0.78,
+        sunHex: 0xd8b4fe,
+        sunInt: 1.05,
+        sunPos: [-22, 42, 18],
+        clouds: false,
+      });
+
+      this._addBox(0, -0.5, 0, 56, 1, 72, {
+        color: 0x1d2438,
+        studColor: 0x26304a,
+        solid: false,
+        shootable: true,
+        castShadow: false,
+      });
+
+      for (const rx of [-2.4, 2.4]) {
+        this._addBox(rx, 0.03, 0, 0.28, 0.06, 68, { color: 0x00f5ff, emissive: 0x00f5ff, solid: false, castShadow: false });
+      }
+
+      this._addPerimeter(13, 0x151b2e, 0x1d2640, 0x00f5ff, 0xf43f5e, 0xc084fc);
+
+      for (const z of [-24, -8, 8, 24]) {
+        this._addBox(0, 12.2, z, 54, 0.65, 1.1, { color: 0x1c233b, solid: false });
+        this._addBox(0, 11.75, z, 42, 0.22, 0.35, {
+          color: z % 16 === 0 ? 0x00f5ff : 0xd946ef,
+          emissive: z % 16 === 0 ? 0x00f5ff : 0xd946ef,
           solid: false,
         });
       }
+
+      const platY = 2.4;
+      this._addBox(-19.5, platY / 2, 0, 15, platY, 54, { color: 0x2b344d, studColor: 0x364261 });
+      this._addBox(19.5, platY / 2, 0, 15, platY, 54, { color: 0x2b344d, studColor: 0x364261 });
+      this._addBox(-12.2, platY + 0.03, 0, 0.45, 0.06, 54, { color: 0xfacc15, emissive: 0xfacc15, solid: false });
+      this._addBox(12.2, platY + 0.03, 0, 0.45, 0.06, 54, { color: 0xfacc15, emissive: 0xfacc15, solid: false });
+
+      for (const zSign of [-1, 1]) {
+        this._addRamp(-19.5, zSign * 30.2, 7.0, 6.4, 0, platY, 'z', -zSign, { baseHex: '#2c3652', studHex: '#3b486b', trimColor: 0x00f5ff });
+        this._addRamp(19.5, zSign * 30.2, 7.0, 6.4, 0, platY, 'z', -zSign, { baseHex: '#2c3652', studHex: '#3b486b', trimColor: 0xd946ef });
+      }
+
+      for (const xSign of [-1, 1]) {
+        for (const z of [-14, 0, 14]) {
+          this._addBox(xSign * 18.5, platY + 1.6, z, 2.8, 3.2, 2.8, { color: 0x1e2942, studColor: 0x2a3859 });
+          this._addBox(xSign * 18.5, platY + 3.25, z, 2.9, 0.18, 2.9, {
+            color: xSign > 0 ? 0xd946ef : 0x00f5ff,
+            emissive: xSign > 0 ? 0xd946ef : 0x00f5ff,
+            solid: false,
+          });
+        }
+      }
+
+      const trainH = 3.4;
+      this._addBox(0, trainH / 2, 0, 5.8, trainH, 20, { color: 0x334155, studColor: 0x475569 });
+      this._addBox(2.96, 2.1, 0, 0.1, 1.0, 16, { color: 0x38bdf8, emissive: 0x38bdf8, solid: false });
+      this._addBox(-2.96, 2.1, 0, 0.1, 1.0, 16, { color: 0x38bdf8, emissive: 0x38bdf8, solid: false });
+      this._addBox(0, 1.0, 10.05, 4.4, 0.5, 0.15, { color: 0x2de2ff, emissive: 0x2de2ff, solid: false });
+      this._addBox(0, 1.0, -10.05, 4.4, 0.5, 0.15, { color: 0xff3e5e, emissive: 0xff3e5e, solid: false });
+      this._addRamp(0, 14.5, 4.8, 9.0, 0, trainH, 'z', -1, { baseHex: '#334155', studHex: '#475569', trimColor: 0x2de2ff });
+      this._addRamp(0, -14.5, 4.8, 9.0, 0, trainH, 'z', 1, { baseHex: '#334155', studHex: '#475569', trimColor: 0xff3e5e });
+
+      for (const zSign of [-1, 1]) {
+        this._addBox(-7.5, 1.4, zSign * 22, 4.2, 2.8, 1.4, { color: 0x2c3652, studColor: 0x3b486b });
+        this._addBox(7.5, 1.4, zSign * 22, 4.2, 2.8, 1.4, { color: 0x2c3652, studColor: 0x3b486b });
+      }
+
+      this.waypoints = [
+        new THREE.Vector3(0, trainH, 0),
+        new THREE.Vector3(-19, platY, 0),
+        new THREE.Vector3(19, platY, 0),
+        new THREE.Vector3(-19, platY, -18),
+        new THREE.Vector3(19, platY, -18),
+        new THREE.Vector3(-19, platY, 18),
+        new THREE.Vector3(19, platY, 18),
+        new THREE.Vector3(-7, 0, 0),
+        new THREE.Vector3(7, 0, 0),
+      ];
     }
 
-    // Central Parked Neon Metro Train Car! (climbable via end ramps!)
-    const trainH = 3.4;
-    this._addBox(0, trainH / 2, 0, 5.8, trainH, 20, { color: 0x334155, studColor: 0x475569 });
-    // Train glowing windows & headlights
-    this._addBox(2.96, 2.1, 0, 0.1, 1.0, 16, { color: 0x38bdf8, emissive: 0x38bdf8, solid: false });
-    this._addBox(-2.96, 2.1, 0, 0.1, 1.0, 16, { color: 0x38bdf8, emissive: 0x38bdf8, solid: false });
-    this._addBox(0, 1.0, 10.05, 4.4, 0.5, 0.15, { color: 0x2de2ff, emissive: 0x2de2ff, solid: false });
-    this._addBox(0, 1.0, -10.05, 4.4, 0.5, 0.15, { color: 0xff3e5e, emissive: 0xff3e5e, solid: false });
-    // Ramps onto train roof from both ends
-    this._addRamp(0, 14.5, 4.8, 9.0, 0, trainH, 'z', -1, {
-      baseHex: '#334155',
-      studHex: '#475569',
-      trimColor: 0x2de2ff,
-    });
-    this._addRamp(0, -14.5, 4.8, 9.0, 0, trainH, 'z', 1, {
-      baseHex: '#334155',
-      studHex: '#475569',
-      trimColor: 0xff3e5e,
-    });
-
-    // Spawn cover barriers
-    for (const zSign of [-1, 1]) {
-      this._addBox(-7.5, 1.4, zSign * 22, 4.2, 2.8, 1.4, { color: 0x2c3652, studColor: 0x3b486b });
-      this._addBox(7.5, 1.4, zSign * 22, 4.2, 2.8, 1.4, { color: 0x2c3652, studColor: 0x3b486b });
-    }
-
-    this.waypoints = [
-      new THREE.Vector3(0, trainH, 0),
-      new THREE.Vector3(-19, platY, 0),
-      new THREE.Vector3(19, platY, 0),
-      new THREE.Vector3(-19, platY, -18),
-      new THREE.Vector3(19, platY, -18),
-      new THREE.Vector3(-19, platY, 18),
-      new THREE.Vector3(19, platY, 18),
-      new THREE.Vector3(-7, 0, 0),
-      new THREE.Vector3(7, 0, 0),
-      new THREE.Vector3(0, 0, 21),
-      new THREE.Vector3(0, 0, -21),
-    ];
-  }
-
-  // =========================================================
-  // MAP 3: CONSTRUCTION (Sunset Scaffolding & Containers)
-  // =========================================================
-  _buildConstructionMap() {
-    this._setLighting({
-      skyHex: 0xff9e64,
-      fogHex: 0xf9a875,
-      hemiSky: 0xffe4b5,
-      hemiGround: 0x5c3a21,
-      hemiInt: 0.92,
-      sunHex: 0xffd18c,
-      sunInt: 1.4,
-      sunPos: [-35, 30, -25],
-      clouds: true,
-    });
-
-    // Concrete rooftop slab
-    this._addBox(0, -0.5, 0, 56, 1, 72, {
-      color: 0x9aa3b0,
-      studColor: 0xaab4c2,
-      solid: false,
-      shootable: true,
-      castShadow: false,
-    });
-
-    this._addPerimeter(10, 0x3f4756, 0x4e586b, 0xfacc15, 0xf97316, 0xfbbf24);
-
-    // Overhead decorative yellow tower crane boom
-    this._addBox(-24, 15, -28, 2.4, 30, 2.4, { color: 0xeab308, solid: false });
-    this._addBox(0, 24, -20, 52, 1.6, 1.8, { color: 0xeab308, solid: false });
-
-    // Central Elevated Steel Scaffolding Tower (height 4.8!)
-    const towerY = 4.8;
-    this._addBox(0, towerY - 0.3, 0, 12, 0.6, 12, { color: 0xd97706, studColor: 0xf59e0b });
-    for (const [px, pz] of [[-5.4, -5.4], [5.4, -5.4], [-5.4, 5.4], [5.4, 5.4]]) {
-      this._addBox(px, towerY / 2 - 0.3, pz, 0.9, towerY - 0.6, 0.9, { color: 0xca8a04 });
-    }
-    // Waist cover on scaffolding deck
-    this._addBox(0, towerY + 0.65, -5.4, 5.5, 1.3, 0.7, { color: 0x475569 });
-    this._addBox(0, towerY + 0.65, 5.4, 5.5, 1.3, 0.7, { color: 0x475569 });
-
-    // 2 long diagonal/north-south ramps to mid scaffolding
-    this._addRamp(-11.5, 0, 5.0, 11.0, 0, towerY, 'x', 1, {
-      baseHex: '#b45309',
-      studHex: '#d97706',
-      trimColor: 0xfacc15,
-    });
-    this._addRamp(11.5, 0, 5.0, 11.0, 0, towerY, 'x', -1, {
-      baseHex: '#b45309',
-      studHex: '#d97706',
-      trimColor: 0xfacc15,
-    });
-
-    // Colorful Shipping Containers around the yard (climbable roofs via ramps!)
-    const contH = 3.2;
-    this._addBox(-16, contH / 2, -14, 5.2, contH, 12, { color: 0xb91c1c, studColor: 0xdc2626 });
-    this._addBox(16, contH / 2, 14, 5.2, contH, 12, { color: 0x1d4ed8, studColor: 0x2563eb });
-    this._addBox(16, contH / 2, -14, 5.2, contH, 12, { color: 0x0f766e, studColor: 0x14b8a6 });
-    this._addBox(-16, contH / 2, 14, 5.2, contH, 12, { color: 0xb45309, studColor: 0xd97706 });
-
-    // Ramps onto shipping containers
-    this._addRamp(-16, -23.5, 4.4, 7.0, 0, contH, 'z', 1, { baseHex: '#64748b', studHex: '#94a3b8', trimColor: 0xfacc15 });
-    this._addRamp(16, 23.5, 4.4, 7.0, 0, contH, 'z', -1, { baseHex: '#64748b', studHex: '#94a3b8', trimColor: 0xfacc15 });
-
-    // Concrete jersey barriers & cinderblock stacks
-    for (const zSign of [-1, 1]) {
-      this._addBox(0, 1.3, zSign * 19, 8.5, 2.6, 1.6, { color: 0x64748b, studColor: 0x78879c });
-      this._addBox(-6.5, 1.1, zSign * 11, 2.8, 2.2, 2.8, { color: 0xd97706, studColor: 0xf59e0b });
-      this._addBox(6.5, 1.1, zSign * 11, 2.8, 2.2, 2.8, { color: 0xd97706, studColor: 0xf59e0b });
-    }
-
-    this.waypoints = [
-      new THREE.Vector3(0, towerY, 0),
-      new THREE.Vector3(-16, contH, -14),
-      new THREE.Vector3(16, contH, 14),
-      new THREE.Vector3(-18, 0, 0),
-      new THREE.Vector3(18, 0, 0),
-      new THREE.Vector3(0, 0, 14),
-      new THREE.Vector3(0, 0, -14),
-      new THREE.Vector3(-9, 0, -23),
-      new THREE.Vector3(9, 0, -23),
-      new THREE.Vector3(-9, 0, 23),
-      new THREE.Vector3(9, 0, 23),
-    ];
-  }
-
-  // =========================================================
-  // MAP 4: SPLASH PARK (Tropical Pool & Water Slides)
-  // =========================================================
-  _buildSplashMap() {
-    this._setLighting({
-      skyHex: 0x56d8ff,
-      fogHex: 0x7ce8ff,
-      hemiSky: 0xe0fbff,
-      hemiGround: 0x38bdf8,
-      hemiInt: 1.05,
-      sunHex: 0xfffbe6,
-      sunInt: 1.38,
-      sunPos: [30, 50, 16],
-      clouds: true,
-    });
-
-    // Sunlit sandy poolside tile deck
-    this._addBox(0, -0.5, 0, 56, 1, 72, {
-      color: 0xf3e5ab,
-      studColor: 0xfaefc0,
-      solid: false,
-      shootable: true,
-      castShadow: false,
-    });
-
-    // Shallow glowing turquoise central swimming pool surface (walkable!)
-    this._addBox(0, 0.03, 0, 30, 0.06, 36, {
-      color: 0x06b6d4,
-      emissive: 0x22d3ee,
-      emissiveIntensity: 0.35,
-      solid: false,
-      castShadow: false,
-    });
-    // Pool lane markers
-    this._addBox(-5, 0.05, 0, 0.25, 0.05, 34, { color: 0xffffff, solid: false, castShadow: false });
-    this._addBox(5, 0.05, 0, 0.25, 0.05, 34, { color: 0xffffff, solid: false, castShadow: false });
-
-    this._addPerimeter(10, 0x0ea5e9, 0x38bdf8, 0x34d399, 0xfb7185, 0xfde047);
-
-    // Center Floating Pool Island Deck
-    const islandY = 1.4;
-    this._addBox(0, islandY / 2, 0, 10, islandY, 10, { color: 0xfbbf24, studColor: 0xfcd34d });
-    // Beach umbrella pole & canopy cover in the center
-    this._addBox(0, islandY + 2.2, 0, 0.6, 4.4, 0.6, { color: 0xffffff });
-    this._addBox(0, islandY + 4.5, 0, 7.5, 0.5, 7.5, { color: 0xf43f5e, studColor: 0xfb7185 });
-    // Mini ramps onto island
-    this._addRamp(0, 7.4, 4.5, 4.8, 0, islandY, 'z', -1, { baseHex: '#34d399', studHex: '#6ee7b7', trimColor: 0xfde047 });
-    this._addRamp(0, -7.4, 4.5, 4.8, 0, islandY, 'z', 1, { baseHex: '#34d399', studHex: '#6ee7b7', trimColor: 0xfde047 });
-
-    // Dual Side Water Slide Towers (Left & Right)
-    const slideY = 4.2;
-    for (const xSign of [-1, 1]) {
-      const col = xSign > 0 ? 0xf43f5e : 0x8b5cf6;
-      const stud = xSign > 0 ? 0xfb7185 : 0xa78bfa;
-      this._addBox(xSign * 21, slideY / 2, 0, 8, slideY, 10, { color: col, studColor: stud });
-      // Long sweeping water slide ramps going North and South!
-      this._addRamp(xSign * 21, 10.5, 5.2, 11.0, 0, slideY, 'z', -1, {
-        baseHex: xSign > 0 ? '#fb7185' : '#a78bfa',
-        studHex: '#ffffff',
-        trimColor: 0x38bdf8,
+    // =========================================================
+    // MAP 5: CONSTRUCTION
+    // =========================================================
+    _buildConstructionMap() {
+      this._setLighting({
+        skyHex: 0xff9e64,
+        fogHex: 0xf9a875,
+        hemiSky: 0xffe4b5,
+        hemiGround: 0x5c3a21,
+        hemiInt: 0.92,
+        sunHex: 0xffd18c,
+        sunInt: 1.4,
+        sunPos: [-35, 30, -25],
+        clouds: true,
       });
-      this._addRamp(xSign * 21, -10.5, 5.2, 11.0, 0, slideY, 'z', 1, {
-        baseHex: xSign > 0 ? '#fb7185' : '#a78bfa',
-        studHex: '#ffffff',
-        trimColor: 0x38bdf8,
+
+      this._addBox(0, -0.5, 0, 56, 1, 72, {
+        color: 0x9aa3b0,
+        studColor: 0xaab4c2,
+        solid: false,
+        shootable: true,
+        castShadow: false,
       });
+
+      this._addPerimeter(10, 0x3f4756, 0x4e586b, 0xfacc15, 0xf97316, 0xfbbf24);
+
+      this._addBox(-24, 15, -28, 2.4, 30, 2.4, { color: 0xeab308, solid: false });
+      this._addBox(0, 24, -20, 52, 1.6, 1.8, { color: 0xeab308, solid: false });
+
+      const towerY = 4.8;
+      this._addBox(0, towerY - 0.3, 0, 12, 0.6, 12, { color: 0xd97706, studColor: 0xf59e0b });
+      for (const [px, pz] of [[-5.4, -5.4], [5.4, -5.4], [-5.4, 5.4], [5.4, 5.4]]) {
+        this._addBox(px, towerY / 2 - 0.3, pz, 0.9, towerY - 0.6, 0.9, { color: 0xca8a04 });
+      }
+      this._addBox(0, towerY + 0.65, -5.4, 5.5, 1.3, 0.7, { color: 0x475569 });
+      this._addBox(0, towerY + 0.65, 5.4, 5.5, 1.3, 0.7, { color: 0x475569 });
+
+      this._addRamp(-11.5, 0, 5.0, 11.0, 0, towerY, 'x', 1, { baseHex: '#b45309', studHex: '#d97706', trimColor: 0xfacc15 });
+      this._addRamp(11.5, 0, 5.0, 11.0, 0, towerY, 'x', -1, { baseHex: '#b45309', studHex: '#d97706', trimColor: 0xfacc15 });
+
+      const contH = 3.2;
+      this._addBox(-16, contH / 2, -14, 5.2, contH, 12, { color: 0xb91c1c, studColor: 0xdc2626 });
+      this._addBox(16, contH / 2, 14, 5.2, contH, 12, { color: 0x1d4ed8, studColor: 0x2563eb });
+      this._addBox(16, contH / 2, -14, 5.2, contH, 12, { color: 0x0f766e, studColor: 0x14b8a6 });
+      this._addBox(-16, contH / 2, 14, 5.2, contH, 12, { color: 0xb45309, studColor: 0xd97706 });
+
+      this._addRamp(-16, -23.5, 4.4, 7.0, 0, contH, 'z', 1, { baseHex: '#64748b', studHex: '#94a3b8', trimColor: 0xfacc15 });
+      this._addRamp(16, 23.5, 4.4, 7.0, 0, contH, 'z', -1, { baseHex: '#64748b', studHex: '#94a3b8', trimColor: 0xfacc15 });
+
+      for (const zSign of [-1, 1]) {
+        this._addBox(0, 1.3, zSign * 19, 8.5, 2.6, 1.6, { color: 0x64748b, studColor: 0x78879c });
+        this._addBox(-6.5, 1.1, zSign * 11, 2.8, 2.2, 2.8, { color: 0xd97706, studColor: 0xf59e0b });
+        this._addBox(6.5, 1.1, zSign * 11, 2.8, 2.2, 2.8, { color: 0xd97706, studColor: 0xf59e0b });
+      }
+
+      this.waypoints = [
+        new THREE.Vector3(0, towerY, 0),
+        new THREE.Vector3(-16, contH, -14),
+        new THREE.Vector3(16, contH, 14),
+        new THREE.Vector3(-18, 0, 0),
+        new THREE.Vector3(18, 0, 0),
+        new THREE.Vector3(0, 0, 14),
+        new THREE.Vector3(0, 0, -14),
+      ];
     }
 
-    // Colorful Poolside Cabanas & Inflatable Floatie Cover Blocks
-    for (const zSign of [-1, 1]) {
-      this._addBox(0, 1.4, zSign * 22, 8.0, 2.8, 1.5, { color: 0x10b981, studColor: 0x34d399 });
-      this._addBox(-10, 1.1, zSign * 14, 3.2, 2.2, 3.2, { color: 0xfb7185, studColor: 0xfda4af });
-      this._addBox(10, 1.1, zSign * 14, 3.2, 2.2, 3.2, { color: 0x38bdf8, studColor: 0x7dd3fc });
-      this._addBox(-19, 1.6, zSign * 24, 5.5, 3.2, 3.2, { color: 0xf59e0b, studColor: 0xfbbf24 });
-      this._addBox(19, 1.6, zSign * 24, 5.5, 3.2, 3.2, { color: 0xf59e0b, studColor: 0xfbbf24 });
+    // =========================================================
+    // MAP 6: SPLASH PARK
+    // =========================================================
+    _buildSplashMap() {
+      this._setLighting({
+        skyHex: 0x56d8ff,
+        fogHex: 0x7ce8ff,
+        hemiSky: 0xe0fbff,
+        hemiGround: 0x38bdf8,
+        hemiInt: 1.05,
+        sunHex: 0xfffbe6,
+        sunInt: 1.38,
+        sunPos: [30, 50, 16],
+        clouds: true,
+      });
+
+      this._addBox(0, -0.5, 0, 56, 1, 72, {
+        color: 0xf3e5ab,
+        studColor: 0xfaefc0,
+        solid: false,
+        shootable: true,
+        castShadow: false,
+      });
+
+      this._addBox(0, 0.03, 0, 30, 0.06, 36, {
+        color: 0x06b6d4,
+        emissive: 0x22d3ee,
+        emissiveIntensity: 0.35,
+        solid: false,
+        castShadow: false,
+      });
+      this._addBox(-5, 0.05, 0, 0.25, 0.05, 34, { color: 0xffffff, solid: false, castShadow: false });
+      this._addBox(5, 0.05, 0, 0.25, 0.05, 34, { color: 0xffffff, solid: false, castShadow: false });
+
+      this._addPerimeter(10, 0x0ea5e9, 0x38bdf8, 0x34d399, 0xfb7185, 0xfde047);
+
+      const islandY = 1.4;
+      this._addBox(0, islandY / 2, 0, 10, islandY, 10, { color: 0xfbbf24, studColor: 0xfcd34d });
+      this._addBox(0, islandY + 2.2, 0, 0.6, 4.4, 0.6, { color: 0xffffff });
+      this._addBox(0, islandY + 4.5, 0, 7.5, 0.5, 7.5, { color: 0xf43f5e, studColor: 0xfb7185 });
+      this._addRamp(0, 7.4, 4.5, 4.8, 0, islandY, 'z', -1, { baseHex: '#34d399', studHex: '#6ee7b7', trimColor: 0xfde047 });
+      this._addRamp(0, -7.4, 4.5, 4.8, 0, islandY, 'z', 1, { baseHex: '#34d399', studHex: '#6ee7b7', trimColor: 0xfde047 });
+
+      // Water Geyser Jump Pads!
+      this._addJumpPad(-11, 0, 0, 1.9, 13.8, 0x22d3ee);
+      this._addJumpPad(11, 0, 0, 1.9, 13.8, 0x22d3ee);
+
+      const slideY = 4.2;
+      for (const xSign of [-1, 1]) {
+        const col = xSign > 0 ? 0xf43f5e : 0x8b5cf6;
+        const stud = xSign > 0 ? 0xfb7185 : 0xa78bfa;
+        this._addBox(xSign * 21, slideY / 2, 0, 8, slideY, 10, { color: col, studColor: stud });
+        this._addRamp(xSign * 21, 10.5, 5.2, 11.0, 0, slideY, 'z', -1, {
+          baseHex: xSign > 0 ? '#fb7185' : '#a78bfa',
+          studHex: '#ffffff',
+          trimColor: 0x38bdf8,
+        });
+        this._addRamp(xSign * 21, -10.5, 5.2, 11.0, 0, slideY, 'z', 1, {
+          baseHex: xSign > 0 ? '#fb7185' : '#a78bfa',
+          studHex: '#ffffff',
+          trimColor: 0x38bdf8,
+        });
+      }
+
+      for (const zSign of [-1, 1]) {
+        this._addBox(0, 1.4, zSign * 22, 8.0, 2.8, 1.5, { color: 0x10b981, studColor: 0x34d399 });
+        this._addBox(-10, 1.1, zSign * 14, 3.2, 2.2, 3.2, { color: 0xfb7185, studColor: 0xfda4af });
+        this._addBox(10, 1.1, zSign * 14, 3.2, 2.2, 3.2, { color: 0x38bdf8, studColor: 0x7dd3fc });
+        this._addBox(-19, 1.6, zSign * 24, 5.5, 3.2, 3.2, { color: 0xf59e0b, studColor: 0xfbbf24 });
+        this._addBox(19, 1.6, zSign * 24, 5.5, 3.2, 3.2, { color: 0xf59e0b, studColor: 0xfbbf24 });
+      }
+
+      this.waypoints = [
+        new THREE.Vector3(0, islandY, 0),
+        new THREE.Vector3(-21, slideY, 0),
+        new THREE.Vector3(21, slideY, 0),
+        new THREE.Vector3(-11, 0, 0),
+        new THREE.Vector3(11, 0, 0),
+        new THREE.Vector3(-10, 0, -20),
+        new THREE.Vector3(10, 0, -20),
+        new THREE.Vector3(-10, 0, 20),
+        new THREE.Vector3(10, 0, 20),
+      ];
     }
 
-    this.waypoints = [
-      new THREE.Vector3(0, islandY, 0),
-      new THREE.Vector3(-21, slideY, 0),
-      new THREE.Vector3(21, slideY, 0),
-      new THREE.Vector3(-12, 0, 0),
-      new THREE.Vector3(12, 0, 0),
-      new THREE.Vector3(-10, 0, -20),
-      new THREE.Vector3(10, 0, -20),
-      new THREE.Vector3(-10, 0, 20),
-      new THREE.Vector3(10, 0, 20),
-    ];
-  }
+    checkJumpPad(pos) {
+      for (const pad of this.jumpPads) {
+        const d = Math.hypot(pos.x - pad.x, pos.z - pad.z);
+        if (d < pad.radius && Math.abs(pos.y - pad.y) < 0.75) {
+          return pad.launchVel;
+        }
+      }
+      return 0;
+    }
 
-  getSpawns() {
-    return {
-      player: this.spawns.player.clone(),
-      bot: this.spawns.bot.clone(),
-    };
-  }
+    getSpawns() {
+      return {
+        player: this.spawns.player.clone(),
+        bot: this.spawns.bot.clone(),
+      };
+    }
 
-  getWaypoints() {
-    return this.waypoints;
-  }
+    getWaypoints() {
+      return this.waypoints;
+    }
 
-  getFloorHeight(x, z, feetY, radius = 0.45) {
-    let highest = 0;
+    getFloorHeight(x, z, feetY, radius = 0.45) {
+      let highest = 0;
 
-    for (const c of this.colliders) {
-      if (
-        x + radius > c.minX &&
-        x - radius < c.maxX &&
-        z + radius > c.minZ &&
-        z - radius < c.maxZ
-      ) {
-        if (c.maxY <= feetY + 0.72 && c.maxY > highest) {
-          highest = c.maxY;
+      for (const c of this.colliders) {
+        if (
+          x + radius > c.minX &&
+          x - radius < c.maxX &&
+          z + radius > c.minZ &&
+          z - radius < c.maxZ
+        ) {
+          if (c.maxY <= feetY + 0.72 && c.maxY > highest) {
+            highest = c.maxY;
+          }
+        }
+      }
+
+      for (const r of this.ramps) {
+        if (
+          x + radius * 0.6 > r.minX &&
+          x - radius * 0.6 < r.maxX &&
+          z + radius * 0.6 > r.minZ &&
+          z - radius * 0.6 < r.maxZ
+        ) {
+          let t = 0;
+          if (r.axis === 'x') t = (x - r.minX) / (r.maxX - r.minX);
+          else t = (z - r.minZ) / (r.maxZ - r.minZ);
+          t = Math.max(0, Math.min(1, t));
+          if (r.dir < 0) t = 1 - t;
+          const rampY = r.yStart + t * (r.yEnd - r.yStart);
+          if (rampY <= feetY + 0.95 && rampY > highest) {
+            highest = rampY;
+          }
+        }
+      }
+
+      return highest;
+    }
+
+    resolveHorizontal(pos, radius = 0.48, height = 1.8) {
+      pos.x = Math.max(this.bounds.minX + radius, Math.min(this.bounds.maxX - radius, pos.x));
+      pos.z = Math.max(this.bounds.minZ + radius, Math.min(this.bounds.maxZ - radius, pos.z));
+
+      for (const c of this.colliders) {
+        if (c.maxY <= pos.y + 0.48 || c.minY >= pos.y + height - 0.05) continue;
+
+        if (
+          pos.x + radius > c.minX &&
+          pos.x - radius < c.maxX &&
+          pos.z + radius > c.minZ &&
+          pos.z - radius < c.maxZ
+        ) {
+          const pushLeft = pos.x + radius - c.minX;
+          const pushRight = c.maxX - (pos.x - radius);
+          const pushFront = pos.z + radius - c.minZ;
+          const pushBack = c.maxZ - (pos.z - radius);
+
+          const minPush = Math.min(pushLeft, pushRight, pushFront, pushBack);
+          if (minPush === pushLeft) pos.x -= pushLeft;
+          else if (minPush === pushRight) pos.x += pushRight;
+          else if (minPush === pushFront) pos.z -= pushFront;
+          else pos.z += pushBack;
         }
       }
     }
 
-    for (const r of this.ramps) {
-      if (
-        x + radius * 0.6 > r.minX &&
-        x - radius * 0.6 < r.maxX &&
-        z + radius * 0.6 > r.minZ &&
-        z - radius * 0.6 < r.maxZ
-      ) {
-        let t = 0;
-        if (r.axis === 'x') t = (x - r.minX) / (r.maxX - r.minX);
-        else t = (z - r.minZ) / (r.maxZ - r.minZ);
-        t = Math.max(0, Math.min(1, t));
-        if (r.dir < 0) t = 1 - t;
-        const rampY = r.yStart + t * (r.yEnd - r.yStart);
-        if (rampY <= feetY + 0.95 && rampY > highest) {
-          highest = rampY;
+    checkCeiling(pos, radius = 0.45, height = 1.8) {
+      let lowestCeil = Infinity;
+      for (const c of this.colliders) {
+        if (
+          pos.x + radius > c.minX &&
+          pos.x - radius < c.maxX &&
+          pos.z + radius > c.minZ &&
+          pos.z - radius < c.maxZ
+        ) {
+          if (c.minY >= pos.y + height * 0.5 && c.minY < lowestCeil) {
+            lowestCeil = c.minY;
+          }
         }
       }
+      return lowestCeil;
     }
 
-    return highest;
-  }
+    isPointInsideSolid(x, y, z, radius = 0.15) {
+      if (y < radius) return { hit: true, normal: new THREE.Vector3(0, 1, 0) };
+      if (x < this.bounds.minX + radius) return { hit: true, normal: new THREE.Vector3(1, 0, 0) };
+      if (x > this.bounds.maxX - radius) return { hit: true, normal: new THREE.Vector3(-1, 0, 0) };
+      if (z < this.bounds.minZ + radius) return { hit: true, normal: new THREE.Vector3(0, 0, 1) };
+      if (z > this.bounds.maxZ - radius) return { hit: true, normal: new THREE.Vector3(0, 0, -1) };
 
-  resolveHorizontal(pos, radius = 0.48, height = 1.8) {
-    pos.x = Math.max(this.bounds.minX + radius, Math.min(this.bounds.maxX - radius, pos.x));
-    pos.z = Math.max(this.bounds.minZ + radius, Math.min(this.bounds.maxZ - radius, pos.z));
-
-    for (const c of this.colliders) {
-      if (c.maxY <= pos.y + 0.48 || c.minY >= pos.y + height - 0.05) continue;
-
-      if (
-        pos.x + radius > c.minX &&
-        pos.x - radius < c.maxX &&
-        pos.z + radius > c.minZ &&
-        pos.z - radius < c.maxZ
-      ) {
-        const pushLeft = pos.x + radius - c.minX;
-        const pushRight = c.maxX - (pos.x - radius);
-        const pushFront = pos.z + radius - c.minZ;
-        const pushBack = c.maxZ - (pos.z - radius);
-
-        const minPush = Math.min(pushLeft, pushRight, pushFront, pushBack);
-        if (minPush === pushLeft) pos.x -= pushLeft;
-        else if (minPush === pushRight) pos.x += pushRight;
-        else if (minPush === pushFront) pos.z -= pushFront;
-        else pos.z += pushBack;
-      }
-    }
-  }
-
-  checkCeiling(pos, radius = 0.45, height = 1.8) {
-    let lowestCeil = Infinity;
-    for (const c of this.colliders) {
-      if (
-        pos.x + radius > c.minX &&
-        pos.x - radius < c.maxX &&
-        pos.z + radius > c.minZ &&
-        pos.z - radius < c.maxZ
-      ) {
-        if (c.minY >= pos.y + height * 0.5 && c.minY < lowestCeil) {
-          lowestCeil = c.minY;
+      for (const c of this.colliders) {
+        if (
+          x + radius > c.minX &&
+          x - radius < c.maxX &&
+          y + radius > c.minY &&
+          y - radius < c.maxY &&
+          z + radius > c.minZ &&
+          z - radius < c.maxZ
+        ) {
+          const dx1 = Math.abs(x - c.minX);
+          const dx2 = Math.abs(c.maxX - x);
+          const dy1 = Math.abs(y - c.minY);
+          const dy2 = Math.abs(c.maxY - y);
+          const dz1 = Math.abs(z - c.minZ);
+          const dz2 = Math.abs(c.maxZ - z);
+          const m = Math.min(dx1, dx2, dy1, dy2, dz1, dz2);
+          const normal = new THREE.Vector3(0, 1, 0);
+          if (m === dx1) normal.set(-1, 0, 0);
+          else if (m === dx2) normal.set(1, 0, 0);
+          else if (m === dy1) normal.set(0, -1, 0);
+          else if (m === dy2) normal.set(0, 1, 0);
+          else if (m === dz1) normal.set(0, 0, -1);
+          else normal.set(0, 0, 1);
+          return { hit: true, normal };
         }
       }
+      return { hit: false, normal: null };
     }
-    return lowestCeil;
   }
-
-  isPointInsideSolid(x, y, z, radius = 0.15) {
-    if (y < radius) return { hit: true, normal: new THREE.Vector3(0, 1, 0) };
-    if (x < this.bounds.minX + radius) return { hit: true, normal: new THREE.Vector3(1, 0, 0) };
-    if (x > this.bounds.maxX - radius) return { hit: true, normal: new THREE.Vector3(-1, 0, 0) };
-    if (z < this.bounds.minZ + radius) return { hit: true, normal: new THREE.Vector3(0, 0, 1) };
-    if (z > this.bounds.maxZ - radius) return { hit: true, normal: new THREE.Vector3(0, 0, -1) };
-
-    for (const c of this.colliders) {
-      if (
-        x + radius > c.minX &&
-        x - radius < c.maxX &&
-        y + radius > c.minY &&
-        y - radius < c.maxY &&
-        z + radius > c.minZ &&
-        z - radius < c.maxZ
-      ) {
-        const dx1 = Math.abs(x - c.minX);
-        const dx2 = Math.abs(c.maxX - x);
-        const dy1 = Math.abs(y - c.minY);
-        const dy2 = Math.abs(c.maxY - y);
-        const dz1 = Math.abs(z - c.minZ);
-        const dz2 = Math.abs(c.maxZ - z);
-        const m = Math.min(dx1, dx2, dy1, dy2, dz1, dz2);
-        const normal = new THREE.Vector3(0, 1, 0);
-        if (m === dx1) normal.set(-1, 0, 0);
-        else if (m === dx2) normal.set(1, 0, 0);
-        else if (m === dy1) normal.set(0, -1, 0);
-        else if (m === dy2) normal.set(0, 1, 0);
-        else if (m === dz1) normal.set(0, 0, -1);
-        else normal.set(0, 0, 1);
-        return { hit: true, normal };
-      }
-    }
-    return { hit: false, normal: null };
-  }
-}
 
   Rivals.MAPS = MAPS;
   Rivals.Arena = Arena;
