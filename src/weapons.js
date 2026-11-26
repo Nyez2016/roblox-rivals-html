@@ -563,6 +563,8 @@
       const reticle = box(0.02, 0.02, 0.02, accent, 'accent', 0, 0.2, accent);
       reticle.position.set(0, 0.1, 0.05);
       group.add(body, barrel, stripe, mag, sight, reticle);
+      group.userData.magPart = mag;
+      group.userData.magHome = mag.position.clone();
       group.userData.muzzle = new THREE.Vector3(0, 0.02, -0.58);
     } else if (weaponId === 'sniper') {
       const body = box(0.1, 0.13, 0.66, 0x2a3140, 'body', 0.35, 0.45);
@@ -570,13 +572,17 @@
       barrel.position.set(0, 0.025, -0.55);
       const accent = box(0.106, 0.03, 0.5, 0xffd447, 'accent', 0.2, 0.3, 0xffd447);
       accent.position.set(0, 0.02, -0.05);
+      const mag = box(0.065, 0.15, 0.11, 0x161b26, 'secondary');
+      mag.position.set(0, -0.12, -0.04);
       const scope = cyl(0.04, 0.045, 0.34, 12, 0x111622, 'secondary', 0.6, 0.3);
       scope.rotation.x = Math.PI / 2;
       scope.position.set(0, 0.125, -0.04);
       const lens = cyl(0.032, 0.032, 0.02, 12, 0x2de2ff, 'accent', 0.2, 0.2, 0x2de2ff);
       lens.rotation.x = Math.PI / 2;
       lens.position.set(0, 0.125, -0.21);
-      group.add(body, barrel, accent, scope, lens);
+      group.add(body, barrel, accent, mag, scope, lens);
+      group.userData.magPart = mag;
+      group.userData.magHome = mag.position.clone();
       group.userData.muzzle = new THREE.Vector3(0, 0.025, -0.88);
     } else if (weaponId === 'crossbow') {
       // Zhuge Repeating Crossbow: carved wood/bronze stock, top bolt magazine, curved limbs!
@@ -678,6 +684,7 @@
       grip.position.set(0, -0.11, 0.1);
       grip.rotation.x = -0.35;
       group.add(frame, barrel, cylinder, grip);
+      group.userData.cylinderPart = cylinder;
       group.userData.muzzle = new THREE.Vector3(0, 0.025, -0.38);
     } else if (weaponId === 'kunai') {
       // Fan of 3 sleek assassin throwing knives!
@@ -704,6 +711,8 @@
       const mag = box(0.05, 0.24, 0.065, 0x161a24, 'secondary');
       mag.position.set(0, -0.17, 0.03);
       group.add(body, accent, barrel, mag);
+      group.userData.magPart = mag;
+      group.userData.magHome = mag.position.clone();
       group.userData.muzzle = new THREE.Vector3(0, 0.015, -0.3);
     } else if (weaponId === 'handgun') {
       const slide = box(0.068, 0.075, 0.34, 0x2a3347, 'body', 0.55, 0.32);
@@ -716,6 +725,8 @@
       grip.position.set(0, -0.1, 0.07);
       grip.rotation.x = -0.28;
       group.add(slide, stripe, frame, grip);
+      group.userData.magPart = grip;
+      group.userData.magHome = grip.position.clone();
       group.userData.muzzle = new THREE.Vector3(0, 0.03, -0.26);
     } else if (weaponId === 'shorty') {
       const body = box(0.11, 0.1, 0.24, 0x343d4f, 'body', 0.5, 0.38);
@@ -886,10 +897,72 @@
     lCuff.rotation.y = 0.25;
 
     arms.add(rForearm, rCuff, rHand, lHand, lCuff);
+    arms.userData.leftGroup = [lHand, lCuff];
+    arms.userData.leftHomes = [lHand.position.clone(), lCuff.position.clone()];
     return arms;
+  }
+
+  function createPlayerAvatar() {
+    // 3rd-person blocky Roblox Blue Team player avatar shown during Emotes!
+    const root = new THREE.Group();
+    const bodyGroup = new THREE.Group();
+    root.add(bodyGroup);
+
+    const matSkin = new THREE.MeshStandardMaterial({ color: 0xf7cf86, roughness: 0.55 });
+    const matTorso = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.42, metalness: 0.25 });
+    const matLegs = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.65 });
+    const matAccent = new THREE.MeshStandardMaterial({
+      color: 0x2de2ff,
+      emissive: 0x2de2ff,
+      emissiveIntensity: 0.9,
+    });
+
+    const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.72, 0.34), matLegs);
+    leftLeg.position.set(-0.19, 0.36, 0);
+    leftLeg.castShadow = true;
+
+    const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.72, 0.34), matLegs);
+    rightLeg.position.set(0.19, 0.36, 0);
+    rightLeg.castShadow = true;
+
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.76, 0.4), matTorso);
+    torso.position.set(0, 1.1, 0);
+    torso.castShadow = true;
+
+    const chestStripe = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.14, 0.42), matAccent);
+    chestStripe.position.set(0, 1.18, 0);
+
+    const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.72, 0.3), matSkin);
+    leftArm.position.set(-0.54, 1.12, 0);
+    leftArm.castShadow = true;
+
+    const rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.72, 0.3), matSkin);
+    rightArm.position.set(0.54, 1.12, 0);
+    rightArm.castShadow = true;
+
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.52, 0.54), matSkin);
+    head.position.set(0, 1.76, 0);
+    head.castShadow = true;
+
+    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.14, 0.08), matAccent);
+    visor.position.set(0, 1.8, 0.27);
+
+    // Optional glowing blade/prop held during Blade Flex emote
+    const flexBlade = new THREE.Mesh(
+      new THREE.BoxGeometry(0.06, 1.1, 0.1),
+      new THREE.MeshStandardMaterial({ color: 0x2de2ff, emissive: 0x2de2ff, emissiveIntensity: 1.0 })
+    );
+    flexBlade.position.set(0.54, 1.85, 0.18);
+    flexBlade.visible = false;
+
+    bodyGroup.add(leftLeg, rightLeg, torso, chestStripe, leftArm, rightArm, head, visor, flexBlade);
+    root.userData = { bodyGroup, leftLeg, rightLeg, torso, leftArm, rightArm, head, visor, flexBlade };
+    root.visible = false;
+    return root;
   }
 
   Rivals.WEAPONS = WEAPONS;
   Rivals.createWeaponMesh = createWeaponMesh;
   Rivals.createFirstPersonArms = createFirstPersonArms;
+  Rivals.createPlayerAvatar = createPlayerAvatar;
 })(window);

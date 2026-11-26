@@ -376,6 +376,55 @@ html, body {
   margin-top: 4px;
 }
 
+#reload-bar-wrap {
+  position: absolute;
+  top: calc(50% + 28px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 96px;
+  height: 5px;
+  background: rgba(10, 14, 24, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+#reload-bar-fill {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, var(--cyan), var(--gold));
+}
+
+#emote-bar {
+  position: absolute;
+  bottom: 84px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  background: rgba(12, 18, 32, 0.9);
+  border: 1px solid var(--cyan);
+  border-radius: 12px;
+  padding: 8px 14px;
+  box-shadow: 0 0 24px rgba(45, 226, 255, 0.28);
+  backdrop-filter: blur(8px);
+}
+
+.emote-chip {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.emote-chip b {
+  background: rgba(45, 226, 255, 0.22);
+  color: var(--cyan);
+  border-radius: 5px;
+  padding: 2px 6px;
+  margin-right: 4px;
+}
+
 /* Bottom Left Vitals */
 #vitals-panel {
   position: absolute;

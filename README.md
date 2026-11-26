@@ -38,6 +38,8 @@ Play live on GitHub Pages: **[https://nyez2016.github.io/roblox-rivals-html/](ht
 | `Left Click` | Shoot / Melee Slash / Throw Utility |
 | `Right Click` | Aim Down Sights (ADS) / Melee Lunge / Backstab |
 | `F` | Toggle Auto Shoot |
+| `G` or `I` | Weapon Inspect Flourish |
+| `B` / `Z` / `X` / `V` | Emote Picker / Quick Emotes (Griddy, Take the L, Backflip, Blade Flex, GG Wave) |
 | `Space` | Jump |
 | `Shift` or `C` | Slide Boost |
 | `E` or `Q` | Quick Dash |

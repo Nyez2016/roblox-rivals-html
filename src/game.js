@@ -6,6 +6,7 @@
     WEAPONS,
     createWeaponMesh,
     createFirstPersonArms,
+    createPlayerAvatar,
     WEAPON_SKINS,
     RIVAL_SKINS,
     KILL_EFFECTS,
@@ -87,6 +88,8 @@
       this.fpArms = createFirstPersonArms();
       this.fpArms.visible = false;
       this.viewmodelRoot.add(this.fpArms);
+      this.playerAvatar = createPlayerAvatar();
+      this.scene.add(this.playerAvatar);
       this.muzzleFlash = this._createMuzzleFlash();
       this.viewmodelRoot.add(this.muzzleFlash);
       this.muzzleLight = new THREE.PointLight(0xffe082, 0, 7.5);
@@ -132,6 +135,15 @@
       this.burstDelay = 0;
       this.isReloading = false;
       this.reloadTimer = 0;
+      this.reloadDuration = 1.4;
+      this.reloadStage = 0;
+      this.inspectTimer = 0;
+      this.inspectDuration = 2.0;
+      this.activeEmote = null;
+      this.emoteTime = 0;
+      this.emoteWheelOpen = false;
+      this.roundEndTitle = '';
+      this.roundEndSub = '';
       this.isMouseDown = false;
       this.isAds = false;
 
@@ -278,6 +290,9 @@
         ammoCurrent: document.getElementById('ammo-current'),
         ammoReserve: document.getElementById('ammo-reserve'),
         reloadInd: document.getElementById('reload-indicator'),
+        reloadBarWrap: document.getElementById('reload-bar-wrap'),
+        reloadBarFill: document.getElementById('reload-bar-fill'),
+        emoteBar: document.getElementById('emote-bar'),
         crosshair: document.getElementById('crosshair'),
         hitmarker: document.getElementById('hitmarker'),
         scopeOverlay: document.getElementById('scope-overlay'),
@@ -525,6 +540,32 @@
         this.keys[code] = true;
 
         if (this.isPaused || !this.matchActive) return;
+
+        // Emote Picker bar (press B to open/close, then 1-5 to pick!)
+        if (code === 'KeyB') {
+          this.emoteWheelOpen = !this.emoteWheelOpen;
+          if (this.ui.emoteBar) this.ui.emoteBar.classList.toggle('hidden', !this.emoteWheelOpen);
+          return;
+        }
+        if (this.emoteWheelOpen) {
+          const mapKeys = { Digit1: 'griddy', Digit2: 'takeL', Digit3: 'backflip', Digit4: 'swordspin', Digit5: 'wave' };
+          if (mapKeys[code]) {
+            this._startEmote(mapKeys[code]);
+            return;
+          }
+        }
+
+        // Instant Rivals Emote hotkeys (Z / X / V) & Weapon Inspect (G / I)!
+        if (code === 'KeyZ') { this._startEmote('griddy'); return; }
+        if (code === 'KeyX') { this._startEmote('takeL'); return; }
+        if (code === 'KeyV') { this._startEmote('backflip'); return; }
+        if (code === 'KeyG' || code === 'KeyI') { this._startInspect(); return; }
+
+        // Moving cancels an active emote cleanly
+        if (this.activeEmote && ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space'].includes(code)) {
+          this._stopEmote();
+        }
+
         if (code === 'Digit1') this.switchWeapon(0);
         if (code === 'Digit2') this.switchWeapon(1);
         if (code === 'Digit3') this.switchWeapon(2);
@@ -561,10 +602,12 @@
         if (document.pointerLockElement !== this.renderer.domElement) {
           this._requestPointerLock();
         }
+        if (this.activeEmote) this._stopEmote();
         if (e.button === 0) {
           this.isMouseDown = true;
           this._tryFire(true);
         } else if (e.button === 2) {
+          this.inspectTimer = 0;
           if (this._currentWeapon().slotType === 'melee') {
             this._tryMeleeLunge();
           } else {
@@ -605,6 +648,8 @@
       this.isMouseDown = false;
       this.isAds = false;
       if (document.pointerLockElement) document.exitPointerLock();
+      this._stopEmote();
+      this._resetReloadParts();
       this._clearRoundEntities();
       this._clearExtraEnemies();
       this.ui.hud.classList.add('hidden');
@@ -971,6 +1016,8 @@
       this.playerRespawnTimer = 0;
       this.isReloading = false;
       this.isAds = false;
+      this.inspectTimer = 0;
+      this._stopEmote();
       this.burstQueue = 0;
       this.blindFlash = 0;
       this.ui.flashOverlay.style.opacity = '0';
@@ -1063,13 +1110,72 @@
       return weaponDef.tracerColor;
     }
 
+    _canPlayerAct() {
+      return (this.roundState === 'playing' || this.roundState === 'round_over') && this.player.alive;
+    }
+
+    _startInspect() {
+      if (!this._canPlayerAct() || this.isReloading || this.isAds) return;
+      if (this.activeEmote) this._stopEmote();
+      this.inspectTimer = this.inspectDuration;
+      this.sound.playInspect(this._currentWeapon().slotType === 'melee');
+    }
+
+    _startEmote(emoteId) {
+      if (!this._canPlayerAct()) return;
+      this.activeEmote = emoteId;
+      this.emoteTime = 0;
+      this.inspectTimer = 0;
+      this.isAds = false;
+      this.emoteWheelOpen = false;
+      if (this.ui.emoteBar) this.ui.emoteBar.classList.add('hidden');
+      if (this.playerAvatar) {
+        this.playerAvatar.visible = true;
+        this.playerAvatar.userData.flexBlade.visible = emoteId === 'swordspin';
+      }
+      this.sound.playEmote(emoteId);
+      const names = { griddy: 'GRIDDY', takeL: 'TAKE THE L', backflip: 'BACKFLIP', swordspin: 'BLADE FLEX', wave: 'GG WAVE' };
+      this._pushKillFeed(`EMOTE: ${names[emoteId] || emoteId.toUpperCase()}`);
+    }
+
+    _stopEmote() {
+      this.activeEmote = null;
+      this.emoteTime = 0;
+      this.emoteWheelOpen = false;
+      if (this.ui.emoteBar) this.ui.emoteBar.classList.add('hidden');
+      if (this.playerAvatar) {
+        this.playerAvatar.visible = false;
+        const u = this.playerAvatar.userData;
+        if (u && u.bodyGroup) {
+          u.bodyGroup.position.set(0, 0, 0);
+          u.bodyGroup.rotation.set(0, 0, 0);
+        }
+      }
+    }
+
+    _resetReloadParts() {
+      if (this.weaponMesh && this.weaponMesh.userData.magPart && this.weaponMesh.userData.magHome) {
+        this.weaponMesh.userData.magPart.position.copy(this.weaponMesh.userData.magHome);
+        this.weaponMesh.userData.magPart.rotation.z = 0;
+      }
+      if (this.fpArms && this.fpArms.userData.leftGroup) {
+        const lg = this.fpArms.userData.leftGroup;
+        const homes = this.fpArms.userData.leftHomes;
+        for (let i = 0; i < lg.length; i++) lg[i].position.copy(homes[i]);
+      }
+      if (this.ui.reloadBarWrap) this.ui.reloadBarWrap.classList.add('hidden');
+    }
+
     switchWeapon(index, force = false) {
       if (!this.slots[index]) return;
       if (!force && index === this.activeSlot) return;
 
+      this._resetReloadParts();
       this.activeSlot = index;
       this.isReloading = false;
       this.isAds = false;
+      this.inspectTimer = 0;
+      this._stopEmote();
       this.burstQueue = 0;
       this.fireCooldown = 0.14;
 
@@ -1090,16 +1196,25 @@
       if (!slot || this.isReloading) return;
       if (slot.def.reloadTime <= 0 || slot.ammo >= slot.def.magSize || slot.reserve <= 0) return;
 
+      if (this.activeEmote) this._stopEmote();
+      this.inspectTimer = 0;
       this.isReloading = true;
       this.isAds = false;
+      this.reloadDuration = slot.def.reloadTime;
       this.reloadTimer = slot.def.reloadTime;
+      this.reloadStage = 0;
       this.sound.playReload();
+
+      const dropPos = this.camera.position.clone().add(new THREE.Vector3(0, -0.35, 0));
+      this._spawnParticles(dropPos, 0x1e293b, 2, 2.0);
+      if (this.ui.reloadBarWrap) this.ui.reloadBarWrap.classList.remove('hidden');
       this._updateHUD();
     }
 
     _trySlide() {
-      if (this.roundState !== 'playing' || !this.player.alive) return;
+      if (!this._canPlayerAct()) return;
       if (this.player.slideCooldown > 0 || !this.player.onGround) return;
+      if (this.activeEmote) this._stopEmote();
 
       const dir = this._getMoveInputDir();
       if (dir.lengthSq() < 0.01) {
@@ -1115,8 +1230,9 @@
     }
 
     _tryDash() {
-      if (this.roundState !== 'playing' || !this.player.alive) return;
+      if (!this._canPlayerAct()) return;
       if (this.player.dashCooldown > 0) return;
+      if (this.activeEmote) this._stopEmote();
 
       const dir = this._getMoveInputDir();
       if (dir.lengthSq() < 0.01) {
@@ -1133,7 +1249,7 @@
     }
 
     _tryMeleeLunge() {
-      if (this.roundState !== 'playing' || !this.player.alive) return;
+      if (!this._canPlayerAct()) return;
       if (this.player.lungeCooldown > 0) return;
 
       const w = this._currentWeapon();
@@ -1141,7 +1257,6 @@
       this.camera.getWorldDirection(forward);
 
       if (w.scytheJump) {
-        // High-flying Scythe Jump: look up + RMB to soar straight onto cranes & rooftops!
         this.player.vel.x = forward.x * (w.lungePower || 22.0);
         this.player.vel.z = forward.z * (w.lungePower || 22.0);
         this.player.vel.y = Math.max(w.lungeLift || 13.5, forward.y * 19.5 + 9.2);
@@ -1170,8 +1285,9 @@
     }
 
     _tryFire(isInitialClick) {
-      if (this.roundState !== 'playing' || !this.player.alive) return;
+      if (!this._canPlayerAct()) return;
       if (this.isReloading || this.fireCooldown > 0) return;
+      this.inspectTimer = 0;
 
       const slot = this._currentSlot();
       const w = slot.def;
@@ -1704,16 +1820,16 @@
     _endRound(playerWon, subtitle) {
       if (this.roundState !== 'playing') return;
       this.roundState = 'round_over';
-      this.stateTimer = 2.6;
-      this.isAds = false;
-      this.isMouseDown = false;
+      this.stateTimer = 3.0;
+      this.roundEndTitle = playerWon ? 'ROUND WON' : 'ROUND LOST';
+      this.roundEndSub = subtitle;
 
       if (playerWon) this.playerScore += 1;
       else this.botScore += 1;
 
       this.sound.playRoundEnd(playerWon);
       this._renderScorePips();
-      this._showBanner(playerWon ? 'ROUND WON' : 'ROUND LOST', subtitle, !playerWon);
+      this._showBanner(this.roundEndTitle, `${subtitle} · RESETTING IN 3...`, !playerWon);
     }
 
     _finishMatch() {
@@ -1899,7 +2015,7 @@
 
       const gravScale = this._getActiveGravityScale();
       const gravMode = GRAVITY_MODES[this.loadoutChoice.gravity] || GRAVITY_MODES.auto;
-      const canMove = this.roundState === 'playing' && p.alive;
+      const canMove = this._canPlayerAct() && !this.activeEmote;
       const w = this._currentWeapon();
       const modeSpeedBonus = this.loadoutChoice.mode === 'assassin' ? 1.12 : 1.0;
       const baseSpeed = 9.4 * w.moveMult * modeSpeedBonus * (this.isAds ? 0.68 : 1.0);
@@ -2039,8 +2155,72 @@
       this.recoilPitch = THREE.MathUtils.lerp(this.recoilPitch, 0, Math.min(1, dt * 12));
       this.recoilKick = THREE.MathUtils.lerp(this.recoilKick, 0, Math.min(1, dt * 14));
 
-      if (!p.alive && this.loadoutChoice.mode === 'twovtwo' && this._getAliveAllyCount() > 0) {
-        // Spectate living Blue Ally in 2v2!
+      if (this.activeEmote && p.alive && this.playerAvatar) {
+        // 3rd-Person Rivals Emote Animation & Orbit Camera!
+        this.emoteTime += dt;
+        const t = this.emoteTime;
+        const u = this.playerAvatar.userData;
+        this.playerAvatar.position.copy(p.pos);
+        this.playerAvatar.rotation.set(0, p.yaw + Math.PI, 0);
+
+        // Reset limbs before applying emote pose
+        u.bodyGroup.position.set(0, 0, 0);
+        u.bodyGroup.rotation.set(0, 0, 0);
+        u.leftLeg.rotation.set(0, 0, 0);
+        u.rightLeg.rotation.set(0, 0, 0);
+        u.leftArm.rotation.set(0, 0, 0);
+        u.rightArm.rotation.set(0, 0, 0);
+        u.head.rotation.set(0, 0, 0);
+
+        if (this.activeEmote === 'griddy') {
+          const beat = t * 9.5;
+          u.bodyGroup.position.y = Math.abs(Math.sin(beat)) * 0.24;
+          u.bodyGroup.rotation.z = Math.sin(beat) * 0.14;
+          u.leftLeg.rotation.x = Math.sin(beat) * 0.75;
+          u.rightLeg.rotation.x = -Math.sin(beat) * 0.75;
+          u.leftArm.rotation.x = -Math.sin(beat) * 1.15 - 0.5;
+          u.rightArm.rotation.x = Math.sin(beat) * 1.15 - 0.5;
+          u.head.rotation.y = Math.sin(beat * 0.5) * 0.35;
+        } else if (this.activeEmote === 'takeL') {
+          const hop = t * 10.5;
+          u.bodyGroup.position.y = Math.abs(Math.sin(hop)) * 0.32;
+          u.bodyGroup.rotation.z = Math.sin(hop) * 0.12;
+          u.leftLeg.rotation.x = Math.max(0, Math.sin(hop)) * 0.95;
+          u.rightLeg.rotation.x = Math.max(0, -Math.sin(hop)) * 0.95;
+          u.rightArm.rotation.set(-2.55, 0, -0.3);
+          u.leftArm.rotation.set(0.4, 0, 0.75);
+        } else if (this.activeEmote === 'backflip') {
+          const cycle = (t * 1.15) % 1.0;
+          if (cycle < 0.72) {
+            const pFlip = cycle / 0.72;
+            u.bodyGroup.position.y = Math.sin(pFlip * Math.PI) * 2.15;
+            u.bodyGroup.rotation.x = -pFlip * Math.PI * 2;
+            u.leftArm.rotation.x = -2.2;
+            u.rightArm.rotation.x = -2.2;
+          } else {
+            u.bodyGroup.position.y = 0;
+            u.bodyGroup.rotation.x = 0;
+          }
+        } else if (this.activeEmote === 'swordspin') {
+          u.bodyGroup.position.y = Math.abs(Math.sin(t * 4)) * 0.14;
+          u.rightArm.rotation.set(-2.9, 0, 0);
+          u.flexBlade.rotation.z = t * 16;
+          u.leftArm.rotation.z = 0.6;
+          if (Math.random() < dt * 14) {
+            this._spawnParticles(new THREE.Vector3(p.pos.x, p.pos.y + 2.2, p.pos.z), 0x2de2ff, 1, 3.5);
+          }
+        } else if (this.activeEmote === 'wave') {
+          u.bodyGroup.position.y = Math.abs(Math.sin(t * 5.5)) * 0.18;
+          u.rightArm.rotation.set(0, 0, -2.55 + Math.sin(t * 14) * 0.45);
+          u.leftArm.rotation.z = 0.25;
+        }
+
+        // Smooth 3rd-person orbit camera in front of the player avatar
+        const camAngle = p.yaw + Math.sin(t * 0.55) * 0.45;
+        const camOffset = new THREE.Vector3(Math.sin(camAngle) * 4.2, 2.35, Math.cos(camAngle) * 4.2);
+        this.camera.position.lerp(p.pos.clone().add(camOffset), Math.min(1, dt * 10));
+        this.camera.lookAt(p.pos.x, p.pos.y + 1.35, p.pos.z);
+      } else if (!p.alive && this.loadoutChoice.mode === 'twovtwo' && this._getAliveAllyCount() > 0) {
         const liveAlly = this.allies.find((a) => a.alive);
         if (liveAlly) {
           this.camera.position.lerp(
@@ -2063,11 +2243,12 @@
       this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, targetFov, Math.min(1, dt * 14));
       this.camera.updateProjectionMatrix();
 
-      const scoped = this.isAds && w.scoped && this.roundState === 'playing';
+      const scoped = this.isAds && w.scoped && this._canPlayerAct() && !this.activeEmote;
+      const hideFP = scoped || Boolean(this.activeEmote) || !p.alive;
       this.ui.scopeOverlay.classList.toggle('hidden', !scoped);
-      this.ui.crosshair.classList.toggle('hidden', scoped);
-      if (this.weaponMesh) this.weaponMesh.visible = !scoped;
-      if (this.fpArms) this.fpArms.visible = !scoped && p.alive;
+      this.ui.crosshair.classList.toggle('hidden', scoped || Boolean(this.activeEmote));
+      if (this.weaponMesh) this.weaponMesh.visible = !hideFP;
+      if (this.fpArms) this.fpArms.visible = !hideFP;
       this.ui.slideLines.style.opacity = p.slideTimer > 0 ? '1' : '0';
     }
 
@@ -2083,13 +2264,25 @@
         }
       }
 
-      if (this.isMouseDown && this.roundState === 'playing') {
+      if (this.isMouseDown && this._canPlayerAct()) {
         this._tryFire(false);
       }
       this._updateAutoShoot();
 
       if (this.isReloading) {
         this.reloadTimer -= dt;
+        const progress = Math.max(0, Math.min(1, 1 - this.reloadTimer / Math.max(0.1, this.reloadDuration)));
+        if (this.ui.reloadBarFill) this.ui.reloadBarFill.style.width = `${Math.round(progress * 100)}%`;
+
+        // Trigger staged reload audio cues!
+        if (this.reloadStage === 0 && progress >= 0.34) {
+          this.reloadStage = 1;
+          this.sound.playReloadMagIn();
+        } else if (this.reloadStage === 1 && progress >= 0.72) {
+          this.reloadStage = 2;
+          this.sound.playReloadRack();
+        }
+
         if (this.reloadTimer <= 0) {
           const slot = this._currentSlot();
           if (this.loadoutChoice.mode === 'range') {
@@ -2102,13 +2295,18 @@
             slot.reserve -= take;
           }
           this.isReloading = false;
+          this._resetReloadParts();
           this._updateHUD();
         }
       }
 
+      if (this.inspectTimer > 0) {
+        this.inspectTimer = Math.max(0, this.inspectTimer - dt);
+      }
+
       if (this.weaponMesh) {
         updateAnimatedWeaponSkin(this.weaponMesh, performance.now() * 0.001);
-        if (this.weaponMesh.userData.spinGroup && this.isMouseDown && this.roundState === 'playing') {
+        if (this.weaponMesh.userData.spinGroup && ((this.isMouseDown && this._canPlayerAct()) || this.inspectTimer > 0)) {
           this.weaponMesh.userData.spinGroup.rotation.z += dt * 22;
         }
 
@@ -2119,24 +2317,100 @@
         const bobX = Math.cos(this.bobPhase) * 0.012;
         const bobY = Math.abs(Math.sin(this.bobPhase)) * 0.014;
 
-        const basePos = this.isAds
+        let basePos = this.isAds
           ? new THREE.Vector3(0, -0.175, -0.34)
           : new THREE.Vector3(0.28, -0.24, -0.46);
+
+        let rotX = this.recoilKick * 1.1;
+        let rotY = 0;
+        let rotZ = this.player.slideTimer > 0 ? -0.18 : 0;
+
+        // === REAL MULTI-STAGE RELOAD ANIMATION ===
+        if (this.isReloading) {
+          const p = Math.max(0, Math.min(1, 1 - this.reloadTimer / Math.max(0.1, this.reloadDuration)));
+          const mag = this.weaponMesh.userData.magPart;
+          const magHome = this.weaponMesh.userData.magHome;
+          const cyl = this.weaponMesh.userData.cylinderPart;
+          const lg = this.fpArms?.userData?.leftGroup;
+          const lHomes = this.fpArms?.userData?.leftHomes;
+
+          if (p < 0.34) {
+            // Stage 1: Tilt gun & eject empty magazine
+            const t1 = p / 0.34;
+            rotX -= Math.sin(t1 * Math.PI * 0.5) * 0.35;
+            rotZ += Math.sin(t1 * Math.PI * 0.5) * 0.62;
+            basePos.y -= t1 * 0.04;
+            if (mag && magHome) {
+              mag.position.set(magHome.x, magHome.y - t1 * 0.34, magHome.z);
+              mag.rotation.z = t1 * 0.4;
+            }
+            if (cyl) cyl.rotation.z += dt * 14;
+          } else if (p < 0.72) {
+            // Stage 2: Left hand slams fresh magazine up into gun!
+            const t2 = (p - 0.34) / 0.38;
+            const slam = t2 > 0.82 ? Math.sin(((t2 - 0.82) / 0.18) * Math.PI) * 0.06 : 0;
+            rotX -= 0.35 - slam * 2.0;
+            rotZ += 0.62 * (1 - t2 * 0.35);
+            basePos.y += slam;
+            if (mag && magHome) {
+              mag.position.set(magHome.x, magHome.y - (1 - t2) * 0.32, magHome.z);
+              mag.rotation.z = (1 - t2) * 0.2;
+            }
+            if (lg && lHomes) {
+              for (let i = 0; i < lg.length; i++) {
+                lg[i].position.set(lHomes[i].x + 0.06, lHomes[i].y - (1 - t2) * 0.24, lHomes[i].z + 0.08);
+              }
+            }
+          } else {
+            // Stage 3: Bolt / slide rack & snap back to ready!
+            const t3 = (p - 0.72) / 0.28;
+            const rack = Math.sin(t3 * Math.PI);
+            rotX -= (1 - t3) * 0.22 - rack * 0.18;
+            rotZ += (1 - t3) * 0.4;
+            basePos.z += rack * 0.065;
+            if (mag && magHome) {
+              mag.position.copy(magHome);
+              mag.rotation.z = 0;
+            }
+            if (cyl) cyl.rotation.z += dt * 18;
+            if (lg && lHomes) {
+              for (let i = 0; i < lg.length; i++) {
+                lg[i].position.set(lHomes[i].x, lHomes[i].y + rack * 0.06, lHomes[i].z + rack * 0.14);
+              }
+            }
+          }
+        } else if (this.inspectTimer > 0) {
+          // === RIVALS WEAPON INSPECT FLOURISH ===
+          const p = 1 - this.inspectTimer / this.inspectDuration;
+          const ease = Math.sin(p * Math.PI);
+          const isMelee = this._currentWeapon().slotType === 'melee';
+          if (isMelee) {
+            basePos = new THREE.Vector3(0.16, -0.14, -0.4);
+            rotX -= p * Math.PI * 4;
+            rotZ += ease * 0.55;
+          } else {
+            basePos = new THREE.Vector3(0.08, -0.15, -0.35);
+            rotY = Math.sin(p * Math.PI * 2) * 0.92;
+            rotZ = ease * 0.58;
+            rotX = ease * 0.16;
+            if (this.weaponMesh.userData.cylinderPart) {
+              this.weaponMesh.userData.cylinderPart.rotation.z += dt * 20;
+            }
+          }
+        }
 
         this.viewmodelRoot.position.lerp(
           new THREE.Vector3(basePos.x + bobX, basePos.y - bobY, basePos.z + this.recoilKick),
           Math.min(1, dt * 18)
         );
 
-        let rotX = this.isReloading ? -0.55 : this.recoilKick * 1.1;
-        let rotY = 0;
         if (this.slashAnim > 0) {
           this.slashAnim = Math.max(0, this.slashAnim - dt * 5.2);
           const swing = Math.sin(this.slashAnim * Math.PI);
           rotX -= swing * 1.1;
           rotY += swing * 1.3;
         }
-        this.viewmodelRoot.rotation.set(rotX, rotY, this.player.slideTimer > 0 ? -0.18 : 0);
+        this.viewmodelRoot.rotation.set(rotX, rotY, rotZ);
 
         if (this.muzzleFlashTimer > 0) {
           this.muzzleFlashTimer -= dt;
@@ -2369,7 +2643,10 @@
         }
       } else if (this.roundState === 'round_over') {
         this.stateTimer -= dt;
+        const secLeft = Math.max(1, Math.ceil(this.stateTimer));
+        this.ui.bannerSub.textContent = `${this.roundEndSub} · RESETTING IN ${secLeft}...`;
         if (this.stateTimer <= 0) {
+          this._stopEmote();
           if (this.playerScore >= WINS_TO_VICTORY || this.botScore >= WINS_TO_VICTORY) {
             this._finishMatch();
           } else {

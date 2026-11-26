@@ -207,8 +207,55 @@
 
     playReload() {
       if (!this._ready()) return;
-      this._tone('square', 420, 320, 0.05, 0.08, 0);
-      this._tone('square', 640, 820, 0.06, 0.09, 0.2);
+      // Stage 1: Mag release click
+      this._tone('square', 360, 220, 0.055, 0.1, 0);
+      this._noise(0.05, 1800, 0.08, 'highpass', 0.02);
+    }
+
+    playReloadMagIn() {
+      if (!this._ready()) return;
+      // Stage 2: Crisp fresh mag slam
+      this._tone('triangle', 260, 520, 0.065, 0.14, 0);
+      this._noise(0.06, 1200, 0.12, 'bandpass', 0.01);
+    }
+
+    playReloadRack() {
+      if (!this._ready()) return;
+      // Stage 3: Slide / bolt rack chk-chk
+      this._noise(0.05, 2800, 0.12, 'highpass', 0);
+      this._tone('square', 580, 740, 0.05, 0.09, 0);
+      this._noise(0.06, 3200, 0.14, 'highpass', 0.09);
+      this._tone('square', 740, 920, 0.06, 0.1, 0.09);
+    }
+
+    playInspect(isMelee = false) {
+      if (!this._ready()) return;
+      if (isMelee) {
+        this._noise(0.14, 4200, 0.14, 'highpass', 0);
+        this._tone('sine', 1200, 2100, 0.16, 0.09, 0.03);
+      } else {
+        this._tone('triangle', 420, 620, 0.07, 0.08, 0);
+        this._noise(0.06, 2400, 0.07, 'bandpass', 0.04);
+      }
+    }
+
+    playEmote(emoteId) {
+      if (!this._ready()) return;
+      if (emoteId === 'backflip') {
+        this._noise(0.22, 2000, 0.16, 'bandpass', 0);
+        this._tone('sine', 280, 720, 0.24, 0.12, 0);
+      } else if (emoteId === 'takeL') {
+        this._tone('square', 440, 440, 0.09, 0.09, 0);
+        this._tone('square', 523, 523, 0.09, 0.09, 0.14);
+        this._tone('square', 392, 392, 0.12, 0.09, 0.28);
+      } else if (emoteId === 'griddy') {
+        this._tone('triangle', 220, 180, 0.08, 0.14, 0);
+        this._tone('triangle', 260, 220, 0.08, 0.14, 0.16);
+        this._tone('triangle', 330, 280, 0.1, 0.14, 0.32);
+      } else {
+        this._tone('sine', 523, 784, 0.15, 0.12, 0);
+        this._tone('sine', 659, 987, 0.18, 0.12, 0.1);
+      }
     }
 
     playJump() {
