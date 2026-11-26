@@ -6,24 +6,27 @@ Play live on GitHub Pages: **[https://nyez2016.github.io/roblox-rivals-html/](ht
 
 ## Features
 
-- **6 Playable Arena Maps** *(with live 3D preview)*:
+- **8 Playable Arena Maps** *(with live 3D menu preview)*:
   - **Arena (Classic)** — Symmetrical bridge, side ramps, sniper perches, and stud crates
-  - **Orbital Zero-G (宇宙反重力空间站)** — Deep starfield, ringed planet, floating platforms, **0.36x low gravity**, and 4 Anti-Gravity Jump Pads
-  - **Jade Courtyard (丹阙古阁 · 中国风)** — Lotus pond, central Jade Arch Bridge, climbable Vermilion Pagoda rooftops, hanging Red Lanterns, Stone Paifang archways, Bamboo groves, and 2 Qi Wind Jump Pads
+  - **Sky Islands** — Floating grassy islands high above the clouds with sky bridges, jump pads, and void ring-outs
+  - **Cloud Spire** — Multi-tier airborne sky citadel with glass walkways, floating monoliths, and open-air sky edges
+  - **Orbital Zero-G** — Deep space station with starfield, ringed planet, **0.36x low gravity**, and 4 Anti-Gravity Jump Pads
+  - **Jade Courtyard** — Eastern palace with lotus pond, central Jade Arch Bridge, climbable Vermilion Pagoda rooftops, hanging lanterns, stone archways, bamboo groves, and 2 Wind Jump Pads
   - **Neon Station** — Cyberpunk nighttime subway platforms & climbable central metro train
   - **Construction** — Sunset rooftop scaffolding tower, overhead crane & shipping containers
-  - **Splash Park** — Tropical pool island, twin water slides & water geyser jump pads
-- **Gravity System**: Switch between `Map Default`, `Earth 1.0x`, `Lunar Low-G (0.38x)`, and `Anti-Grav Bounce (0.22x)` on any map!
-- **4 Game Modes**: `Classic Duel`, `Ancient Assassin` (诸葛连弩/飞刀/暗影双匕/烟雾弹), `Sniper Only`, and `Randomizer`.
+  - **Splash Park** — Tropical pool island, twin water slides & water geyser launch pads
+- **Auto Shoot Mode**: Toggle **Auto Shoot** in Settings or press `F` mid-match to automatically fire whenever your crosshair locks onto the Rival!
+- **Gravity System**: Switch between `Map Default`, `Earth 1.0x`, `Lunar Low-G (0.38x)`, and `Zero-G Bounce (0.22x)` on any map.
+- **4 Game Modes**: `Classic Duel`, `Ancient Assassin` (Repeating Crossbow / Shadow Kunai / Shadow Daggers / Smoke Bomb), `Sniper Only`, and `Randomizer`.
 - **22 Weapons Across All 4 Loadout Slots**:
-  - **Primary (8)**: Assault Rifle, Sniper, **诸葛连弩 (Zhuge Crossbow)**, **寒霜长弓 (Frost Longbow)**, Burst Rifle, Shotgun, Paintball Gun, Minigun
-  - **Secondary (5)**: Revolver, **暗影飞刀 (Shadow Kunai)**, Uzi, Handgun, Shorty
-  - **Melee (5)**: Katana, **暗影双匕 (Shadow Daggers — 105 Backstab!)**, **绣春刀 (Imperial Saber — 95 Backstab!)**, Scythe, Battle Axe
-  - **Utility (4)**: Frag Grenade, **烟雾弹 (Smoke Bomb — blocks Rival sight!)**, Molotov, Flashbang
+  - **Primary (8)**: Assault Rifle, Sniper, Repeating Crossbow, Frost Longbow, Burst Rifle, Shotgun, Paintball Gun, Minigun
+  - **Secondary (5)**: Revolver, Shadow Kunai, Uzi, Handgun, Shorty
+  - **Melee (5)**: Katana, Shadow Daggers (105 Backstab), Imperial Saber (95 Backstab), Scythe, Battle Axe
+  - **Utility (4)**: Frag Grenade, Smoke Bomb (blocks Rival Bot vision), Molotov, Flashbang
 - **17 Skins & 5 Kill Effects**:
-  - **11 Weapon Wraps**: Standard, **青花瓷 Porcelain**, **玄铁青龙 Jade**, **星际漫步 Orbital**, Cyber Neon, 24K Gold, Sakura, Crimson Dragon, Cosmic Galaxy, Toxic Emerald, and animated **Rainbow Prism**
-  - **6 Rival Avatar Skins**: Red Rival, **锦衣暗卫 (with 斗笠 bamboo hat)**, **星际宇航员 (with jetpack)**, Shadow Ninja, Golden Champ, Frost Knight
-  - **5 Kill Effects**: Classic, **金色雷击 Thunder**, **樱花散落 Sakura**, **黑洞吞噬 Void**, and **像素解体 Voxel Shatter**
+  - **11 Weapon Wraps**: Standard, Blue Porcelain, Jade Dragon, Starlight Orbital, Cyber Neon, 24K Gold, Sakura, Crimson Dragon, Cosmic Galaxy, Toxic Emerald, and animated **Rainbow Prism**
+  - **6 Rival Avatar Skins**: Red Rival, Imperial Assassin (with conical hat), Space Astronaut (with jetpack), Shadow Ninja, Golden Champ, Frost Knight
+  - **5 Kill Effects**: Classic, Golden Thunder, Sakura Burst, Void Black Hole, and Voxel Shatter
 
 ## Controls
 
@@ -33,6 +36,7 @@ Play live on GitHub Pages: **[https://nyez2016.github.io/roblox-rivals-html/](ht
 | `Mouse` | Aim |
 | `Left Click` | Shoot / Melee Slash / Throw Utility |
 | `Right Click` | Aim Down Sights (ADS) / Melee Lunge / Backstab |
+| `F` | Toggle Auto Shoot |
 | `Space` | Jump |
 | `Shift` or `C` | Slide Boost |
 | `E` or `Q` | Quick Dash |

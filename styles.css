@@ -208,6 +208,18 @@ html, body {
   vertical-align: middle;
 }
 
+.auto-pill {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(56, 239, 125, 0.2);
+  border: 1px solid rgba(56, 239, 125, 0.7);
+  color: #6ee7b7;
+  font-size: 9.5px;
+  vertical-align: middle;
+}
+
 .round-timer {
   font-size: 19px;
   font-weight: 900;
@@ -296,6 +308,14 @@ html, body {
 #crosshair.spread .ch-bottom { transform: translateY(6px); }
 #crosshair.spread .ch-left   { transform: translateX(-6px); }
 #crosshair.spread .ch-right  { transform: translateX(6px); }
+
+#crosshair.locked .ch-line {
+  background: var(--red);
+  box-shadow: 0 0 8px var(--red);
+}
+#crosshair.locked .ch-dot {
+  background: var(--gold);
+}
 
 #hitmarker {
   position: absolute;

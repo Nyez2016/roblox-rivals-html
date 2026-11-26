@@ -38,6 +38,7 @@
         <div class="round-label">
           <span id="map-badge">ARENA</span> · <span id="round-label">ROUND 1</span>
           <span id="grav-badge" class="grav-pill hidden">LOW-G</span>
+          <span id="autoshoot-badge" class="auto-pill hidden">AUTO SHOOT</span>
         </div>
         <div class="round-timer" id="round-timer">1:30</div>
       </div>
@@ -134,9 +135,9 @@
   <div id="menu-overlay">
     <div class="menu-card">
       <div class="brand-header">
-        <div class="brand-tag">HTML5 ARENA · ZERO-G &amp; ASSASSIN EDITION</div>
+        <div class="brand-tag">HTML5 ARENA · SKY, ZERO-G &amp; ASSASSIN EDITION</div>
         <h1 class="brand-title">ROBLOX <span>RIVALS</span></h1>
-        <p class="brand-sub">6 Maps · 22 Weapons · 17 Skins · Anti-Gravity · Kill Effects</p>
+        <p class="brand-sub">8 Maps · 22 Weapons · 17 Skins · Auto Shoot · Anti-Gravity · Kill Effects</p>
       </div>
 
       <!-- Menu Navigation Tabs -->
@@ -160,11 +161,11 @@
               <span>1-Shot HS · 75 / 150</span>
             </button>
             <button class="choice-btn" data-weapon="crossbow">
-              <strong>诸葛连弩 Crossbow</strong>
+              <strong>Repeating Crossbow</strong>
               <span>Silent · 28 / 56 HS</span>
             </button>
             <button class="choice-btn" data-weapon="bow">
-              <strong>寒霜长弓 Longbow</strong>
+              <strong>Frost Longbow</strong>
               <span>1-Shot HS · Silent</span>
             </button>
             <button class="choice-btn" data-weapon="burst">
@@ -194,7 +195,7 @@
               <span>36 / 72 HS</span>
             </button>
             <button class="choice-btn" data-weapon="kunai">
-              <strong>暗影飞刀 Kunai</strong>
+              <strong>Shadow Kunai</strong>
               <span>Silent · 34 / 78</span>
             </button>
             <button class="choice-btn" data-weapon="uzi">
@@ -220,11 +221,11 @@
               <span>45 · Fast Dash</span>
             </button>
             <button class="choice-btn" data-weapon="hiddenblade">
-              <strong>暗影双匕 Daggers</strong>
+              <strong>Shadow Daggers</strong>
               <span>105 Backstab!</span>
             </button>
             <button class="choice-btn" data-weapon="xiuchun">
-              <strong>绣春刀 Saber</strong>
+              <strong>Imperial Saber</strong>
               <span>58 · 95 Backstab</span>
             </button>
             <button class="choice-btn" data-weapon="scythe">
@@ -246,7 +247,7 @@
               <span>92 AoE Blast</span>
             </button>
             <button class="choice-btn" data-weapon="smoke">
-              <strong>烟雾弹 Smoke</strong>
+              <strong>Smoke Bomb</strong>
               <span>Hides From Rival</span>
             </button>
             <button class="choice-btn" data-weapon="molotov">
@@ -264,8 +265,8 @@
       <!-- TAB 2: MAPS, GRAVITY & MODES -->
       <div class="tab-panel hidden" id="tab-maps">
         <div class="loadout-section">
-          <label class="section-label">SELECT ARENA MAP (LIVE 3D PREVIEW)</label>
-          <div class="choice-grid cols-3" data-category="map">
+          <label class="section-label">SELECT ARENA MAP (8 MAPS · LIVE 3D PREVIEW)</label>
+          <div class="choice-grid cols-4" data-category="map">
             <button class="choice-btn map-card active" data-map="arena">
               <span class="map-swatch" style="background: linear-gradient(135deg, #38bdf8, #1e3a8a);"></span>
               <div>
@@ -273,18 +274,32 @@
                 <span>Bridge &amp; perches</span>
               </div>
             </button>
+            <button class="choice-btn map-card" data-map="skyislands">
+              <span class="map-swatch" style="background: linear-gradient(135deg, #60c5ff, #22c55e, #fbbf24);"></span>
+              <div>
+                <strong>Sky Islands</strong>
+                <span>Floating in the sky!</span>
+              </div>
+            </button>
+            <button class="choice-btn map-card" data-map="cloudspire">
+              <span class="map-swatch" style="background: linear-gradient(135deg, #3b82f6, #a855f7, #f8fafc);"></span>
+              <div>
+                <strong>Cloud Spire</strong>
+                <span>Airborne sky citadel</span>
+              </div>
+            </button>
             <button class="choice-btn map-card" data-map="orbital">
               <span class="map-swatch" style="background: linear-gradient(135deg, #0f172a, #a855f7, #38bdf8);"></span>
               <div>
-                <strong>宇宙反重力 Orbital</strong>
-                <span>0.36x 低重力 + 弹射板</span>
+                <strong>Orbital Zero-G</strong>
+                <span>Space Low-G + Pads</span>
               </div>
             </button>
             <button class="choice-btn map-card" data-map="jade">
               <span class="map-swatch" style="background: linear-gradient(135deg, #b91c1c, #f59e0b, #10b981);"></span>
               <div>
-                <strong>丹阙古阁 Jade</strong>
-                <span>中国风 · 飞檐荷桥灯笼</span>
+                <strong>Jade Courtyard</strong>
+                <span>Pagodas &amp; lanterns</span>
               </div>
             </button>
             <button class="choice-btn map-card" data-map="station">
@@ -312,22 +327,22 @@
         </div>
 
         <div class="loadout-section">
-          <label class="section-label">GRAVITY SYSTEM (重力模式)</label>
+          <label class="section-label">GRAVITY SYSTEM</label>
           <div class="choice-grid cols-4" data-category="gravity">
             <button class="choice-btn center-text active" data-grav="auto">
               <strong>Map Default</strong>
-              <span>Space=Low-G</span>
+              <span>Auto Per Map</span>
             </button>
             <button class="choice-btn center-text" data-grav="normal">
               <strong>Earth 1.0x</strong>
               <span>Standard</span>
             </button>
             <button class="choice-btn center-text" data-grav="low">
-              <strong>月球低重力</strong>
+              <strong>Lunar Low-G</strong>
               <span>0.38x Floaty</span>
             </button>
             <button class="choice-btn center-text" data-grav="antigrav">
-              <strong>反重力弹跳</strong>
+              <strong>Zero-G Bounce</strong>
               <span>0.22x Super Air</span>
             </button>
           </div>
@@ -335,15 +350,15 @@
 
         <div class="loadout-split">
           <div class="loadout-section">
-            <label class="section-label">GAME MODE (玩法模式)</label>
+            <label class="section-label">GAME MODE</label>
             <div class="choice-grid cols-2" data-category="mode">
               <button class="choice-btn center-text active" data-mode="classic">
                 <strong>Classic Duel</strong>
                 <span>Custom Loadout</span>
               </button>
               <button class="choice-btn center-text" data-mode="assassin">
-                <strong>古代暗杀 Assassin</strong>
-                <span>连弩/飞刀/双匕/烟雾</span>
+                <strong>Ancient Assassin</strong>
+                <span>Crossbow / Kunai / Daggers</span>
               </button>
               <button class="choice-btn center-text" data-mode="sniper">
                 <strong>Sniper Only</strong>
@@ -387,15 +402,15 @@
             </button>
             <button class="choice-btn skin-btn" data-skin="porcelain">
               <span class="skin-swatch" style="background: linear-gradient(135deg, #f8fafc, #2563eb);"></span>
-              <strong>青花瓷 Porcelain</strong>
+              <strong>Blue Porcelain</strong>
             </button>
             <button class="choice-btn skin-btn" data-skin="jadedragon">
               <span class="skin-swatch" style="background: linear-gradient(135deg, #0a1f18, #10b981);"></span>
-              <strong>玄铁青龙 Jade</strong>
+              <strong>Jade Dragon</strong>
             </button>
             <button class="choice-btn skin-btn" data-skin="starlight">
               <span class="skin-swatch" style="background: linear-gradient(135deg, #e2e8f0, #f59e0b, #38bdf8);"></span>
-              <strong>星际漫步 Orbital</strong>
+              <strong>Starlight Orbital</strong>
             </button>
             <button class="choice-btn skin-btn" data-skin="cyber">
               <span class="skin-swatch" style="background: linear-gradient(135deg, #0d1324, #00f5ff);"></span>
@@ -437,11 +452,11 @@
             </button>
             <button class="choice-btn skin-btn" data-rskin="assassin">
               <span class="skin-swatch" style="background: linear-gradient(135deg, #7f1d1d, #1c1917, #fbbf24);"></span>
-              <strong>锦衣暗卫</strong>
+              <strong>Assassin</strong>
             </button>
             <button class="choice-btn skin-btn" data-rskin="astronaut">
               <span class="skin-swatch" style="background: linear-gradient(135deg, #f8fafc, #f59e0b);"></span>
-              <strong>宇航员</strong>
+              <strong>Astronaut</strong>
             </button>
             <button class="choice-btn skin-btn" data-rskin="shadow">
               <span class="skin-swatch" style="background: linear-gradient(135deg, #111420, #a855f7);"></span>
@@ -459,27 +474,27 @@
         </div>
 
         <div class="loadout-section">
-          <label class="section-label">KILL EFFECT (击杀特效)</label>
+          <label class="section-label">KILL EFFECT</label>
           <div class="choice-grid cols-5" data-category="killEffect">
             <button class="choice-btn center-text active" data-kfx="classic">
               <strong>Classic</strong>
               <span>Ragdoll</span>
             </button>
             <button class="choice-btn center-text" data-kfx="lightning">
-              <strong>金色雷击</strong>
-              <span>Sky Thunder</span>
+              <strong>Golden Thunder</strong>
+              <span>Sky Bolt</span>
             </button>
             <button class="choice-btn center-text" data-kfx="sakura">
-              <strong>樱花散落</strong>
-              <span>Blossom Burst</span>
+              <strong>Sakura Burst</strong>
+              <span>Blossoms</span>
             </button>
             <button class="choice-btn center-text" data-kfx="blackhole">
-              <strong>黑洞吞噬</strong>
-              <span>Void Vortex</span>
+              <strong>Void Black Hole</strong>
+              <span>Dark Vortex</span>
             </button>
             <button class="choice-btn center-text" data-kfx="pixel">
-              <strong>像素解体</strong>
-              <span>Voxel Shatter</span>
+              <strong>Voxel Shatter</strong>
+              <span>Exploding Studs</span>
             </button>
           </div>
         </div>
@@ -494,6 +509,10 @@
         <div class="setting-item">
           <label for="fov-slider">FOV: <span id="fov-val">82</span></label>
           <input type="range" id="fov-slider" min="65" max="105" step="1" value="82" />
+        </div>
+        <div class="setting-item toggle-item">
+          <label for="autoshoot-toggle">Auto Shoot (F)</label>
+          <input type="checkbox" id="autoshoot-toggle" />
         </div>
         <div class="setting-item toggle-item">
           <label for="sound-toggle">SFX Audio</label>
@@ -515,6 +534,7 @@
         <span><b>E</b> Dash</span>
         <span><b>LMB</b> Fire</span>
         <span><b>RMB</b> ADS / Lunge</span>
+        <span><b>F</b> Auto Shoot</span>
         <span><b>1-4</b> Weapons</span>
         <span><b>R</b> Reload</span>
       </div>

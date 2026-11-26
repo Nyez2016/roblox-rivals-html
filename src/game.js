@@ -42,7 +42,7 @@
       this.camera = new THREE.PerspectiveCamera(82, window.innerWidth / window.innerHeight, 0.08, 260);
       this.scene.add(this.camera);
 
-      this.settings = { sensitivity: 1.0, fov: 82 };
+      this.settings = { sensitivity: 1.0, fov: 82, autoShoot: false };
       this.loadoutChoice = {
         primary: 'ar',
         secondary: 'revolver',
@@ -155,6 +155,7 @@
         if (saved.killEffect && KILL_EFFECTS[saved.killEffect]) this.loadoutChoice.killEffect = saved.killEffect;
         if (typeof saved.sensitivity === 'number') this.settings.sensitivity = saved.sensitivity;
         if (typeof saved.fov === 'number') this.settings.fov = saved.fov;
+        if (typeof saved.autoShoot === 'boolean') this.settings.autoShoot = saved.autoShoot;
       } catch {
         // Ignore storage failures
       }
@@ -168,6 +169,7 @@
             ...this.loadoutChoice,
             sensitivity: this.settings.sensitivity,
             fov: this.settings.fov,
+            autoShoot: this.settings.autoShoot,
           })
         );
       } catch {
@@ -197,6 +199,7 @@
         botName: document.getElementById('bot-name'),
         mapBadge: document.getElementById('map-badge'),
         gravBadge: document.getElementById('grav-badge'),
+        autoShootBadge: document.getElementById('autoshoot-badge'),
         roundLabel: document.getElementById('round-label'),
         roundTimer: document.getElementById('round-timer'),
         hpValue: document.getElementById('hp-value'),
@@ -233,6 +236,7 @@
         fovSlider: document.getElementById('fov-slider'),
         fovVal: document.getElementById('fov-val'),
         soundToggle: document.getElementById('sound-toggle'),
+        autoShootToggle: document.getElementById('autoshoot-toggle'),
       };
     }
 
@@ -260,6 +264,8 @@
       this.ui.sensVal.textContent = this.settings.sensitivity.toFixed(1);
       this.ui.fovSlider.value = String(this.settings.fov);
       this.ui.fovVal.textContent = String(this.settings.fov);
+      if (this.ui.autoShootToggle) this.ui.autoShootToggle.checked = this.settings.autoShoot;
+      this._updateAutoShootBadge();
     }
 
     _createMuzzleFlash() {
@@ -341,6 +347,13 @@
       this.ui.soundToggle.addEventListener('change', (e) => {
         this.sound.enabled = e.target.checked;
       });
+      if (this.ui.autoShootToggle) {
+        this.ui.autoShootToggle.addEventListener('change', (e) => {
+          this.settings.autoShoot = e.target.checked;
+          this._updateAutoShootBadge();
+          this._savePreferences();
+        });
+      }
 
       this.ui.playBtn.addEventListener('click', () => {
         this.sound.unlock();
@@ -402,6 +415,13 @@
         if (code === 'Digit3') this.switchWeapon(2);
         if (code === 'Digit4') this.switchWeapon(3);
         if (code === 'KeyR') this.startReload();
+        if (code === 'KeyF') {
+          this.settings.autoShoot = !this.settings.autoShoot;
+          if (this.ui.autoShootToggle) this.ui.autoShootToggle.checked = this.settings.autoShoot;
+          this._updateAutoShootBadge();
+          this._savePreferences();
+          this._pushKillFeed(`AUTO SHOOT: ${this.settings.autoShoot ? 'ON' : 'OFF'}`);
+        }
         if (code === 'KeyE' || code === 'KeyQ') this._tryDash();
         if (code === 'ShiftLeft' || code === 'KeyC') this._trySlide();
       });
@@ -480,6 +500,49 @@
         this.ui.gravBadge.classList.remove('hidden');
       } else {
         this.ui.gravBadge.classList.add('hidden');
+      }
+    }
+
+    _updateAutoShootBadge() {
+      if (this.ui.autoShootBadge) {
+        this.ui.autoShootBadge.classList.toggle('hidden', !this.settings.autoShoot);
+      }
+      if (!this.settings.autoShoot && this.ui.crosshair) {
+        this.ui.crosshair.classList.remove('locked');
+      }
+    }
+
+    _updateAutoShoot() {
+      if (!this.settings.autoShoot || this.roundState !== 'playing' || !this.player.alive || !this.bot.alive) {
+        this.ui.crosshair.classList.remove('locked');
+        return;
+      }
+
+      const w = this._currentWeapon();
+      // Do not auto-throw utility grenades/smoke
+      if (w.slotType === 'utility') {
+        this.ui.crosshair.classList.remove('locked');
+        return;
+      }
+
+      const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
+      this.raycaster.set(this.camera.position, dir);
+      this.raycaster.far = w.range;
+
+      const botHits = this.raycaster.intersectObjects(this.bot.getHitMeshes(), false);
+      if (botHits.length === 0) {
+        this.ui.crosshair.classList.remove('locked');
+        return;
+      }
+
+      const mapHits = this.raycaster.intersectObjects(this.arena.meshes, false);
+      const mapDist = mapHits.length > 0 ? mapHits[0].distance : w.range;
+
+      if (botHits[0].distance < mapDist) {
+        this.ui.crosshair.classList.add('locked');
+        this._tryFire(true);
+      } else {
+        this.ui.crosshair.classList.remove('locked');
       }
     }
 
@@ -943,7 +1006,8 @@
       this._spawnParticles(pos, 0xff6b1a, 22, 8);
 
       const radius = 4.6;
-      const floorY = this.arena.getFloorHeight(pos.x, pos.z, pos.y + 0.5, 0.2);
+      const rawFloor = this.arena.getFloorHeight(pos.x, pos.z, pos.y + 0.5, 0.2);
+      const floorY = rawFloor > -Infinity ? rawFloor : pos.y;
       const geo = new THREE.CylinderGeometry(radius, radius, 0.14, 24);
       const mat = new THREE.MeshBasicMaterial({
         color: 0xff5a1f,
@@ -965,7 +1029,8 @@
 
     _spawnSmokeCloud(pos) {
       this.sound.playSmokePop();
-      const floorY = this.arena.getFloorHeight(pos.x, pos.z, pos.y + 0.5, 0.2);
+      const rawFloor = this.arena.getFloorHeight(pos.x, pos.z, pos.y + 0.5, 0.2);
+      const floorY = rawFloor > -Infinity ? rawFloor : pos.y;
       const center = new THREE.Vector3(pos.x, floorY + 1.9, pos.z);
       const group = new THREE.Group();
       const puffs = [];
@@ -1325,12 +1390,22 @@
       this.arena.resolveHorizontal(p.pos, 0.45, p.slideTimer > 0 ? 1.15 : 1.8);
 
       const floorY = this.arena.getFloorHeight(p.pos.x, p.pos.z, p.pos.y, 0.42);
-      if (p.pos.y <= floorY) {
+      if (floorY > -Infinity && p.pos.y <= floorY) {
         p.pos.y = floorY;
         p.vel.y = 0;
         p.onGround = true;
       } else {
         p.onGround = false;
+      }
+
+      // Open-air void ring-out check for Sky Islands & Cloud Spire!
+      if (!this.arena.hasFloor && p.pos.y < this.arena.voidY && p.alive && this.roundState === 'playing') {
+        p.hp = 0;
+        p.alive = false;
+        this.sound.playHurt();
+        this._updateHUD();
+        this._pushKillFeed('YOU FELL INTO THE SKY VOID');
+        this._endRound(false, 'FELL INTO THE SKY VOID');
       }
 
       // Anti-Gravity Jump Pads / Qi Wind Pads / Water Geysers!
@@ -1390,6 +1465,7 @@
       if (this.isMouseDown && this.roundState === 'playing') {
         this._tryFire(false);
       }
+      this._updateAutoShoot();
 
       if (this.isReloading) {
         this.reloadTimer -= dt;
@@ -1553,9 +1629,10 @@
         pr.mesh.rotation.x += dt * 7;
         pr.mesh.rotation.y += dt * 5;
 
-        if (pr.fuse <= 0) {
+        if (pr.fuse <= 0 || pr.pos.y < -25) {
           this.scene.remove(pr.mesh);
           this.projectiles.splice(i, 1);
+          if (pr.pos.y < -25) continue;
           if (pr.type === 'flash') this._detonateFlashbang(pr.pos);
           else if (pr.type === 'molotov') this._spawnMolotovPool(pr.pos);
           else if (pr.type === 'smoke') this._spawnSmokeCloud(pr.pos);
@@ -1676,7 +1753,15 @@
           this.roundState === 'playing',
           (origin, dir, dmg) => this._onBotShoot(origin, dir, dmg),
           this._getActiveGravityScale(),
-          this.smokeClouds
+          this.smokeClouds,
+          () => {
+            if (this.roundState === 'playing') {
+              this.stats.kills += 1;
+              this.sound.playKill();
+              this._pushKillFeed('RIVAL FELL INTO THE SKY VOID!');
+              this._endRound(true, 'SKY VOID RING-OUT!');
+            }
+          }
         );
         this._updateEffects(dt);
         this._updateHUD();

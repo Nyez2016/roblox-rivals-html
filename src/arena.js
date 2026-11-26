@@ -8,36 +8,56 @@
       name: 'ARENA',
       subtitle: 'Classic symmetrical bridge & sniper perches',
       gravityScale: 1.0,
+      hasFloor: true,
+    },
+    skyislands: {
+      id: 'skyislands',
+      name: 'SKY ISLANDS',
+      subtitle: 'Floating islands high above the clouds with void ring-outs',
+      gravityScale: 0.72,
+      hasFloor: false,
+    },
+    cloudspire: {
+      id: 'cloudspire',
+      name: 'CLOUD SPIRE',
+      subtitle: 'Multi-tier airborne sky citadel with jump pads & glass bridges',
+      gravityScale: 0.65,
+      hasFloor: false,
     },
     orbital: {
       id: 'orbital',
       name: 'ORBITAL ZERO-G',
-      subtitle: '宇宙反重力空间站 · 0.36x 低重力 + 4个弹射板',
+      subtitle: 'Deep space station with 0.36x low gravity & 4 launch pads',
       gravityScale: 0.36,
+      hasFloor: true,
     },
     jade: {
       id: 'jade',
       name: 'JADE COURTYARD',
-      subtitle: '丹阙古阁 · 飞檐楼阁、荷花拱桥、红灯笼与竹林',
+      subtitle: 'Eastern palace with pagoda rooftops, lotus pond & lanterns',
       gravityScale: 1.0,
+      hasFloor: true,
     },
     station: {
       id: 'station',
       name: 'NEON STATION',
-      subtitle: 'Night subway platforms & central metro car',
+      subtitle: 'Night subway platforms & climbable central metro train',
       gravityScale: 1.0,
+      hasFloor: true,
     },
     construction: {
       id: 'construction',
       name: 'CONSTRUCTION',
-      subtitle: 'Sunset scaffolding towers & shipping crates',
+      subtitle: 'Sunset scaffolding towers & climbable shipping crates',
       gravityScale: 1.0,
+      hasFloor: true,
     },
     splash: {
       id: 'splash',
       name: 'SPLASH PARK',
-      subtitle: 'Tropical pool deck, water slides & geysers',
+      subtitle: 'Tropical pool deck, water slides & geyser launch pads',
       gravityScale: 1.0,
+      hasFloor: true,
     },
   };
 
@@ -92,6 +112,8 @@
       this.jumpPads = [];
       this.meshes = [];
       this.waypoints = [];
+      this.hasFloor = true;
+      this.voidY = -14;
       this.spawns = {
         player: new THREE.Vector3(0, 0, 29),
         bot: new THREE.Vector3(0, 0, -29),
@@ -108,6 +130,7 @@
 
     loadMap(mapId) {
       this.mapId = MAPS[mapId] ? mapId : 'arena';
+      this.hasFloor = MAPS[this.mapId].hasFloor !== false;
 
       while (this.mapGroup.children.length > 0) {
         const child = this.mapGroup.children[0];
@@ -129,7 +152,11 @@
         bot: new THREE.Vector3(0, 0, -29),
       };
 
-      if (this.mapId === 'orbital') {
+      if (this.mapId === 'skyislands') {
+        this._buildSkyIslandsMap();
+      } else if (this.mapId === 'cloudspire') {
+        this._buildCloudSpireMap();
+      } else if (this.mapId === 'orbital') {
         this._buildOrbitalMap();
       } else if (this.mapId === 'jade') {
         this._buildJadeCourtyardMap();
@@ -144,9 +171,21 @@
       }
     }
 
-    _setLighting({ skyHex, fogHex, hemiSky, hemiGround, hemiInt, sunHex, sunInt, sunPos, clouds = true, stars = false }) {
+    _setLighting({
+      skyHex,
+      fogHex,
+      hemiSky,
+      hemiGround,
+      hemiInt,
+      sunHex,
+      sunInt,
+      sunPos,
+      clouds = true,
+      lowerClouds = false,
+      stars = false,
+    }) {
       this.scene.background = new THREE.Color(skyHex);
-      this.scene.fog = new THREE.Fog(fogHex, 52, 145);
+      this.scene.fog = new THREE.Fog(fogHex, 56, 165);
 
       const hemi = new THREE.HemisphereLight(hemiSky, hemiGround, hemiInt);
       this.mapGroup.add(hemi);
@@ -157,8 +196,8 @@
       sun.shadow.mapSize.width = 2048;
       sun.shadow.mapSize.height = 2048;
       sun.shadow.camera.near = 5;
-      sun.shadow.camera.far = 140;
-      const d = 48;
+      sun.shadow.camera.far = 150;
+      const d = 52;
       sun.shadow.camera.left = -d;
       sun.shadow.camera.right = d;
       sun.shadow.camera.top = d;
@@ -169,10 +208,10 @@
       if (clouds) {
         const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.78 });
         const cloudPositions = [
-          [-30, 32, -25, 14, 3, 7],
-          [25, 36, -10, 18, 3.5, 9],
-          [-15, 34, 28, 15, 3, 8],
-          [32, 30, 22, 12, 2.5, 7],
+          [-32, 34, -26, 15, 3, 8],
+          [26, 38, -10, 18, 3.5, 9],
+          [-16, 36, 28, 16, 3, 8],
+          [34, 32, 22, 13, 2.5, 7],
         ];
         for (const [x, y, z, w, h, dep] of cloudPositions) {
           const c = new THREE.Mesh(new THREE.BoxGeometry(w, h, dep), cloudMat);
@@ -181,8 +220,28 @@
         }
       }
 
+      if (lowerClouds) {
+        // Sea of soft blocky Roblox clouds far BELOW the floating sky maps!
+        const seaMat = new THREE.MeshBasicMaterial({ color: 0xf0f9ff, transparent: true, opacity: 0.65 });
+        const lowClusters = [
+          [-38, -15, -34, 28, 4, 22],
+          [34, -17, -28, 32, 5, 24],
+          [0, -19, 0, 44, 4, 36],
+          [-34, -16, 32, 30, 4.5, 24],
+          [36, -15, 30, 26, 4, 22],
+          [-55, -10, 0, 24, 5, 40],
+          [55, -11, 4, 24, 5, 42],
+          [0, -12, -58, 44, 5, 22],
+          [0, -12, 58, 44, 5, 22],
+        ];
+        for (const [x, y, z, w, h, dep] of lowClusters) {
+          const c = new THREE.Mesh(new THREE.BoxGeometry(w, h, dep), seaMat);
+          c.position.set(x, y, z);
+          this.mapGroup.add(c);
+        }
+      }
+
       if (stars) {
-        // Deep space starfield + ringed alien planet!
         const starPositions = [];
         for (let i = 0; i < 420; i++) {
           const theta = Math.random() * Math.PI * 2;
@@ -273,6 +332,13 @@
         });
       }
       return mesh;
+    }
+
+    _addFloatingIsland(x, topY, z, w, d, grassColor = 0x22c55e, grassStud = 0x4ade80, rockColor = 0x785a46) {
+      // Grassy stud top deck + tapering rocky underside floating in mid-air!
+      this._addBox(x, topY - 0.5, z, w, 1.0, d, { color: grassColor, studColor: grassStud });
+      this._addBox(x, topY - 1.9, z, w * 0.78, 1.8, d * 0.78, { color: rockColor, solid: false });
+      this._addBox(x, topY - 3.4, z, w * 0.45, 1.4, d * 0.45, { color: 0x5c4536, solid: false });
     }
 
     _addJumpPad(x, y, z, radius = 2.0, launchVel = 15.5, colorHex = 0xa855f7) {
@@ -369,7 +435,159 @@
     }
 
     // =========================================================
-    // MAP 1: CLASSIC ARENA
+    // MAP 1: SKY ISLANDS (Floating Open-Air Islands Above Clouds!)
+    // =========================================================
+    _buildSkyIslandsMap() {
+      this._setLighting({
+        skyHex: 0x60c5ff,
+        fogHex: 0x99dcff,
+        hemiSky: 0xe8f8ff,
+        hemiGround: 0x7dd3fc,
+        hemiInt: 1.05,
+        sunHex: 0xfff8dc,
+        sunInt: 1.4,
+        sunPos: [34, 52, 24],
+        clouds: true,
+        lowerClouds: true,
+      });
+
+      this.bounds = { minX: -40, maxX: 40, minZ: -44, maxZ: 44 };
+      this.spawns = {
+        player: new THREE.Vector3(0, 2.0, 24),
+        bot: new THREE.Vector3(0, 2.0, -24),
+      };
+
+      // North & South Spawn Islands (floating at Y = 2.0)
+      for (const zSign of [-1, 1]) {
+        const accent = zSign > 0 ? 0x2de2ff : 0xff3e5e;
+        this._addFloatingIsland(0, 2.0, zSign * 24, 15, 13);
+        // Spawn stone cover wall & glowing sky beacon
+        this._addBox(0, 3.4, zSign * 19.2, 5.8, 2.8, 1.2, { color: 0xe2e8f0, studColor: 0xf1f5f9 });
+        this._addBox(0, 4.9, zSign * 19.2, 6.0, 0.2, 1.3, { color: accent, emissive: accent, solid: false });
+        // Blocky Roblox trees on spawn islands
+        this._addBox(-5.5, 3.6, zSign * 26.5, 1.0, 3.2, 1.0, { color: 0x784c2b });
+        this._addBox(-5.5, 5.8, zSign * 26.5, 3.6, 2.2, 3.6, { color: 0x16a34a, studColor: 0x22c55e, solid: false });
+        this._addBox(5.5, 3.6, zSign * 26.5, 1.0, 3.2, 1.0, { color: 0x784c2b });
+        this._addBox(5.5, 5.8, zSign * 26.5, 3.6, 2.2, 3.6, { color: 0x16a34a, studColor: 0x22c55e, solid: false });
+        // Jump pads launching toward side islands!
+        this._addJumpPad(-5.2, 2.0, zSign * 21, 1.7, 13.5, 0x38bdf8);
+        this._addJumpPad(5.2, 2.0, zSign * 21, 1.7, 13.5, 0x38bdf8);
+      }
+
+      // High Central Floating Sky Temple Island (Y = 4.6)
+      this._addFloatingIsland(0, 4.6, 0, 15, 15, 0x38bdf8, 0x7dd3fc, 0x475569);
+      // Marble Sky Temple Pillars + Golden Cap
+      for (const [px, pz] of [[-5.2, -5.2], [5.2, -5.2], [-5.2, 5.2], [5.2, 5.2]]) {
+        this._addBox(px, 6.8, pz, 1.3, 4.4, 1.3, { color: 0xf1f5f9, studColor: 0xffffff });
+      }
+      this._addBox(0, 9.2, 0, 13, 0.7, 13, { color: 0xfbbf24, studColor: 0xfde047 });
+      // Center waist cover block
+      this._addBox(0, 5.4, 0, 3.2, 1.6, 3.2, { color: 0xe2e8f0, studColor: 0xf8fafc });
+
+      // Sweeping Floating Sky Bridges connecting Spawn Islands to Center Island
+      this._addRamp(0, 12.5, 5.2, 10.5, 2.0, 4.6, 'z', -1, { baseHex: '#d97706', studHex: '#f59e0b', trimColor: 0x2de2ff });
+      this._addRamp(0, -12.5, 5.2, 10.5, 2.0, 4.6, 'z', 1, { baseHex: '#d97706', studHex: '#f59e0b', trimColor: 0xff3e5e });
+
+      // 2 Elevated Side Sniper Islands (Y = 6.2) with floating bridges to Center!
+      for (const xSign of [-1, 1]) {
+        this._addFloatingIsland(xSign * 21, 6.2, 0, 11, 13);
+        this._addBox(xSign * 18.5, 7.6, 0, 1.2, 2.8, 5.2, { color: 0xe2e8f0, studColor: 0xf1f5f9 });
+        this._addRamp(xSign * 11.5, 0, 4.4, 8.2, 4.6, 6.2, 'x', xSign, { baseHex: '#94a3b8', studHex: '#cbd5e1', trimColor: 0xfde047 });
+        // Wind launch pad on side islands up to the central temple roof!
+        this._addJumpPad(xSign * 21, 6.2, 4.2, 1.7, 12.8, 0xa855f7);
+        this._addJumpPad(xSign * 21, 6.2, -4.2, 1.7, 12.8, 0xa855f7);
+      }
+
+      this.waypoints = [
+        new THREE.Vector3(0, 4.6, 0),
+        new THREE.Vector3(-4, 4.6, 4),
+        new THREE.Vector3(4, 4.6, -4),
+        new THREE.Vector3(0, 2.0, 23),
+        new THREE.Vector3(0, 2.0, -23),
+        new THREE.Vector3(-21, 6.2, 0),
+        new THREE.Vector3(21, 6.2, 0),
+      ];
+    }
+
+    // =========================================================
+    // MAP 2: CLOUD SPIRE (Multi-Tier Airborne Sky Citadel!)
+    // =========================================================
+    _buildCloudSpireMap() {
+      this._setLighting({
+        skyHex: 0x3b82f6,
+        fogHex: 0x93c5fd,
+        hemiSky: 0xf0f9ff,
+        hemiGround: 0x60a5fa,
+        hemiInt: 1.08,
+        sunHex: 0xfffbeb,
+        sunInt: 1.38,
+        sunPos: [-28, 56, 20],
+        clouds: true,
+        lowerClouds: true,
+      });
+
+      this.bounds = { minX: -40, maxX: 40, minZ: -44, maxZ: 44 };
+      this.spawns = {
+        player: new THREE.Vector3(0, 4.0, 23),
+        bot: new THREE.Vector3(0, 4.0, -23),
+      };
+
+      // Lower Floating Sky Deck (Y = 4.0)
+      this._addBox(0, 3.5, 0, 22, 1.0, 56, { color: 0xe2e8f0, studColor: 0xf8fafc });
+      this._addBox(0, 2.8, 0, 22.4, 0.35, 56.4, { color: 0x2de2ff, emissive: 0x2de2ff, solid: false });
+
+      // Side Open-Air Wing Platforms (Y = 8.4)
+      for (const xSign of [-1, 1]) {
+        this._addBox(xSign * 22, 7.9, 0, 12, 1.0, 28, { color: 0x1e293b, studColor: 0x334155 });
+        this._addBox(xSign * 22, 7.2, 0, 12.4, 0.3, 28.4, { color: 0xa855f7, emissive: 0xa855f7, solid: false });
+        // Glass Energy Bridges from main deck up to side wings!
+        this._addRamp(xSign * 13.5, 8, 4.6, 5.8, 4.0, 8.4, 'x', xSign, { baseHex: '#38bdf8', studHex: '#7dd3fc', trimColor: 0x2de2ff });
+        this._addRamp(xSign * 13.5, -8, 4.6, 5.8, 4.0, 8.4, 'x', xSign, { baseHex: '#38bdf8', studHex: '#7dd3fc', trimColor: 0x2de2ff });
+        // Cover walls on side wings
+        this._addBox(xSign * 19, 9.6, 0, 1.2, 2.4, 6.0, { color: 0x475569, studColor: 0x64748b });
+      }
+
+      // Towering Upper Sky Crown Platform (Y = 12.6!)
+      this._addBox(0, 12.1, 0, 16, 1.0, 16, { color: 0xf8fafc, studColor: 0xffffff });
+      this._addBox(0, 11.4, 0, 16.4, 0.35, 16.4, { color: 0xfbbf24, emissive: 0xfbbf24, solid: false });
+      this._addBox(-4.5, 13.6, 0, 1.6, 2.0, 4.8, { color: 0x38bdf8, studColor: 0x7dd3fc });
+      this._addBox(4.5, 13.6, 0, 1.6, 2.0, 4.8, { color: 0x38bdf8, studColor: 0x7dd3fc });
+
+      // Launch pads shooting players straight up to the Sky Crown (Y=12.6) & Side Wings (Y=8.4)!
+      this._addJumpPad(0, 4.0, 13, 2.1, 15.6, 0x2de2ff);
+      this._addJumpPad(0, 4.0, -13, 2.1, 15.6, 0xff3e5e);
+      this._addJumpPad(-22, 8.4, 0, 1.9, 13.2, 0xfbbf24);
+      this._addJumpPad(22, 8.4, 0, 1.9, 13.2, 0xfbbf24);
+
+      // Main Deck Cover Blocks
+      for (const zSign of [-1, 1]) {
+        const accent = zSign > 0 ? 0x2de2ff : 0xff3e5e;
+        this._addBox(0, 5.4, zSign * 18.5, 7.2, 2.8, 1.3, { color: 0x334155, studColor: 0x475569 });
+        this._addBox(0, 6.9, zSign * 18.5, 7.4, 0.2, 1.4, { color: accent, emissive: accent, solid: false });
+        this._addBox(-6.5, 5.1, zSign * 7, 2.6, 2.2, 2.6, { color: 0x38bdf8, studColor: 0x7dd3fc });
+        this._addBox(6.5, 5.1, zSign * 7, 2.6, 2.2, 2.6, { color: 0x38bdf8, studColor: 0x7dd3fc });
+      }
+
+      // Decorative Floating Sky Monoliths in the distance
+      for (const [mx, my, mz] of [[-36, 10, -28], [36, 12, -26], [-36, 11, 28], [36, 9, 26]]) {
+        this._addBox(mx, my, mz, 4.5, 16, 4.5, { color: 0x1e293b, solid: false });
+        this._addBox(mx, my + 8.5, mz, 4.8, 0.5, 4.8, { color: 0x2de2ff, emissive: 0x2de2ff, solid: false });
+      }
+
+      this.waypoints = [
+        new THREE.Vector3(0, 12.6, 0),
+        new THREE.Vector3(0, 4.0, 0),
+        new THREE.Vector3(0, 4.0, 13),
+        new THREE.Vector3(0, 4.0, -13),
+        new THREE.Vector3(-22, 8.4, 0),
+        new THREE.Vector3(22, 8.4, 0),
+        new THREE.Vector3(-6, 4.0, 20),
+        new THREE.Vector3(6, 4.0, -20),
+      ];
+    }
+
+    // =========================================================
+    // MAP 3: CLASSIC ARENA
     // =========================================================
     _buildClassicArenaMap() {
       this._setLighting({
@@ -447,13 +665,11 @@
         new THREE.Vector3(8, 0, 16),
         new THREE.Vector3(-21, 2.8, -29),
         new THREE.Vector3(21, 2.8, -29),
-        new THREE.Vector3(-18, 0, -8),
-        new THREE.Vector3(18, 0, -8),
       ];
     }
 
     // =========================================================
-    // MAP 2: ORBITAL ZERO-G (宇宙反重力空间站)
+    // MAP 4: ORBITAL ZERO-G (Space Anti-Gravity Station)
     // =========================================================
     _buildOrbitalMap() {
       this._setLighting({
@@ -469,7 +685,6 @@
         stars: true,
       });
 
-      // Space station metallic lunar floor deck
       this._addBox(0, -0.5, 0, 56, 1, 72, {
         color: 0x1e293b,
         studColor: 0x334155,
@@ -480,26 +695,20 @@
         castShadow: false,
       });
 
-      // Glowing forcefield low perimeter walls so you can see the starry cosmos!
       this._addPerimeter(6.5, 0x172033, 0x24324d, 0x38bdf8, 0xf43f5e, 0xa855f7);
-      // Translucent upper energy forcefield glass
       this._addBox(0, 10, -35.5, 56, 7, 0.2, { color: 0xa855f7, emissive: 0xa855f7, emissiveIntensity: 0.25, opacity: 0.14, solid: false });
       this._addBox(0, 10, 35.5, 56, 7, 0.2, { color: 0x38bdf8, emissive: 0x38bdf8, emissiveIntensity: 0.25, opacity: 0.14, solid: false });
 
-      // Central Anti-Gravity Core Floating Platform (High in the air: Y = 6.2!)
       const coreY = 6.2;
       this._addBox(0, coreY - 0.35, 0, 13, 0.7, 13, { color: 0x334155, studColor: 0x475569, metalness: 0.5 });
       this._addBox(0, coreY - 0.75, 0, 13.4, 0.22, 13.4, { color: 0x38bdf8, emissive: 0x38bdf8, solid: false });
-      // Floating central holographic energy crystal
       this._addBox(0, coreY + 1.1, 0, 2.2, 2.2, 2.2, { color: 0x1e1b4b, studColor: 0x4338ca });
       this._addBox(0, coreY + 2.35, 0, 2.3, 0.25, 2.3, { color: 0xc084fc, emissive: 0xc084fc, solid: false });
 
-      // 4 Floating Mid-Air Asteroid / Sci-Fi Pads around the station (Y = 4.6)
       const padY = 4.6;
       for (const [ax, az] of [[-17, -14], [17, -14], [-17, 14], [17, 14]]) {
         this._addBox(ax, padY - 0.4, az, 9.5, 0.8, 9.5, { color: 0x475569, studColor: 0x64748b });
         this._addBox(ax, padY - 0.85, az, 9.8, 0.2, 9.8, { color: 0xa855f7, emissive: 0xa855f7, solid: false });
-        // Low energy shield cover on each floating pad
         this._addBox(ax, padY + 0.85, az > 0 ? az - 3.8 : az + 3.8, 4.2, 1.7, 0.6, {
           color: 0x38bdf8,
           emissive: 0x0284c7,
@@ -508,13 +717,11 @@
         });
       }
 
-      // 4 Anti-Gravity Jump Pads on the floor launching players straight up to the floating platforms!
       this._addJumpPad(-17, 0, 0, 2.2, 13.5, 0xa855f7);
       this._addJumpPad(17, 0, 0, 2.2, 13.5, 0xa855f7);
       this._addJumpPad(0, 0, 15, 2.2, 14.2, 0x38bdf8);
       this._addJumpPad(0, 0, -15, 2.2, 14.2, 0xf43f5e);
 
-      // Floor space crates & lunar boulders for lower-level cover
       for (const zSign of [-1, 1]) {
         this._addBox(0, 1.4, zSign * 23, 8.0, 2.8, 1.4, { color: 0x334155, studColor: 0x475569 });
         this._addBox(-9.5, 1.2, zSign * 10, 3.0, 2.4, 3.0, { color: 0x4338ca, studColor: 0x6366f1 });
@@ -535,7 +742,7 @@
     }
 
     // =========================================================
-    // MAP 3: JADE COURTYARD (中国风 · 丹阙古阁)
+    // MAP 5: JADE COURTYARD (Eastern Palace & Pagodas)
     // =========================================================
     _buildJadeCourtyardMap() {
       this._setLighting({
@@ -550,7 +757,6 @@
         clouds: true,
       });
 
-      // 青石古砖庭院地面 (Ancient Jade Stone Courtyard)
       this._addBox(0, -0.5, 0, 56, 1, 72, {
         color: 0xb7c0b8,
         studColor: 0xcad3cb,
@@ -559,7 +765,6 @@
         castShadow: false,
       });
 
-      // 中央荷花水池 (Central Lotus Pond — shallow walkable!)
       this._addBox(0, 0.03, 0, 26, 0.06, 22, {
         color: 0x0d9488,
         emissive: 0x14b8a6,
@@ -567,39 +772,29 @@
         solid: false,
         castShadow: false,
       });
-      // Floating lotus pads & pink lotus blossoms
       for (const [lx, lz] of [[-8, -6], [8, -6], [-9, 6], [9, 6], [-4, -8], [5, 8]]) {
         this._addBox(lx, 0.08, lz, 2.2, 0.08, 2.2, { color: 0x15803d, solid: false, castShadow: false });
         this._addBox(lx, 0.22, lz, 0.7, 0.28, 0.7, { color: 0xf472b6, emissive: 0xf43f5e, emissiveIntensity: 0.4, solid: false, castShadow: false });
       }
 
-      // 宫墙围栏 (Crimson Palace Perimeter Wall + Gold Roof Trim)
       this._addPerimeter(10.5, 0x7f1d1d, 0x991b1b, 0xfbbf24, 0xfbbf24, 0xf59e0b);
 
-      // 中央玉石拱桥 (Central Jade Arch Bridge spanning the lotus pond!)
       const bridgeY = 2.6;
       this._addBox(0, bridgeY - 0.25, 0, 7.6, 0.5, 11, { color: 0xe2e8f0, studColor: 0xf1f5f9 });
-      // Red lacquered bridge side railings
       this._addBox(-3.6, bridgeY + 0.55, 0, 0.35, 1.1, 11, { color: 0xb91c1c });
       this._addBox(3.6, bridgeY + 0.55, 0, 0.35, 1.1, 11, { color: 0xb91c1c });
-      // Bridge North & South ramps
       this._addRamp(0, 9.2, 7.2, 7.5, 0, bridgeY, 'z', -1, { baseHex: '#cbd5e1', studHex: '#e2e8f0', trimColor: 0xb91c1c });
       this._addRamp(0, -9.2, 7.2, 7.5, 0, bridgeY, 'z', 1, { baseHex: '#cbd5e1', studHex: '#e2e8f0', trimColor: 0xb91c1c });
 
-      // 东西双侧朱红飞檐亭阁 (East & West Climbable Pagoda Pavilions — 飞檐走壁!)
       const deckY = 3.8;
       for (const xSign of [-1, 1]) {
         const px = xSign * 20;
-        // Raised stone pagoda foundation
         this._addBox(px, deckY / 2, 0, 10, deckY, 16, { color: 0x64748b, studColor: 0x7c8ca3 });
-        // 4 Vermilion wooden pillars supporting golden pagoda roof
         for (const [dx, dz] of [[-4, -6.5], [4, -6.5], [-4, 6.5], [4, 6.5]]) {
           this._addBox(px + dx, deckY + 2.3, dz, 0.9, 4.6, 0.9, { color: 0xb91c1c });
         }
-        // Golden Glazed-Tile Pagoda Roof (2 tiers!)
         this._addBox(px, deckY + 4.9, 0, 12.2, 0.7, 18.2, { color: 0xd97706, studColor: 0xf59e0b });
         this._addBox(px, deckY + 5.7, 0, 8.6, 0.9, 13.4, { color: 0xf59e0b, studColor: 0xfbbf24 });
-        // Glowing Red Lanterns hanging under the eaves!
         for (const lz of [-6.5, 0, 6.5]) {
           this._addBox(px - xSign * 4.9, deckY + 3.6, lz, 0.7, 0.95, 0.7, {
             color: 0xff2a2a,
@@ -608,29 +803,22 @@
             solid: false,
           });
         }
-        // Sweeping ramps up to the pagoda deck from North & South
         this._addRamp(px, 12.2, 5.5, 8.4, 0, deckY, 'z', -1, { baseHex: '#991b1b', studHex: '#b91c1c', trimColor: 0xfbbf24 });
         this._addRamp(px, -12.2, 5.5, 8.4, 0, deckY, 'z', 1, { baseHex: '#991b1b', studHex: '#b91c1c', trimColor: 0xfbbf24 });
       }
 
-      // 2 Qi Wind Launch Pads to leap right onto the golden pagoda rooftops (轻功飞檐!)
       this._addJumpPad(-12.5, 0, 0, 1.9, 14.2, 0x34d399);
       this._addJumpPad(12.5, 0, 0, 1.9, 14.2, 0x34d399);
 
-      // 南北石牌坊 & 翠竹掩体 (North/South Stone Paifang Archways + Bamboo Grove Cover)
       for (const zSign of [-1, 1]) {
-        // Paifang Archway pillars + lintel + gold roof
         this._addBox(-5.2, 2.8, zSign * 22, 1.3, 5.6, 1.3, { color: 0xb91c1c });
         this._addBox(5.2, 2.8, zSign * 22, 1.3, 5.6, 1.3, { color: 0xb91c1c });
         this._addBox(0, 5.8, zSign * 22, 13.5, 1.0, 1.8, { color: 0xd97706, studColor: 0xf59e0b });
-        // Low stone screen wall (影壁) right behind spawn
         this._addBox(0, 1.35, zSign * 22, 5.2, 2.7, 1.1, { color: 0x7f1d1d, studColor: 0x991b1b });
 
-        // Bamboo grove cover clusters (翠竹)
         for (const bx of [-10, 10]) {
           this._addBox(bx, 2.1, zSign * 16, 2.4, 4.2, 2.4, { color: 0x15803d, studColor: 0x22c55e });
         }
-        // Courtyard stone lanterns / cover blocks
         this._addBox(-17, 1.4, zSign * 24, 3.6, 2.8, 2.4, { color: 0x64748b, studColor: 0x94a3b8 });
         this._addBox(17, 1.4, zSign * 24, 3.6, 2.8, 2.4, { color: 0x64748b, studColor: 0x94a3b8 });
       }
@@ -651,7 +839,7 @@
     }
 
     // =========================================================
-    // MAP 4: NEON STATION
+    // MAP 6: NEON STATION
     // =========================================================
     _buildStationMap() {
       this._setLighting({
@@ -739,7 +927,7 @@
     }
 
     // =========================================================
-    // MAP 5: CONSTRUCTION
+    // MAP 7: CONSTRUCTION
     // =========================================================
     _buildConstructionMap() {
       this._setLighting({
@@ -805,7 +993,7 @@
     }
 
     // =========================================================
-    // MAP 6: SPLASH PARK
+    // MAP 8: SPLASH PARK
     // =========================================================
     _buildSplashMap() {
       this._setLighting({
@@ -847,7 +1035,6 @@
       this._addRamp(0, 7.4, 4.5, 4.8, 0, islandY, 'z', -1, { baseHex: '#34d399', studHex: '#6ee7b7', trimColor: 0xfde047 });
       this._addRamp(0, -7.4, 4.5, 4.8, 0, islandY, 'z', 1, { baseHex: '#34d399', studHex: '#6ee7b7', trimColor: 0xfde047 });
 
-      // Water Geyser Jump Pads!
       this._addJumpPad(-11, 0, 0, 1.9, 13.8, 0x22d3ee);
       this._addJumpPad(11, 0, 0, 1.9, 13.8, 0x22d3ee);
 
@@ -892,7 +1079,7 @@
     checkJumpPad(pos) {
       for (const pad of this.jumpPads) {
         const d = Math.hypot(pos.x - pad.x, pos.z - pad.z);
-        if (d < pad.radius && Math.abs(pos.y - pad.y) < 0.75) {
+        if (d < pad.radius && Math.abs(pos.y - pad.y) < 0.85) {
           return pad.launchVel;
         }
       }
@@ -911,7 +1098,7 @@
     }
 
     getFloorHeight(x, z, feetY, radius = 0.45) {
-      let highest = 0;
+      let highest = this.hasFloor ? 0 : -Infinity;
 
       for (const c of this.colliders) {
         if (
@@ -993,7 +1180,7 @@
     }
 
     isPointInsideSolid(x, y, z, radius = 0.15) {
-      if (y < radius) return { hit: true, normal: new THREE.Vector3(0, 1, 0) };
+      if (this.hasFloor && y < radius) return { hit: true, normal: new THREE.Vector3(0, 1, 0) };
       if (x < this.bounds.minX + radius) return { hit: true, normal: new THREE.Vector3(1, 0, 0) };
       if (x > this.bounds.maxX - radius) return { hit: true, normal: new THREE.Vector3(-1, 0, 0) };
       if (z < this.bounds.minZ + radius) return { hit: true, normal: new THREE.Vector3(0, 0, 1) };

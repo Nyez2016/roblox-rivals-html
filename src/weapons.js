@@ -96,7 +96,7 @@
     },
     crossbow: {
       id: 'crossbow',
-      name: '诸葛连弩 CROSSBOW',
+      name: 'REPEATING CROSSBOW',
       slotType: 'primary',
       damage: 28,
       headDamage: 56,
@@ -119,7 +119,7 @@
     },
     bow: {
       id: 'bow',
-      name: '寒霜长弓 LONGBOW',
+      name: 'FROST LONGBOW',
       slotType: 'primary',
       damage: 65,
       headDamage: 135,
@@ -211,7 +211,7 @@
     },
     kunai: {
       id: 'kunai',
-      name: '暗影飞刀 KUNAI',
+      name: 'SHADOW KUNAI',
       slotType: 'secondary',
       damage: 34,
       headDamage: 78,
@@ -326,7 +326,7 @@
     },
     hiddenblade: {
       id: 'hiddenblade',
-      name: '暗影双匕 DAGGERS',
+      name: 'SHADOW DAGGERS',
       slotType: 'melee',
       damage: 40,
       lungeDamage: 58,
@@ -351,7 +351,7 @@
     },
     xiuchun: {
       id: 'xiuchun',
-      name: '绣春刀 SABER',
+      name: 'IMPERIAL SABER',
       slotType: 'melee',
       damage: 58,
       lungeDamage: 78,
@@ -492,7 +492,7 @@
     },
     smoke: {
       id: 'smoke',
-      name: '烟雾弹 SMOKE',
+      name: 'SMOKE BOMB',
       slotType: 'utility',
       utilityType: 'smoke',
       damage: 0,
@@ -756,7 +756,7 @@
       group.rotation.set(0.18, 0.12, 0);
       group.userData.muzzle = new THREE.Vector3(0, 0, -0.5);
     } else if (weaponId === 'xiuchun') {
-      // Ming Dynasty Imperial Saber (绣春刀) with crimson tassel & gold dragon guard!
+      // Imperial curved saber with crimson grip & gold dragon guard!
       const hilt = box(0.048, 0.048, 0.26, 0x7f1d1d, 'secondary', 0.2, 0.6);
       hilt.position.set(0, -0.05, 0.14);
       const guard = cyl(0.07, 0.07, 0.026, 8, 0xf59e0b, 'accent', 0.85, 0.2, 0xd97706);

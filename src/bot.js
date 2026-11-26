@@ -129,7 +129,7 @@
       visor.position.set(0, 1.8, 0.27);
       visor.userData.hitbox = 'head';
 
-      // Accessory 1: Chinese Assassin Conical Bamboo Hat (斗笠)
+      // Accessory 1: Eastern Assassin Conical Bamboo Hat
       this.bambooHat = new THREE.Group();
       const hatCone = new THREE.Mesh(
         new THREE.ConeGeometry(0.74, 0.32, 12),
@@ -354,7 +354,7 @@
       return hits.length === 0;
     }
 
-    update(dt, playerPos, playerAlive, canFight, onBotShoot, gravityScale = 1.0, smokeClouds = []) {
+    update(dt, playerPos, playerAlive, canFight, onBotShoot, gravityScale = 1.0, smokeClouds = [], onBotVoidFall = null) {
       if (this.hurtFlash > 0) {
         this.hurtFlash = Math.max(0, this.hurtFlash - dt);
         const emissiveVal = this.hurtFlash > 0 ? 0.5 : 0;
@@ -444,6 +444,19 @@
         this.vel.z *= Math.max(0, 1 - dt * 8);
       }
 
+      // On open-air floating maps, avoid stepping off edges when grounded
+      if (!this.arena.hasFloor && this.onGround) {
+        const probeX = this.pos.x + this.vel.x * 0.28;
+        const probeZ = this.pos.z + this.vel.z * 0.28;
+        const probeFloor = this.arena.getFloorHeight(probeX, probeZ, this.pos.y + 0.3, 0.25);
+        if (probeFloor === -Infinity) {
+          this.strafeDir = -this.strafeDir;
+          this.vel.x *= -0.5;
+          this.vel.z *= -0.5;
+          this._pickNewWaypoint();
+        }
+      }
+
       // Gravity scaled by space/anti-gravity mode
       this.vel.y -= 23 * gravityScale * dt;
       this.pos.x += this.vel.x * dt;
@@ -452,12 +465,22 @@
 
       this.arena.resolveHorizontal(this.pos, 0.48, 1.9);
       const floorY = this.arena.getFloorHeight(this.pos.x, this.pos.z, this.pos.y, 0.45);
-      if (this.pos.y <= floorY) {
+      if (floorY > -Infinity && this.pos.y <= floorY) {
         this.pos.y = floorY;
         this.vel.y = 0;
         this.onGround = true;
       } else {
         this.onGround = false;
+      }
+
+      // Check open-air void ring-out!
+      if (!this.arena.hasFloor && this.pos.y < this.arena.voidY) {
+        this.alive = false;
+        this.hp = 0;
+        this.hpSprite.visible = false;
+        this.stunRing.visible = false;
+        if (typeof onBotVoidFall === 'function') onBotVoidFall();
+        return;
       }
 
       // Bot uses Jump Pads too!

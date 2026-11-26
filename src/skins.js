@@ -158,7 +158,7 @@
     },
     porcelain: {
       id: 'porcelain',
-      name: '青花瓷 Porcelain',
+      name: 'Blue Porcelain',
       bodyColor: 0xffffff,
       secondaryColor: 0x1e3a8a,
       accentColor: 0x38bdf8,
@@ -169,7 +169,7 @@
     },
     jadedragon: {
       id: 'jadedragon',
-      name: '玄铁青龙 Jade',
+      name: 'Jade Dragon',
       bodyColor: 0x14241e,
       secondaryColor: 0x0a0f0d,
       accentColor: 0x10b981,
@@ -179,7 +179,7 @@
     },
     starlight: {
       id: 'starlight',
-      name: '星际漫步 Orbital',
+      name: 'Starlight Orbital',
       bodyColor: 0xe2e8f0,
       secondaryColor: 0x1e293b,
       accentColor: 0xf59e0b,
@@ -244,7 +244,7 @@
     },
     assassin: {
       id: 'assassin',
-      name: '锦衣暗卫 Assassin',
+      name: 'Imperial Assassin',
       skinColor: 0x27232c,
       torsoColor: 0x7f1d1d,
       legsColor: 0x11131a,
@@ -254,7 +254,7 @@
     },
     astronaut: {
       id: 'astronaut',
-      name: '星际宇航员 Astro',
+      name: 'Space Astronaut',
       skinColor: 0xf1f5f9,
       torsoColor: 0xe2e8f0,
       legsColor: 0xcbd5e1,
@@ -296,10 +296,10 @@
 
   const KILL_EFFECTS = {
     classic: { id: 'classic', name: 'Classic' },
-    lightning: { id: 'lightning', name: '金色雷击 Thunder' },
-    sakura: { id: 'sakura', name: '樱花散落 Sakura' },
-    blackhole: { id: 'blackhole', name: '黑洞吞噬 Void' },
-    pixel: { id: 'pixel', name: '像素解体 Voxel' },
+    lightning: { id: 'lightning', name: 'Golden Thunder' },
+    sakura: { id: 'sakura', name: 'Sakura Burst' },
+    blackhole: { id: 'blackhole', name: 'Void Black Hole' },
+    pixel: { id: 'pixel', name: 'Voxel Shatter' },
   };
 
   function getSkinTexture(pattern) {
