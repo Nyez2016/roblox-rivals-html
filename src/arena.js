@@ -1,6 +1,8 @@
-import * as THREE from 'three';
+(function (global) {
+  const Rivals = (global.Rivals = global.Rivals || {});
+  const THREE = global.THREE;
 
-export const MAPS = {
+  const MAPS = {
   arena: {
     id: 'arena',
     name: 'ARENA',
@@ -66,11 +68,12 @@ function createStudTexture(baseHex, studHex, gridSize = 64) {
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
-  tex.colorSpace = THREE.SRGBColorSpace;
+  if ('SRGBColorSpace' in THREE) tex.colorSpace = THREE.SRGBColorSpace;
+  else if ('sRGBEncoding' in THREE) tex.encoding = THREE.sRGBEncoding;
   return tex;
 }
 
-export class Arena {
+class Arena {
   constructor(scene, initialMapId = 'arena') {
     this.scene = scene;
     this.mapGroup = new THREE.Group();
@@ -804,3 +807,7 @@ export class Arena {
     return { hit: false, normal: null };
   }
 }
+
+  Rivals.MAPS = MAPS;
+  Rivals.Arena = Arena;
+})(window);

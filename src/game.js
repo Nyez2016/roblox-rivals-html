@@ -1,11 +1,19 @@
-import * as THREE from 'three';
-import { Arena, MAPS } from './arena.js';
-import { WEAPONS, createWeaponMesh } from './weapons.js';
-import { WEAPON_SKINS, RIVAL_SKINS, updateAnimatedWeaponSkin } from './skins.js';
-import { RivalBot, DIFFICULTIES } from './bot.js';
-import { SoundEngine } from './audio.js';
+(function (global) {
+  const THREE = global.THREE;
+  const {
+    Arena,
+    MAPS,
+    WEAPONS,
+    createWeaponMesh,
+    WEAPON_SKINS,
+    RIVAL_SKINS,
+    updateAnimatedWeaponSkin,
+    RivalBot,
+    DIFFICULTIES,
+    SoundEngine,
+  } = global.Rivals;
 
-const WINS_TO_VICTORY = 5;
+  const WINS_TO_VICTORY = 5;
 const ROUND_DURATION = 90;
 const STORAGE_KEY = 'rivals_html_prefs_v2';
 const PAINT_COLORS = [0xff5ef7, 0x2de2ff, 0x38ef7d, 0xffd447, 0xff5a36, 0xa855f7];
@@ -56,6 +64,8 @@ class RivalsGame {
 
     // Match state
     this.matchActive = false;
+    this.isPaused = true;
+    this.wasPointerLocked = false;
     this.roundState = 'menu'; // 'menu' | 'countdown' | 'playing' | 'round_over' | 'match_over'
     this.playerScore = 0;
     this.botScore = 0;
@@ -321,6 +331,7 @@ class RivalsGame {
       if (!this.matchActive) {
         this.startNewMatch();
       } else {
+        this.isPaused = false;
         this.ui.menu.classList.add('hidden');
         this.ui.hud.classList.remove('hidden');
         this._requestPointerLock();
@@ -341,6 +352,7 @@ class RivalsGame {
     this.ui.loadoutBtn.addEventListener('click', () => {
       this.ui.matchEnd.classList.add('hidden');
       this.matchActive = false;
+      this.isPaused = true;
       this.ui.playBtn.textContent = 'ENTER ARENA';
       this.ui.restartBtn.classList.add('hidden');
       this.ui.menu.classList.remove('hidden');
@@ -348,23 +360,26 @@ class RivalsGame {
 
     document.addEventListener('pointerlockchange', () => {
       const locked = document.pointerLockElement === this.renderer.domElement;
-      if (!locked && this.matchActive && this.roundState !== 'match_over') {
-        this.isMouseDown = false;
-        this.isAds = false;
-        this.ui.playBtn.textContent = 'RESUME DUEL';
-        this.ui.restartBtn.classList.remove('hidden');
-        this.ui.menu.classList.remove('hidden');
+      if (locked) {
+        this.wasPointerLocked = true;
+      } else if (this.wasPointerLocked && this.matchActive && this.roundState !== 'match_over') {
+        this.wasPointerLocked = false;
+        this._openPauseMenu();
       }
     });
 
     window.addEventListener('keydown', (e) => {
       const code = e.code;
-      if (['Space', 'Tab'].includes(code) && document.pointerLockElement) {
+      if (code === 'Escape' && this.matchActive && !this.isPaused && this.roundState !== 'match_over') {
+        this._openPauseMenu();
+        return;
+      }
+      if (['Space', 'Tab'].includes(code) && !this.isPaused) {
         e.preventDefault();
       }
       this.keys[code] = true;
 
-      if (document.pointerLockElement !== this.renderer.domElement) return;
+      if (this.isPaused || !this.matchActive) return;
       if (code === 'Digit1') this.switchWeapon(0);
       if (code === 'Digit2') this.switchWeapon(1);
       if (code === 'Digit3') this.switchWeapon(2);
@@ -379,7 +394,9 @@ class RivalsGame {
     });
 
     window.addEventListener('mousemove', (e) => {
-      if (document.pointerLockElement !== this.renderer.domElement) return;
+      if (this.isPaused || !this.matchActive) return;
+      const locked = document.pointerLockElement === this.renderer.domElement;
+      if (!locked && e.buttons === 0) return;
       const mult = this.isAds && this._currentWeapon().scoped ? 0.35 : this.isAds ? 0.68 : 1.0;
       const sens = 0.0021 * this.settings.sensitivity * mult;
       this.player.yaw -= e.movementX * sens;
@@ -388,7 +405,10 @@ class RivalsGame {
     });
 
     window.addEventListener('mousedown', (e) => {
-      if (document.pointerLockElement !== this.renderer.domElement) return;
+      if (this.isPaused || !this.matchActive) return;
+      if (document.pointerLockElement !== this.renderer.domElement) {
+        this._requestPointerLock();
+      }
       if (e.button === 0) {
         this.isMouseDown = true;
         this._tryFire(true);
@@ -409,21 +429,36 @@ class RivalsGame {
     window.addEventListener('contextmenu', (e) => e.preventDefault());
 
     window.addEventListener('wheel', (e) => {
-      if (document.pointerLockElement !== this.renderer.domElement) return;
+      if (this.isPaused || !this.matchActive) return;
       const dir = e.deltaY > 0 ? 1 : -1;
       const next = (this.activeSlot + dir + this.slots.length) % this.slots.length;
       this.switchWeapon(next);
     });
   }
 
+  _openPauseMenu() {
+    this.isPaused = true;
+    this.isMouseDown = false;
+    this.isAds = false;
+    this.ui.playBtn.textContent = 'RESUME DUEL';
+    this.ui.restartBtn.classList.remove('hidden');
+    this.ui.menu.classList.remove('hidden');
+  }
+
   _requestPointerLock() {
-    if (this.renderer.domElement.requestPointerLock) {
-      this.renderer.domElement.requestPointerLock();
+    try {
+      if (this.renderer.domElement.requestPointerLock) {
+        const res = this.renderer.domElement.requestPointerLock();
+        if (res && typeof res.catch === 'function') res.catch(() => {});
+      }
+    } catch {
+      // Ignore pointer lock rejection
     }
   }
 
   startNewMatch() {
     this.matchActive = true;
+    this.isPaused = false;
     this.playerScore = 0;
     this.botScore = 0;
     this.roundNumber = 1;
@@ -1421,7 +1456,7 @@ class RivalsGame {
       return;
     }
 
-    const paused = document.pointerLockElement !== this.renderer.domElement && this.roundState !== 'match_over';
+    const paused = this.isPaused && this.roundState !== 'match_over';
     if (!paused) {
       this._updateRoundState(dt);
       this._updatePlayer(dt);
@@ -1441,6 +1476,11 @@ class RivalsGame {
   }
 }
 
-window.addEventListener('DOMContentLoaded', () => {
-  new RivalsGame();
-});
+  window.addEventListener('DOMContentLoaded', () => {
+    if (typeof window.THREE === 'undefined') {
+      alert('Failed to load Three.js CDN. Please check your internet connection and refresh.');
+      return;
+    }
+    new RivalsGame();
+  });
+})(window);

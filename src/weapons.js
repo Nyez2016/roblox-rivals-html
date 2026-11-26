@@ -1,7 +1,9 @@
-import * as THREE from 'three';
-import { applyWeaponSkin } from './skins.js';
+(function (global) {
+  const Rivals = (global.Rivals = global.Rivals || {});
+  const THREE = global.THREE;
+  const { applyWeaponSkin } = Rivals;
 
-export const WEAPONS = {
+  const WEAPONS = {
   // === PRIMARIES ===
   ar: {
     id: 'ar',
@@ -400,7 +402,7 @@ function cyl(rt, rb, h, segs, color, role = 'secondary', metalness = 0.55, rough
   return mesh;
 }
 
-export function createWeaponMesh(weaponId, skinId = 'default') {
+function createWeaponMesh(weaponId, skinId = 'default') {
   const group = new THREE.Group();
 
   if (weaponId === 'ar' || weaponId === 'burst') {
@@ -618,3 +620,7 @@ export function createWeaponMesh(weaponId, skinId = 'default') {
   applyWeaponSkin(group, skinId);
   return group;
 }
+
+  Rivals.WEAPONS = WEAPONS;
+  Rivals.createWeaponMesh = createWeaponMesh;
+})(window);

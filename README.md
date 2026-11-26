@@ -39,7 +39,9 @@ Play live on GitHub Pages: **[https://nyez2016.github.io/roblox-rivals-html/](ht
 
 ## Run Locally
 
-Because the game uses ES modules, serve the directory with any static HTTP server:
+Just **double-click `index.html`** directly in your browser — no build step or local server required!
+
+You can also serve it over HTTP if you prefer:
 
 ```bash
 # Using Python

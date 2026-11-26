@@ -1,7 +1,9 @@
-import * as THREE from 'three';
-import { RIVAL_SKINS } from './skins.js';
+(function (global) {
+  const Rivals = (global.Rivals = global.Rivals || {});
+  const THREE = global.THREE;
+  const { RIVAL_SKINS } = Rivals;
 
-export const DIFFICULTIES = {
+  const DIFFICULTIES = {
   rookie: {
     name: 'RIVAL (ROOKIE)',
     speed: 6.4,
@@ -31,7 +33,7 @@ export const DIFFICULTIES = {
   },
 };
 
-export class RivalBot {
+class RivalBot {
   constructor(scene, arena) {
     this.scene = scene;
     this.arena = arena;
@@ -443,3 +445,7 @@ export class RivalBot {
     this.group.rotation.set(0, this.yaw, 0);
   }
 }
+
+  Rivals.DIFFICULTIES = DIFFICULTIES;
+  Rivals.RivalBot = RivalBot;
+})(window);

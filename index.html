@@ -5,11 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ROBLOX RIVALS — HTML5 Arena FPS</title>
   <link rel="stylesheet" href="./styles.css" />
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://unpkg.com/three@0.170.0/build/three.module.js"
-      }
+  <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
+  <script>
+    if (typeof window.THREE === 'undefined') {
+      document.write('<script src="https://unpkg.com/three@0.149.0/build/three.min.js"><\/script>');
     }
   </script>
 </head>
@@ -404,6 +403,11 @@
     </div>
   </div>
 
-  <script type="module" src="./src/game.js"></script>
+  <script src="./src/audio.js"></script>
+  <script src="./src/skins.js"></script>
+  <script src="./src/weapons.js"></script>
+  <script src="./src/arena.js"></script>
+  <script src="./src/bot.js"></script>
+  <script src="./src/game.js"></script>
 </body>
 </html>

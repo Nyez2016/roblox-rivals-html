@@ -1,4 +1,7 @@
-export class SoundEngine {
+(function (global) {
+  const Rivals = (global.Rivals = global.Rivals || {});
+
+  class SoundEngine {
   constructor() {
     this.ctx = null;
     this.enabled = true;
@@ -217,3 +220,6 @@ export class SoundEngine {
     }
   }
 }
+
+  Rivals.SoundEngine = SoundEngine;
+})(window);

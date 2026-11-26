@@ -1,6 +1,13 @@
-import * as THREE from 'three';
+(function (global) {
+  const Rivals = (global.Rivals = global.Rivals || {});
+  const THREE = global.THREE;
 
-function createGalaxyTexture() {
+  function setTextureSRGB(tex) {
+    if ('SRGBColorSpace' in THREE) tex.colorSpace = THREE.SRGBColorSpace;
+    else if ('sRGBEncoding' in THREE) tex.encoding = THREE.sRGBEncoding;
+  }
+
+  function createGalaxyTexture() {
   const canvas = document.createElement('canvas');
   canvas.width = 128;
   canvas.height = 128;
@@ -38,7 +45,7 @@ function createGalaxyTexture() {
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
-  tex.colorSpace = THREE.SRGBColorSpace;
+  setTextureSRGB(tex);
   return tex;
 }
 
@@ -71,14 +78,14 @@ function createSakuraTexture() {
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
-  tex.colorSpace = THREE.SRGBColorSpace;
+  setTextureSRGB(tex);
   return tex;
 }
 
 let cachedGalaxyTex = null;
 let cachedSakuraTex = null;
 
-export const WEAPON_SKINS = {
+const WEAPON_SKINS = {
   default: {
     id: 'default',
     name: 'Standard',
@@ -168,7 +175,7 @@ export const WEAPON_SKINS = {
   },
 };
 
-export const RIVAL_SKINS = {
+const RIVAL_SKINS = {
   classic: {
     id: 'classic',
     name: 'Red Rival',
@@ -211,7 +218,7 @@ export const RIVAL_SKINS = {
   },
 };
 
-export function getSkinTexture(pattern) {
+function getSkinTexture(pattern) {
   if (pattern === 'galaxy') {
     if (!cachedGalaxyTex) cachedGalaxyTex = createGalaxyTexture();
     return cachedGalaxyTex;
@@ -223,7 +230,7 @@ export function getSkinTexture(pattern) {
   return null;
 }
 
-export function applyWeaponSkin(group, skinId) {
+function applyWeaponSkin(group, skinId) {
   const skin = WEAPON_SKINS[skinId] || WEAPON_SKINS.default;
   group.userData.skinId = skin.id;
   group.userData.animatedMaterials = [];
@@ -259,7 +266,7 @@ export function applyWeaponSkin(group, skinId) {
   });
 }
 
-export function updateAnimatedWeaponSkin(group, timeSec) {
+function updateAnimatedWeaponSkin(group, timeSec) {
   const anims = group?.userData?.animatedMaterials;
   if (!anims || anims.length === 0) return;
   const hue = (timeSec * 0.25) % 1;
@@ -273,3 +280,9 @@ export function updateAnimatedWeaponSkin(group, timeSec) {
     }
   }
 }
+
+  Rivals.WEAPON_SKINS = WEAPON_SKINS;
+  Rivals.RIVAL_SKINS = RIVAL_SKINS;
+  Rivals.applyWeaponSkin = applyWeaponSkin;
+  Rivals.updateAnimatedWeaponSkin = updateAnimatedWeaponSkin;
+})(window);
