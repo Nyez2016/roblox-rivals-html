@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ROBLOX RIVALS — HTML5 Arena FPS</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.170.0/build/three.module.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="game-container"></div>
+
+  <!-- Damage Vignette & Sniper Scope Overlay -->
+  <div id="damage-vignette"></div>
+  <div id="slide-lines"></div>
+  <div id="scope-overlay" class="hidden">
+    <div class="scope-ring"></div>
+    <div class="scope-h"></div>
+    <div class="scope-v"></div>
+  </div>
+
+  <!-- Active Gameplay HUD -->
+  <div id="hud" class="hidden">
+    <!-- Top Scoreboard -->
+    <div id="scoreboard">
+      <div class="team-block player-team">
+        <span class="team-name">YOU</span>
+        <div class="score-pips" id="player-pips"></div>
+        <span class="team-score" id="player-score">0</span>
+      </div>
+      <div class="round-center">
+        <div class="round-label" id="round-label">ROUND 1</div>
+        <div class="round-timer" id="round-timer">1:30</div>
+      </div>
+      <div class="team-block bot-team">
+        <span class="team-score" id="bot-score">0</span>
+        <div class="score-pips" id="bot-pips"></div>
+        <span class="team-name" id="bot-name">RIVAL</span>
+      </div>
+    </div>
+
+    <!-- Kill Feed / Event Log -->
+    <div id="kill-feed"></div>
+
+    <!-- Floating Damage Numbers Layer -->
+    <div id="damage-numbers"></div>
+
+    <!-- Crosshair & Hitmarker -->
+    <div id="crosshair">
+      <div class="ch-line ch-top"></div>
+      <div class="ch-line ch-bottom"></div>
+      <div class="ch-line ch-left"></div>
+      <div class="ch-line ch-right"></div>
+      <div class="ch-dot"></div>
+      <div id="hitmarker">
+        <span class="hm-arm hm-1"></span>
+        <span class="hm-arm hm-2"></span>
+        <span class="hm-arm hm-3"></span>
+        <span class="hm-arm hm-4"></span>
+      </div>
+    </div>
+
+    <!-- Center Round Banner -->
+    <div id="center-banner" class="hidden">
+      <div id="banner-title">ROUND 1</div>
+      <div id="banner-sub">GET READY</div>
+    </div>
+
+    <!-- Bottom Left: Health & Movement Abilities -->
+    <div id="vitals-panel">
+      <div class="hp-row">
+        <span class="hp-icon">+</span>
+        <span id="hp-value">100</span>
+        <div class="hp-bar-track">
+          <div id="hp-bar-fill"></div>
+        </div>
+      </div>
+      <div class="abilities-row">
+        <div class="ability-chip" id="ability-slide">
+          <span class="key-badge">SHIFT</span>
+          <span class="ability-name">SLIDE</span>
+          <div class="ability-bar"><div id="slide-cd-fill"></div></div>
+        </div>
+        <div class="ability-chip" id="ability-dash">
+          <span class="key-badge">E</span>
+          <span class="ability-name">DASH</span>
+          <div class="ability-bar"><div id="dash-cd-fill"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Center: Weapon Hotbar -->
+    <div id="hotbar">
+      <div class="hotbar-slot active" data-slot="0">
+        <span class="slot-num">1</span>
+        <span class="slot-label" id="slot-0-name">ASSAULT RIFLE</span>
+      </div>
+      <div class="hotbar-slot" data-slot="1">
+        <span class="slot-num">2</span>
+        <span class="slot-label" id="slot-1-name">REVOLVER</span>
+      </div>
+      <div class="hotbar-slot" data-slot="2">
+        <span class="slot-num">3</span>
+        <span class="slot-label" id="slot-2-name">KATANA</span>
+      </div>
+      <div class="hotbar-slot" data-slot="3">
+        <span class="slot-num">4</span>
+        <span class="slot-label" id="slot-3-name">GRENADE</span>
+      </div>
+    </div>
+
+    <!-- Bottom Right: Ammo Counter -->
+    <div id="ammo-panel">
+      <div id="weapon-name-hud">ASSAULT RIFLE</div>
+      <div class="ammo-numbers">
+        <span id="ammo-current">25</span>
+        <span class="ammo-sep">/</span>
+        <span id="ammo-reserve">100</span>
+      </div>
+      <div id="reload-indicator" class="hidden">RELOADING...</div>
+    </div>
+  </div>
+
+  <!-- Main Menu / Pause / Loadout Overlay -->
+  <div id="menu-overlay">
+    <div class="menu-card">
+      <div class="brand-header">
+        <div class="brand-tag">HTML5 ARENA EDITION</div>
+        <h1 class="brand-title">ROBLOX <span>RIVALS</span></h1>
+        <p class="brand-sub">1v1 Competitive Arena Duel — First to 5 Wins</p>
+      </div>
+
+      <!-- Loadout Selector -->
+      <div class="loadout-grid">
+        <div class="loadout-col">
+          <label class="section-label">PRIMARY (1)</label>
+          <div class="choice-group" data-category="primary">
+            <button class="choice-btn active" data-weapon="ar">
+              <strong>Assault Rifle</strong>
+              <span>Balanced auto · 18 / 32 HS</span>
+            </button>
+            <button class="choice-btn" data-weapon="sniper">
+              <strong>Sniper</strong>
+              <span>1-shot HS · 75 / 150 HS</span>
+            </button>
+            <button class="choice-btn" data-weapon="burst">
+              <strong>Burst Rifle</strong>
+              <span>3-round burst · 16 / 28 HS</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="loadout-col">
+          <label class="section-label">SECONDARY (2)</label>
+          <div class="choice-group" data-category="secondary">
+            <button class="choice-btn active" data-weapon="revolver">
+              <strong>Revolver</strong>
+              <span>High punch · 36 / 72 HS</span>
+            </button>
+            <button class="choice-btn" data-weapon="uzi">
+              <strong>Uzi</strong>
+              <span>Rapid SMG · 11 / 18 HS</span>
+            </button>
+          </div>
+
+          <label class="section-label" style="margin-top: 12px;">BOT DIFFICULTY</label>
+          <div class="choice-group horizontal" data-category="difficulty">
+            <button class="choice-btn" data-diff="rookie">Rookie</button>
+            <button class="choice-btn active" data-diff="pro">Pro</button>
+            <button class="choice-btn" data-diff="nemesis">Nemesis</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Settings Row -->
+      <div class="settings-bar">
+        <div class="setting-item">
+          <label for="sens-slider">Mouse Sens: <span id="sens-val">1.0</span></label>
+          <input type="range" id="sens-slider" min="0.2" max="2.5" step="0.1" value="1.0" />
+        </div>
+        <div class="setting-item">
+          <label for="fov-slider">FOV: <span id="fov-val">82</span></label>
+          <input type="range" id="fov-slider" min="65" max="105" step="1" value="82" />
+        </div>
+        <div class="setting-item toggle-item">
+          <label for="sound-toggle">SFX Audio</label>
+          <input type="checkbox" id="sound-toggle" checked />
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="menu-actions">
+        <button id="play-btn" class="primary-btn">ENTER ARENA</button>
+        <button id="restart-btn" class="secondary-btn hidden">NEW MATCH</button>
+      </div>
+
+      <!-- Controls Reference -->
+      <div class="controls-footer">
+        <span><b>WASD</b> Move</span>
+        <span><b>SPACE</b> Jump</span>
+        <span><b>SHIFT/C</b> Slide</span>
+        <span><b>E</b> Dash</span>
+        <span><b>LMB</b> Fire</span>
+        <span><b>RMB</b> ADS / Lunge</span>
+        <span><b>1-4</b> Weapons</span>
+        <span><b>R</b> Reload</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Match End Modal -->
+  <div id="match-end-overlay" class="hidden">
+    <div class="end-card">
+      <div id="end-badge" class="end-badge">VICTORY</div>
+      <div id="end-score" class="end-score">5 — 2</div>
+      <div id="end-stats" class="end-stats"></div>
+      <div class="menu-actions">
+        <button id="rematch-btn" class="primary-btn">REMATCH</button>
+        <button id="loadout-btn" class="secondary-btn">CHANGE LOADOUT</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./src/game.js"></script>
+</body>
+</html>
