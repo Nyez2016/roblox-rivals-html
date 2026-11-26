@@ -68,6 +68,9 @@
       this.extraEnemies = [];
       this.allies = [];
       this.playerRespawnTimer = 0;
+      this.escapedRange = false;
+      this.activeMatchMode = 'classic';
+      this.activeMatchMap = 'arena';
 
       this.viewmodelRoot = new THREE.Group();
       this.camera.add(this.viewmodelRoot);
@@ -200,6 +203,7 @@
         playBtn: document.getElementById('play-btn'),
         rangeQuickBtn: document.getElementById('range-quick-btn'),
         restartBtn: document.getElementById('restart-btn'),
+        exitMenuBtn: document.getElementById('exit-menu-btn'),
         rematchBtn: document.getElementById('rematch-btn'),
         loadoutBtn: document.getElementById('loadout-btn'),
         playerScore: document.getElementById('player-score'),
@@ -381,7 +385,11 @@
 
       this.ui.playBtn.addEventListener('click', () => {
         this.sound.unlock();
-        if (!this.matchActive) {
+        if (
+          !this.matchActive ||
+          this.loadoutChoice.mode !== this.activeMatchMode ||
+          this.loadoutChoice.map !== this.activeMatchMap
+        ) {
           this.startNewMatch();
         } else {
           this.isPaused = false;
@@ -394,6 +402,12 @@
           this._requestPointerLock();
         }
       });
+
+      if (this.ui.exitMenuBtn) {
+        this.ui.exitMenuBtn.addEventListener('click', () => {
+          this._exitToMainMenu();
+        });
+      }
 
       if (this.ui.rangeQuickBtn) {
         this.ui.rangeQuickBtn.addEventListener('click', () => {
@@ -515,8 +529,27 @@
       this.isPaused = true;
       this.isMouseDown = false;
       this.isAds = false;
-      this.ui.playBtn.textContent = 'RESUME DUEL';
+      this.ui.playBtn.textContent = 'RESUME';
       this.ui.restartBtn.classList.remove('hidden');
+      if (this.ui.exitMenuBtn) this.ui.exitMenuBtn.classList.remove('hidden');
+      this.ui.menu.classList.remove('hidden');
+    }
+
+    _exitToMainMenu() {
+      this.matchActive = false;
+      this.isPaused = true;
+      this.roundState = 'menu';
+      this.isMouseDown = false;
+      this.isAds = false;
+      if (document.pointerLockElement) document.exitPointerLock();
+      this._clearRoundEntities();
+      this._clearExtraEnemies();
+      this.ui.hud.classList.add('hidden');
+      this.ui.centerBanner.classList.add('hidden');
+      this.ui.matchEnd.classList.add('hidden');
+      this.ui.playBtn.textContent = 'ENTER ARENA';
+      this.ui.restartBtn.classList.add('hidden');
+      if (this.ui.exitMenuBtn) this.ui.exitMenuBtn.classList.add('hidden');
       this.ui.menu.classList.remove('hidden');
     }
 
@@ -587,6 +620,9 @@
     startNewMatch() {
       this.matchActive = true;
       this.isPaused = false;
+      this.activeMatchMode = this.loadoutChoice.mode;
+      this.activeMatchMap = this.loadoutChoice.map;
+      this.escapedRange = false;
       this.playerScore = 0;
       this.botScore = 0;
       this.roundNumber = 1;
@@ -672,6 +708,8 @@
                 { pos: new THREE.Vector3(-12, 0, -14), moveAxis: 'x', moveRange: 5.5, moveSpeed: 2.2, phase: 1.4, label: 'FAST DUMMY' },
                 { pos: new THREE.Vector3(12, 0, -16), label: 'MID-LONG DUMMY' },
                 { pos: new THREE.Vector3(0, 3.4, -28), moveAxis: 'x', moveRange: 10, moveSpeed: 1.4, phase: 2.6, label: 'SNIPER GALLERY' },
+                // Secret Outside Golden Boss Dummy on the outer parkour tower!
+                { pos: new THREE.Vector3(0, 12.6, -56), hp: 500, moveAxis: 'x', moveRange: 4.5, moveSpeed: 1.8, phase: 0, label: 'SECRET BOSS DUMMY' },
               ]
             : this.arena.getWaypoints().slice(0, 6).map((wp, idx) => ({
                 pos: wp.clone(),
@@ -1809,6 +1847,22 @@
         this.sound.playHurt();
         this._updateHUD();
         this._handlePlayerDeath('SKY VOID');
+      }
+
+      // Shooting Range Escape Easter Egg!
+      if (
+        this.arena.mapId === 'shootingrange' &&
+        !this.escapedRange &&
+        this.roundState === 'playing' &&
+        (Math.abs(p.pos.x) > 29.5 || p.pos.z < -37.5 || p.pos.z > 37.5)
+      ) {
+        this.escapedRange = true;
+        this.sound.playRoundEnd(true);
+        this._pushKillFeed('ESCAPED THE SHOOTING RANGE!');
+        this._showBanner('YOU ESCAPED!', 'EXPLORE OUTSIDE & FIND THE GOLDEN BOSS DUMMY', false);
+        setTimeout(() => {
+          if (this.roundState === 'playing') this.ui.centerBanner.classList.add('hidden');
+        }, 2600);
       }
 
       // Anti-Gravity Jump Pads / Qi Wind Pads / Water Geysers!

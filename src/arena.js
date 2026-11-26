@@ -459,12 +459,22 @@
         clouds: true,
       });
 
+      this.bounds = { minX: -72, maxX: 72, minZ: -82, maxZ: 72 };
       this.spawns = {
         player: new THREE.Vector3(0, 0, 26),
         bot: new THREE.Vector3(0, 0, -16),
       };
 
-      // Clean concrete range floor
+      // Outside lush Roblox grass world surrounding the Shooting Range (escapable!)
+      this._addBox(0, -0.58, -4, 152, 1, 160, {
+        color: 0x22c55e,
+        studColor: 0x4ade80,
+        solid: false,
+        shootable: true,
+        castShadow: false,
+      });
+
+      // Clean concrete range floor inside the compound
       this._addBox(0, -0.5, 0, 56, 1, 72, {
         color: 0xd1dae6,
         studColor: 0xdfe7f2,
@@ -479,7 +489,24 @@
       this._addBox(0, 0.02, -14, 52, 0.04, 0.35, { color: 0xff3e5e, emissive: 0xff3e5e, solid: false, castShadow: false });
       this._addBox(0, 0.02, -26, 52, 0.04, 0.4, { color: 0xa855f7, emissive: 0xa855f7, solid: false, castShadow: false });
 
-      this._addPerimeter(11, 0x243044, 0x303f59, 0x2de2ff, 0xfbbf24, 0x38bdf8);
+      // Perimeter walls WITH a breached open escape doorway on the East wall (+X) & climbable wall tops!
+      const wallH = 11;
+      this._addBox(0, wallH / 2, -36, 58, wallH, 2, { color: 0x243044, studColor: 0x303f59 });
+      this._addBox(0, wallH / 2, 36, 58, wallH, 2, { color: 0x243044, studColor: 0x303f59 });
+      this._addBox(-28, wallH / 2, 0, 2, wallH, 72, { color: 0x243044, studColor: 0x303f59 });
+      // Split East wall leaving a wide glowing ESCAPE BREACH at Z = [-18, -10]
+      this._addBox(28, wallH / 2, -27, 2, wallH, 18, { color: 0x243044, studColor: 0x303f59 });
+      this._addBox(28, wallH / 2, 13, 2, wallH, 46, { color: 0x243044, studColor: 0x303f59 });
+      this._addBox(28, 8.2, -14, 2, 5.6, 8, { color: 0x243044, studColor: 0x303f59 });
+      // Glowing green EXIT portal frame around the escape opening!
+      this._addBox(27.2, 5.4, -14, 0.4, 0.35, 8.4, { color: 0x38ef7d, emissive: 0x38ef7d, solid: false });
+      this._addBox(27.2, 2.7, -18.0, 0.4, 5.4, 0.35, { color: 0x38ef7d, emissive: 0x38ef7d, solid: false });
+      this._addBox(27.2, 2.7, -10.0, 0.4, 5.4, 0.35, { color: 0x38ef7d, emissive: 0x38ef7d, solid: false });
+
+      // Glowing wall accent strips
+      this._addBox(0, 6.5, 34.9, 52, 0.35, 0.2, { color: 0x2de2ff, emissive: 0x2de2ff, solid: false });
+      this._addBox(0, 6.5, -34.9, 52, 0.35, 0.2, { color: 0xfbbf24, emissive: 0xfbbf24, solid: false });
+      this._addBox(-26.9, 6.5, 0, 0.2, 0.35, 68, { color: 0x38bdf8, emissive: 0x38bdf8, solid: false });
 
       // Firing line booths (waist-high weapon benches with open center walkout!)
       this._addBox(-11, 0.7, 21, 9, 1.4, 1.2, { color: 0x334155, studColor: 0x475569 });
@@ -487,11 +514,13 @@
       this._addBox(-15.5, 1.7, 22.8, 0.7, 3.4, 4.4, { color: 0x1e293b });
       this._addBox(15.5, 1.7, 22.8, 0.7, 3.4, 4.4, { color: 0x1e293b });
 
-      // Side Elevated Sniper Balcony (Left) with ramp & jump pad
+      // Side Elevated Sniper Balcony (Left) with ramp + SUPER Roof-Escape Jump Pad!
       const balcY = 3.8;
       this._addBox(-21, balcY / 2, 10, 10, balcY, 14, { color: 0x3b4961, studColor: 0x4c5d7a });
       this._addRamp(-21, 21.5, 5.2, 9.0, 0, balcY, 'z', -1, { baseHex: '#475569', studHex: '#64748b', trimColor: 0x2de2ff });
       this._addJumpPad(-14, 0, 18, 1.8, 12.6, 0x2de2ff);
+      // Launch right over the 11m Shooting Range perimeter wall from the balcony!
+      this._addJumpPad(-22, balcY, 6, 2.0, 19.5, 0x38ef7d);
 
       // Far Elevated Target Gallery Platform (North back wall at Y = 3.4)
       const backY = 3.4;
@@ -512,6 +541,27 @@
         this._addBox(tx, 7.2, -34.55, 2.8, 2.8, 0.2, { color: 0xff3e5e, emissive: 0xff3e5e, emissiveIntensity: 0.45, solid: false });
         this._addBox(tx, 7.2, -34.4, 1.2, 1.2, 0.2, { color: 0xfbbf24, emissive: 0xfbbf24, emissiveIntensity: 0.65, solid: false });
       }
+
+      // === OUTSIDE ESCAPE WORLD (Beyond the Shooting Range Walls!) ===
+      // Outside blocky Roblox trees & hills
+      for (const [tx, tz] of [[44, -22], [54, 4], [46, 26], [-44, -18], [-48, 22], [0, -56], [-26, -58], [26, -58]]) {
+        this._addBox(tx, 2.4, tz, 1.4, 4.8, 1.4, { color: 0x784c2b });
+        this._addBox(tx, 5.8, tz, 5.0, 3.2, 5.0, { color: 0x15803d, studColor: 0x22c55e });
+      }
+
+      // Outside Sky Parkour Obby leading to the Secret Golden Boss Dummy Tower!
+      this._addBox(42, 1.5, -14, 7, 3.0, 7, { color: 0x38bdf8, studColor: 0x7dd3fc });
+      this._addRamp(35, -14, 4.4, 7.0, 0, 3.0, 'x', 1, { baseHex: '#38bdf8', studHex: '#7dd3fc', trimColor: 0x38ef7d });
+      this._addBox(52, 4.5, -24, 7, 1.0, 7, { color: 0xa855f7, studColor: 0xc084fc });
+      this._addBox(44, 7.5, -36, 7, 1.0, 7, { color: 0xfbbf24, studColor: 0xfde047 });
+      this._addBox(30, 10.5, -48, 8, 1.0, 8, { color: 0xf43f5e, studColor: 0xfb7185 });
+      // Secret Golden Boss Tower platform behind the North wall!
+      this._addBox(0, 12.0, -56, 16, 1.2, 14, { color: 0xf59e0b, studColor: 0xfde047 });
+      this._addBox(0, 11.2, -56, 16.4, 0.35, 14.4, { color: 0x2de2ff, emissive: 0x2de2ff, solid: false });
+      // Jump Pads outside to soar onto the Golden Tower or back over the wall into the Range!
+      this._addJumpPad(42, 3.0, -14, 2.0, 16.5, 0xa855f7);
+      this._addJumpPad(0, 0, -45, 2.2, 22.0, 0xfbbf24);
+      this._addJumpPad(-38, 0, 6, 2.2, 21.0, 0x38ef7d);
 
       this.waypoints = [
         new THREE.Vector3(-12, 0, 6),
