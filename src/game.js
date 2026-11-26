@@ -122,6 +122,7 @@
         dashCooldown: 0,
         lungeCooldown: 0,
         padCooldown: 0,
+        ladderStepTimer: 0,
       };
 
       this.slots = [];
@@ -1902,41 +1903,83 @@
       const w = this._currentWeapon();
       const modeSpeedBonus = this.loadoutChoice.mode === 'assassin' ? 1.12 : 1.0;
       const baseSpeed = 9.4 * w.moveMult * modeSpeedBonus * (this.isAds ? 0.68 : 1.0);
+      const activeLadder = canMove ? this.arena.getLadderAt(p.pos) : null;
 
-      if (canMove) {
-        if (p.slideTimer > 0) {
-          p.slideTimer = Math.max(0, p.slideTimer - dt);
-          const slideSpeed = 14.5 * (0.55 + 0.45 * (p.slideTimer / 0.42));
-          p.vel.x = p.slideDir.x * slideSpeed;
-          p.vel.z = p.slideDir.z * slideSpeed;
-        } else {
-          const input = this._getMoveInputDir();
-          if (input.lengthSq() > 0.001) input.normalize();
-          const accel = p.onGround ? 14 : gravScale < 0.6 ? 8.2 : 5.5;
-          p.vel.x = THREE.MathUtils.lerp(p.vel.x, input.x * baseSpeed, Math.min(1, dt * accel));
-          p.vel.z = THREE.MathUtils.lerp(p.vel.z, input.z * baseSpeed, Math.min(1, dt * accel));
+      if (canMove && activeLadder) {
+        // Smooth Ladder Climbing! Hold W / Space to climb up, S to climb down
+        const input = this._getMoveInputDir();
+        if (input.lengthSq() > 0.001) input.normalize();
+        p.vel.x = THREE.MathUtils.lerp(p.vel.x, input.x * 4.5, Math.min(1, dt * 12));
+        p.vel.z = THREE.MathUtils.lerp(p.vel.z, input.z * 4.5, Math.min(1, dt * 12));
+
+        let climbSpeed = 0;
+        if (this.keys['Space']) {
+          climbSpeed = 9.0;
+        } else if (this.keys['KeyW']) {
+          climbSpeed = p.pitch < -0.55 ? -7.0 : 8.5;
+        } else if (this.keys['KeyS']) {
+          climbSpeed = -7.5;
         }
 
-        if (p.onGround) p.coyoteTimer = 0.11;
-        else p.coyoteTimer = Math.max(0, p.coyoteTimer - dt);
+        p.vel.y = climbSpeed;
+        p.slideTimer = 0;
+        p.onGround = true;
+        p.coyoteTimer = 0.12;
 
-        if (this.keys['Space'] && p.coyoteTimer > 0) {
-          p.vel.y = 8.9 * gravMode.jumpBoost;
-          p.onGround = false;
-          p.coyoteTimer = 0;
-          p.slideTimer = 0;
-          this.sound.playJump();
+        if (Math.abs(climbSpeed) > 1.0) {
+          p.ladderStepTimer -= dt;
+          if (p.ladderStepTimer <= 0) {
+            p.ladderStepTimer = 0.22;
+            this.sound.playLadderStep();
+          }
+        }
+
+        p.pos.x += p.vel.x * dt;
+        p.pos.z += p.vel.z * dt;
+        p.pos.y += p.vel.y * dt;
+
+        // Clean gentle hop onto the Crane Boom when reaching the top of the ladder!
+        if (p.pos.y >= activeLadder.yTop - 0.15 && climbSpeed > 0) {
+          p.pos.y = activeLadder.yTop + 0.05;
+          p.pos.x += 1.05;
+          p.vel.y = 3.2;
         }
       } else {
-        p.vel.x *= Math.max(0, 1 - dt * 10);
-        p.vel.z *= Math.max(0, 1 - dt * 10);
-      }
+        if (canMove) {
+          if (p.slideTimer > 0) {
+            p.slideTimer = Math.max(0, p.slideTimer - dt);
+            const slideSpeed = 14.5 * (0.55 + 0.45 * (p.slideTimer / 0.42));
+            p.vel.x = p.slideDir.x * slideSpeed;
+            p.vel.z = p.slideDir.z * slideSpeed;
+          } else {
+            const input = this._getMoveInputDir();
+            if (input.lengthSq() > 0.001) input.normalize();
+            const accel = p.onGround ? 14 : gravScale < 0.6 ? 8.2 : 5.5;
+            p.vel.x = THREE.MathUtils.lerp(p.vel.x, input.x * baseSpeed, Math.min(1, dt * accel));
+            p.vel.z = THREE.MathUtils.lerp(p.vel.z, input.z * baseSpeed, Math.min(1, dt * accel));
+          }
 
-      // Apply gravity (scaled for Space Low-G / Anti-Grav modes!)
-      p.vel.y -= 23 * gravScale * dt;
-      p.pos.x += p.vel.x * dt;
-      p.pos.z += p.vel.z * dt;
-      p.pos.y += p.vel.y * dt;
+          if (p.onGround) p.coyoteTimer = 0.11;
+          else p.coyoteTimer = Math.max(0, p.coyoteTimer - dt);
+
+          if (this.keys['Space'] && p.coyoteTimer > 0) {
+            p.vel.y = 8.9 * gravMode.jumpBoost;
+            p.onGround = false;
+            p.coyoteTimer = 0;
+            p.slideTimer = 0;
+            this.sound.playJump();
+          }
+        } else {
+          p.vel.x *= Math.max(0, 1 - dt * 10);
+          p.vel.z *= Math.max(0, 1 - dt * 10);
+        }
+
+        // Apply gravity (scaled for Space Low-G / Anti-Grav modes!)
+        p.vel.y -= 23 * gravScale * dt;
+        p.pos.x += p.vel.x * dt;
+        p.pos.z += p.vel.z * dt;
+        p.pos.y += p.vel.y * dt;
+      }
 
       this.arena.resolveHorizontal(p.pos, 0.45, p.slideTimer > 0 ? 1.15 : 1.8);
 

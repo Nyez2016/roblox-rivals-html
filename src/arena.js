@@ -192,6 +192,7 @@
       this.colliders = [];
       this.ramps = [];
       this.jumpPads = [];
+      this.ladders = [];
       this.animatedProps = [];
       this.trainHazard = null;
       this.meshes = [];
@@ -229,6 +230,7 @@
       this.colliders = [];
       this.ramps = [];
       this.jumpPads = [];
+      this.ladders = [];
       this.animatedProps = [];
       this.trainHazard = null;
       this.meshes = [];
@@ -505,6 +507,51 @@
       this.animatedProps.push({ type: 'padRing', mesh: floatRing, baseY: y + 0.35, phase: Math.random() * 6.28 });
 
       this.jumpPads.push({ x, y, z, radius, launchVel });
+    }
+
+    _addLadder(x, z, yBottom, yTop, facingAxis = 'x', radius = 1.25) {
+      const h = yTop - yBottom;
+      const railMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.75, roughness: 0.28 });
+      const rungMat = new THREE.MeshStandardMaterial({
+        color: 0xfacc15,
+        emissive: 0xeab308,
+        emissiveIntensity: 0.45,
+        metalness: 0.5,
+        roughness: 0.3,
+      });
+
+      // 2 vertical steel rails
+      for (const side of [-0.42, 0.42]) {
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(0.1, h, 0.1), railMat);
+        if (facingAxis === 'x') rail.position.set(x, yBottom + h / 2, z + side);
+        else rail.position.set(x + side, yBottom + h / 2, z);
+        rail.castShadow = true;
+        this.mapGroup.add(rail);
+      }
+
+      // Evenly spaced horizontal climbable rungs
+      const steps = Math.max(4, Math.floor(h / 0.62));
+      for (let i = 0; i <= steps; i++) {
+        const ry = yBottom + 0.35 + (i / steps) * (h - 0.55);
+        const rung = new THREE.Mesh(
+          new THREE.BoxGeometry(facingAxis === 'x' ? 0.1 : 0.92, 0.085, facingAxis === 'x' ? 0.92 : 0.1),
+          rungMat
+        );
+        rung.position.set(x, ry, z);
+        this.mapGroup.add(rung);
+      }
+
+      this.ladders.push({ x, z, yBottom, yTop, radius });
+    }
+
+    getLadderAt(pos) {
+      for (const lad of this.ladders) {
+        const d = Math.hypot(pos.x - lad.x, pos.z - lad.z);
+        if (d <= lad.radius && pos.y >= lad.yBottom - 0.4 && pos.y <= lad.yTop + 0.35) {
+          return lad;
+        }
+      }
+      return null;
     }
 
     update(dt, timeSec, onTrainEvent = null) {
@@ -1376,18 +1423,49 @@
       this._addBox(0, 2.2, 0, 24, 1.2, 1.4, { color: 0x334155, solid: false });
       this._addBox(0, 2.2, 16, 24, 1.2, 1.4, { color: 0x334155, solid: false });
 
-      // Towering Walkable Yellow Construction Crane! (Grenade Jump / Scythe Jump right onto the Crane Boom!)
+      // Towering Hollow Climbable Yellow Construction Crane WITH A LADDER INSIDE!
       const craneY = 15.6;
-      this._addBox(-24, 11.5, -18, 2.8, 24, 2.8, { color: 0xeab308, studColor: 0xfacc15 });
-      // Solid walkable main crane boom right above center scaffolding (top at Y = 16.3!)
-      this._addBox(0, craneY, 0, 54, 1.4, 3.6, { color: 0xeab308, studColor: 0xfacc15 });
-      // Crane Operator Cabin perched on the boom!
-      this._addBox(-14, craneY + 2.2, 0, 4.2, 3.0, 4.0, { color: 0xd97706, studColor: 0xf59e0b });
-      this._addBox(-11.85, craneY + 2.3, 0, 0.15, 1.6, 2.8, { color: 0x38bdf8, emissive: 0x38bdf8, solid: false });
-      // Counterweight block & glowing crane beacon
+      const mastX = -11.2;
+      const mastZ = 0;
+      const mastBase = 4.0;
+      const mastTop = craneY + 0.7; // 16.3
+      const mastH = mastTop - mastBase;
+
+      // 4 Yellow Steel Lattice Corner Columns forming a hollow walkable tower shaft!
+      for (const [dx, dz] of [[-1.35, -1.35], [1.35, -1.35], [-1.35, 1.35], [1.35, 1.35]]) {
+        this._addBox(mastX + dx, mastBase + mastH / 2, mastZ + dz, 0.42, mastH, 0.42, {
+          color: 0xeab308,
+          studColor: 0xfacc15,
+        });
+      }
+      // Horizontal steel cross-braces on North, South, and West sides (East side stays open so you walk right in!)
+      for (let by = mastBase + 2.4; by < mastTop - 0.6; by += 2.6) {
+        this._addBox(mastX, by, mastZ - 1.35, 2.7, 0.24, 0.24, { color: 0xca8a04, solid: false });
+        this._addBox(mastX, by, mastZ + 1.35, 2.7, 0.24, 0.24, { color: 0xca8a04, solid: false });
+        this._addBox(mastX - 1.35, by, mastZ, 0.24, 0.24, 2.7, { color: 0xca8a04, solid: false });
+      }
+      // Glowing green entrance frame at the bottom of the Crane Tower so the ladder is easy to spot!
+      this._addBox(mastX + 1.35, mastBase + 2.6, mastZ, 0.24, 0.24, 2.7, { color: 0x38ef7d, emissive: 0x38ef7d, solid: false });
+
+      // Climbable Steel Ladder INSIDE the hollow Crane Mast (Y = 4.0 -> 16.5)!
+      this._addLadder(mastX - 0.88, mastZ, mastBase, mastTop + 0.25, 'x', 1.45);
+
+      // Walkable Main Crane Boom split cleanly around the open ladder hatch at X = [-12.5, -10.0]!
+      // West boom section: X = -27 to -12.5 (width 14.5, center -19.75)
+      this._addBox(-19.75, craneY, 0, 14.5, 1.4, 3.8, { color: 0xeab308, studColor: 0xfacc15 });
+      // East boom section: X = -10.0 to +27 (width 37.0, center +8.5)
+      this._addBox(8.5, craneY, 0, 37.0, 1.4, 3.8, { color: 0xeab308, studColor: 0xfacc15 });
+      // Side rim walkways framing the ladder hatch so you can walk around the shaft without falling in!
+      this._addBox(mastX, craneY, -1.65, 2.8, 1.4, 0.7, { color: 0xeab308, studColor: 0xfacc15 });
+      this._addBox(mastX, craneY, 1.65, 2.8, 1.4, 0.7, { color: 0xeab308, studColor: 0xfacc15 });
+
+      // Crane Operator Cabin perched right beside the ladder top at X = -18!
+      this._addBox(-18, craneY + 2.2, 0, 4.2, 3.0, 4.0, { color: 0xd97706, studColor: 0xf59e0b });
+      this._addBox(-15.85, craneY + 2.3, 0, 0.15, 1.6, 2.8, { color: 0x38bdf8, emissive: 0x38bdf8, solid: false });
+      // Counterweight block & glowing red crane beacon
       this._addBox(-26, craneY + 1.1, 0, 4.4, 2.4, 4.2, { color: 0x475569, studColor: 0x64748b });
       this._addBox(26, craneY + 1.0, 0, 1.2, 1.2, 1.2, { color: 0xff3e5e, emissive: 0xff3e5e, solid: false });
-      // Upper decorative secondary crane strut for hanging wing cables
+      // Upper decorative secondary crane struts for hanging wing cables
       this._addBox(0, 25, -10, 52, 1.2, 1.4, { color: 0xca8a04, solid: false });
       this._addBox(0, 25, 10, 52, 1.2, 1.4, { color: 0xca8a04, solid: false });
 
@@ -1423,8 +1501,8 @@
       }
 
       // Construction Hoist Jump Pads launching straight onto the Scaffolding Tower!
-      this._addJumpPad(-9.5, 4.0, 0, 1.9, 13.8, 0xfacc15);
-      this._addJumpPad(9.5, 4.0, 0, 1.9, 13.8, 0xfacc15);
+      this._addJumpPad(-9.5, 4.0, 6.2, 1.9, 13.8, 0xfacc15);
+      this._addJumpPad(9.5, 4.0, -6.2, 1.9, 13.8, 0xfacc15);
 
       // Concrete Jersey Barriers & Cinderblock Stacks on Main Deck
       for (const zSign of [-1, 1]) {

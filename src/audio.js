@@ -216,6 +216,11 @@
       this._tone('sine', 180, 340, 0.09, 0.08);
     }
 
+    playLadderStep() {
+      if (!this._ready()) return;
+      this._tone('triangle', 480, 320, 0.045, 0.08);
+    }
+
     playSlide() {
       if (!this._ready()) return;
       this._noise(0.24, 1100, 0.16, 'bandpass');
