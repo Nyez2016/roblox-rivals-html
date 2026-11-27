@@ -35,11 +35,11 @@
       this.cb = callbacks;
       this.peer = null;
       this.hostConn = null;
-      this.clients = new Map(); // host only: peerId -> { conn, info }
+      this.clients = new Map(); // host only: peerId -> { conn, info, lastSeen }
       this.players = new Map(); // all peers: playerId -> info
 
       this.myId = 'local_' + generateRoomCode();
-      this.myName = options.playerName || 'Player_' + Math.floor(100 + Math.random() * 899);
+      this.myName = (options.playerName || '').trim().slice(0, 16) || 'Player';
       this.isMobile = Boolean(options.isMobile);
       this.streak = options.streak || 0;
 
@@ -51,20 +51,40 @@
       this.isHost = true;
       this.connected = false;
       this.nextColorIdx = 1;
+      this.sessionToken = 0;
+      this.reconnectTimer = null;
+      this.reconnectAttempts = 0;
+      this.heartbeatTimer = null;
+      this.kickedByHost = false;
 
-      this._init();
+      // Authoritative Server Scene/Match State owned by Host!
+      this.serverState = {
+        scene: 'lobby', // 'lobby' | 'range' | 'pvp'
+        map: 'arena',
+        roundNumber: 1,
+        matchId: 0,
+        scores: {},
+      };
+
+      if (options.autoStart !== false) {
+        this.start();
+      }
     }
 
-    _init() {
+    static getUrlJoinInfo() {
       const params = new URLSearchParams(window.location.search || '');
-      const joinCode = (params.get('server') || params.get('join') || '')
+      const code = (params.get('server') || params.get('join') || '')
         .trim()
         .toUpperCase()
         .replace(/[^A-Z0-9]/g, '');
-      const joinPin = (params.get('pin') || '').trim();
+      const pin = (params.get('pin') || '').trim();
+      return { code: code.length >= 4 ? code : '', pin };
+    }
 
+    start() {
+      const { code, pin } = NetManager.getUrlJoinInfo();
       if (typeof global.Peer === 'undefined') {
-        this.roomCode = joinCode || generateRoomCode();
+        this.roomCode = code || generateRoomCode();
         this.inviteUrl = buildInviteUrl(this.roomCode);
         this._resetLocalRoster();
         this._emitReady();
@@ -72,11 +92,11 @@
         return;
       }
 
-      if (joinCode && joinCode.length >= 4) {
-        this.joinServer(joinCode, joinPin);
+      if (code) {
+        this.joinServer(code, pin);
       } else {
         this.createPrivateServer({
-          name: this.serverName,
+          name: `${this.myName}'s Server`,
           pass: '',
           maxPlayers: 8,
         });
@@ -107,7 +127,27 @@
       this._emitRoster();
     }
 
+    setServerState(partialState, broadcastNow = true) {
+      this.serverState = { ...this.serverState, ...partialState };
+      if (this.isHost && broadcastNow) {
+        this.broadcast({ type: 'server_state', state: this.serverState });
+      }
+    }
+
+    _clearTimers() {
+      if (this.reconnectTimer) {
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
+      }
+      if (this.heartbeatTimer) {
+        clearInterval(this.heartbeatTimer);
+        this.heartbeatTimer = null;
+      }
+    }
+
     _destroyPeer() {
+      this.sessionToken += 1;
+      this._clearTimers();
       for (const entry of this.clients.values()) {
         try {
           entry.conn.close();
@@ -144,15 +184,38 @@
       this._emitRoster();
     }
 
+    _startHeartbeat() {
+      if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = setInterval(() => {
+        if (this.isHost) {
+          // Keep signaling alive & broadcast periodic roster sync so nobody drifts!
+          if (this.peer && this.peer.disconnected && !this.peer.destroyed) {
+            try {
+              this.peer.reconnect();
+            } catch {}
+          }
+          if (this.clients.size > 0) {
+            this.broadcast({ type: 'hb', state: this.serverState });
+          }
+        } else if (this.hostConn && this.hostConn.open) {
+          this.sendToHost({ type: 'hb' });
+        }
+      }, 2500);
+    }
+
     createPrivateServer(opts = {}) {
       this._destroyPeer();
+      const myToken = this.sessionToken;
       this.isHost = true;
+      this.kickedByHost = false;
+      this.reconnectAttempts = 0;
       this.serverName = (opts.name || `${this.myName}'s Server`).trim().slice(0, 26) || 'Private Server';
       this.serverPass = (opts.pass || '').trim().slice(0, 12);
       this.maxPlayers = Math.max(2, Math.min(8, parseInt(opts.maxPlayers, 10) || 8));
       this.roomCode = (opts.code || generateRoomCode()).toUpperCase().replace(/[^A-Z0-9]/g, '');
       this.inviteUrl = buildInviteUrl(this.roomCode, this.serverPass);
       this.nextColorIdx = 1;
+      this.serverState = { scene: 'lobby', map: 'arena', roundNumber: 1, matchId: 0, scores: {} };
 
       this.myId = PEER_PREFIX + this.roomCode;
       this._resetLocalRoster();
@@ -162,20 +225,33 @@
       if (typeof global.Peer === 'undefined') return;
 
       try {
-        this.peer = new global.Peer(PEER_PREFIX + this.roomCode, { debug: 0 });
+        const peer = new global.Peer(PEER_PREFIX + this.roomCode, { debug: 0 });
+        this.peer = peer;
 
-        this.peer.on('open', (id) => {
+        peer.on('open', (id) => {
+          if (myToken !== this.sessionToken) return;
           this.myId = id;
           this._resetLocalRoster();
           this._emitReady();
           this._emitStatus('PRIVATE SERVER LIVE · SHARE LINK!', false);
+          this._startHeartbeat();
         });
 
-        this.peer.on('connection', (conn) => {
-          this._handleIncomingClient(conn);
+        peer.on('connection', (conn) => {
+          if (myToken !== this.sessionToken) return;
+          this._handleIncomingClient(conn, myToken);
         });
 
-        this.peer.on('error', (err) => {
+        peer.on('disconnected', () => {
+          if (myToken !== this.sessionToken) return;
+          // Auto-reconnect signaling WITHOUT killing active friend connections!
+          try {
+            if (!peer.destroyed) peer.reconnect();
+          } catch {}
+        });
+
+        peer.on('error', (err) => {
+          if (myToken !== this.sessionToken) return;
           if (err && err.type === 'unavailable-id') {
             this.createPrivateServer({
               name: this.serverName,
@@ -184,7 +260,13 @@
               code: generateRoomCode(),
             });
           } else {
-            this._emitStatus('SERVER ONLINE (P2P RECONNECTING...)', this.clients.size > 0);
+            // Never tear down the server on a transient signaling error!
+            this._emitStatus(
+              this.clients.size > 0
+                ? `${this.players.size}/${this.maxPlayers} IN PRIVATE SERVER`
+                : 'PRIVATE SERVER LIVE (RECONNECTING SIGNAL...)',
+              this.clients.size > 0
+            );
           }
         });
       } catch {
@@ -192,7 +274,7 @@
       }
     }
 
-    joinServer(code, pass = '') {
+    joinServer(code, pass = '', isRetry = false) {
       const clean = String(code || '')
         .trim()
         .toUpperCase()
@@ -200,26 +282,63 @@
       if (!clean) return;
 
       this._destroyPeer();
+      const myToken = this.sessionToken;
       this.isHost = false;
+      this.kickedByHost = false;
       this.roomCode = clean;
       this.serverPass = String(pass || '').trim();
       this.inviteUrl = buildInviteUrl(clean, this.serverPass);
+      if (!isRetry) this.reconnectAttempts = 0;
+
       this._emitReady();
-      this._emitStatus(`JOINING PRIVATE SERVER ${clean}...`, false);
+      this._emitStatus(
+        isRetry ? `RECONNECTING TO ${clean} (${this.reconnectAttempts}/6)...` : `JOINING PRIVATE SERVER ${clean}...`,
+        false
+      );
 
       if (typeof global.Peer === 'undefined') {
         this._emitStatus('P2P LIBRARY FAILED TO LOAD', false);
         return;
       }
 
+      const scheduleReconnect = (reasonText) => {
+        if (myToken !== this.sessionToken || this.kickedByHost || this.isHost) return;
+        if (this.connected) return;
+        this.reconnectAttempts += 1;
+        if (this.reconnectAttempts <= 6) {
+          this._emitStatus(`${reasonText} · RETRYING (${this.reconnectAttempts}/6)...`, false);
+          this.reconnectTimer = setTimeout(() => {
+            if (myToken === this.sessionToken && !this.connected && !this.isHost) {
+              this.joinServer(clean, this.serverPass, true);
+            }
+          }, 2200);
+        } else {
+          // NEVER silently rip into hosting a separate server! Wait for user to click Retry or Leave!
+          this._emitStatus(`COULD NOT REACH ${clean} · CLICK RECONNECT OR LEAVE`, false);
+        }
+      };
+
       try {
-        this.peer = new global.Peer(undefined, { debug: 0 });
-        this.peer.on('open', (id) => {
+        const peer = new global.Peer(undefined, { debug: 0 });
+        this.peer = peer;
+
+        peer.on('open', (id) => {
+          if (myToken !== this.sessionToken) return;
           this.myId = id;
-          const conn = this.peer.connect(PEER_PREFIX + clean, { reliable: true });
+          const conn = peer.connect(PEER_PREFIX + clean, { reliable: true });
           this.hostConn = conn;
 
+          // Timeout guard if host doesn't answer within 6s
+          const openTimeout = setTimeout(() => {
+            if (myToken === this.sessionToken && !this.connected && !this.isHost) {
+              scheduleReconnect(`WAITING FOR ${clean}`);
+            }
+          }, 6000);
+
           conn.on('open', () => {
+            if (myToken !== this.sessionToken) return;
+            clearTimeout(openTimeout);
+            this.reconnectAttempts = 0;
             conn.send({
               type: 'join_req',
               name: this.myName,
@@ -230,46 +349,56 @@
           });
 
           conn.on('data', (data) => {
+            if (myToken !== this.sessionToken) return;
             if (!data || typeof data !== 'object') return;
             this._handleHostPacket(data);
           });
 
           conn.on('close', () => {
+            clearTimeout(openTimeout);
+            if (myToken !== this.sessionToken) return;
             const wasConn = this.connected;
             this.connected = false;
             this.hostConn = null;
             this.players.clear();
             this._emitRoster();
-            this._emitStatus('LEFT PRIVATE SERVER', false);
             if (wasConn && this.cb.onDisconnect) this.cb.onDisconnect();
+            if (!this.kickedByHost) {
+              scheduleReconnect('HOST CONNECTION LOST');
+            }
           });
 
           conn.on('error', () => {
-            this.connected = false;
+            clearTimeout(openTimeout);
+            if (myToken !== this.sessionToken) return;
+            if (!this.connected) scheduleReconnect(`SERVER ${clean} BUSY`);
           });
         });
 
-        this.peer.on('error', () => {
-          this._emitStatus(`SERVER ${clean} NOT FOUND · CREATING YOUR OWN`, false);
-          setTimeout(() => {
-            if (!this.connected) {
-              this.createPrivateServer({ name: `${this.myName}'s Server`, pass: '', maxPlayers: 8 });
-            }
-          }, 1800);
+        peer.on('error', () => {
+          if (myToken !== this.sessionToken) return;
+          if (!this.connected) scheduleReconnect(`SEARCHING FOR ${clean}`);
         });
       } catch {
-        this._emitStatus('JOIN FAILED', false);
+        scheduleReconnect('CONNECTION ERROR');
       }
     }
 
-    _handleIncomingClient(conn) {
+    reconnectNow() {
+      if (this.isHost || !this.roomCode) return;
+      this.reconnectAttempts = 0;
+      this.joinServer(this.roomCode, this.serverPass, false);
+    }
+
+    _handleIncomingClient(conn, myToken) {
       const peerId = conn.peer;
 
       conn.on('data', (data) => {
+        if (myToken !== this.sessionToken) return;
         if (!data || typeof data !== 'object') return;
 
         if (data.type === 'join_req') {
-          if (this.clients.size + 1 >= this.maxPlayers) {
+          if (this.clients.size + 1 >= this.maxPlayers && !this.clients.has(peerId)) {
             conn.send({ type: 'join_denied', reason: 'PRIVATE SERVER IS FULL' });
             setTimeout(() => conn.close(), 200);
             return;
@@ -288,7 +417,7 @@
             streak: Number(data.streak) || 0,
             colorIdx: this.nextColorIdx++,
           };
-          this.clients.set(peerId, { conn, info });
+          this.clients.set(peerId, { conn, info, lastSeen: Date.now() });
           this.players.set(peerId, info);
           this.connected = this.clients.size > 0;
 
@@ -298,6 +427,7 @@
             yourId: peerId,
             serverName: this.serverName,
             maxPlayers: this.maxPlayers,
+            serverState: this.serverState,
           });
           this._broadcastRoster();
           this._emitStatus(`${this.players.size}/${this.maxPlayers} IN PRIVATE SERVER`, true);
@@ -305,7 +435,11 @@
           return;
         }
 
-        if (!this.clients.has(peerId)) return;
+        const clientEntry = this.clients.get(peerId);
+        if (!clientEntry) return;
+        clientEntry.lastSeen = Date.now();
+
+        if (data.type === 'hb') return;
 
         if (data.type === 'profile_update') {
           const info = this.players.get(peerId);
@@ -348,6 +482,7 @@
       });
 
       const removeClient = () => {
+        if (myToken !== this.sessionToken) return;
         const entry = this.clients.get(peerId);
         if (!entry) return;
         const info = entry.info;
@@ -367,13 +502,23 @@
     }
 
     _handleHostPacket(data) {
+      if (data.type === 'hb') {
+        if (data.state && this.cb.onServerStateCheck) {
+          this.serverState = data.state;
+          this.cb.onServerStateCheck(data.state);
+        }
+        return;
+      }
+
       if (data.type === 'join_denied') {
+        this.kickedByHost = true;
         this._emitStatus(`DENIED: ${data.reason || 'CANNOT JOIN'}`, false);
         if (this.cb.onJoinDenied) this.cb.onJoinDenied(data.reason || 'CANNOT JOIN');
         return;
       }
 
       if (data.type === 'kicked') {
+        this.kickedByHost = true;
         this._emitStatus('KICKED FROM PRIVATE SERVER', false);
         if (this.hostConn) this.hostConn.close();
         return;
@@ -381,12 +526,21 @@
 
       if (data.type === 'join_ok') {
         this.connected = true;
+        this.reconnectAttempts = 0;
         this.myId = data.yourId || this.myId;
         this.serverName = data.serverName || this.serverName;
         this.maxPlayers = data.maxPlayers || 8;
+        if (data.serverState) this.serverState = data.serverState;
         this._emitReady();
         this._emitStatus(`JOINED ${this.serverName}`, true);
-        if (this.cb.onConnectedToServer) this.cb.onConnectedToServer(this.serverName);
+        this._startHeartbeat();
+        if (this.cb.onConnectedToServer) this.cb.onConnectedToServer(this.serverName, this.serverState);
+        return;
+      }
+
+      if (data.type === 'server_state' && data.state) {
+        this.serverState = data.state;
+        if (this.cb.onServerStateCheck) this.cb.onServerStateCheck(data.state);
         return;
       }
 

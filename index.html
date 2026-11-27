@@ -85,6 +85,7 @@
         <b id="hud-server-count">1/8</b>
       </div>
       <div id="hud-friends-list"></div>
+      <button id="hud-edit-name-btn" class="hud-edit-name-btn">CHANGE USERNAME</button>
     </div>
 
     <!-- Shooting Range Quick Weapon Picker Hint -->
@@ -220,6 +221,18 @@
         <button id="mob-dash-btn" class="mob-btn mob-dash">DASH</button>
         <button id="mob-reload-btn" class="mob-btn mob-reload">R</button>
       </div>
+    </div>
+  </div>
+
+  <!-- First-Join / Change Username Modal (pick your own name before joining the server!) -->
+  <div id="username-modal" class="hidden">
+    <div class="username-card">
+      <div class="brand-tag">ROBLOX RIVALS · PRIVATE SERVERS</div>
+      <h2 id="username-modal-title">PICK YOUR USERNAME</h2>
+      <p id="username-modal-sub">Choose the name your friends will see floating above your character in the 3D Lobby &amp; matches.</p>
+      <input type="text" id="username-modal-input" maxlength="16" placeholder="Enter username (e.g. AceSniper)" autocomplete="off" />
+      <div id="username-error" class="username-error hidden">Please enter at least 2 characters!</div>
+      <button id="username-confirm-btn" class="primary-btn full-w">ENTER 3D LOBBY</button>
     </div>
   </div>
 
@@ -672,6 +685,11 @@
               <button id="srv-start-pvp-btn" class="mp-btn duel">START SERVER PVP (ALL FRIENDS)</button>
               <button id="srv-pull-range-btn" class="mp-btn">ALL TO SHOOTING RANGE</button>
               <button id="srv-pull-lobby-btn" class="mp-btn">ALL TO 3D LOBBY</button>
+            </div>
+            <div class="srv-guest-actions hidden" id="srv-guest-controls">
+              <div class="srv-guest-note" id="srv-guest-note">CONNECTED AS GUEST · HOST CONTROLS MATCHES &amp; MAP</div>
+              <button id="srv-reconnect-btn" class="mp-btn primary">RECONNECT TO SERVER</button>
+              <button id="srv-leave-btn" class="mp-btn">LEAVE &amp; HOST OWN SERVER</button>
             </div>
           </div>
         </div>

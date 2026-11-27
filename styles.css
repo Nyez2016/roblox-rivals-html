@@ -1131,6 +1131,106 @@ html, body {
   border: 1px solid rgba(255, 255, 255, 0.25);
 }
 
+.hud-edit-name-btn {
+  margin-top: 7px;
+  width: 100%;
+  padding: 4px 8px;
+  border-radius: 7px;
+  border: 1px solid rgba(45, 226, 255, 0.45);
+  background: rgba(45, 226, 255, 0.14);
+  color: var(--cyan);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.hud-edit-name-btn:hover {
+  background: rgba(45, 226, 255, 0.25);
+}
+
+#username-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(5, 9, 18, 0.78);
+  backdrop-filter: blur(10px);
+}
+
+.username-card {
+  width: min(440px, 92vw);
+  padding: 24px 26px;
+  border-radius: 18px;
+  background: linear-gradient(155deg, rgba(16, 24, 42, 0.96), rgba(9, 13, 24, 0.98));
+  border: 2px solid rgba(45, 226, 255, 0.55);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.72);
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  text-align: center;
+}
+
+.username-card h2 {
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+}
+
+.username-card p {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+#username-modal-input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 11px;
+  border: 2px solid rgba(45, 226, 255, 0.45);
+  background: rgba(5, 9, 18, 0.85);
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 17px;
+  font-weight: 800;
+  text-align: center;
+  letter-spacing: 0.04em;
+}
+
+#username-modal-input:focus {
+  outline: none;
+  border-color: var(--cyan);
+  box-shadow: 0 0 18px rgba(45, 226, 255, 0.35);
+}
+
+.username-error {
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.srv-guest-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: auto;
+}
+
+.srv-guest-note {
+  font-size: 10.5px;
+  font-weight: 800;
+  color: var(--cyan);
+  background: rgba(45, 226, 255, 0.12);
+  border: 1px solid rgba(45, 226, 255, 0.3);
+  border-radius: 8px;
+  padding: 6px 8px;
+  text-align: center;
+}
+
 /* Live Friends Roster Panel in 3D Lobby */
 #hud-friends-panel {
   position: fixed;

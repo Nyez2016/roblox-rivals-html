@@ -87,8 +87,13 @@
       this.bot.applySkin(this.loadoutChoice.rivalSkin);
       this.bot.setVisible(false);
       this.remotePlayers = new Map();
-      this.playerName = this.playerName || 'Player_' + Math.floor(100 + Math.random() * 899);
+      this.playerName = this.playerName || '';
+      this.hasCustomName = Boolean(this.hasCustomName && this.playerName);
+      this.usernameModalOpen = false;
       this.pvpActive = false;
+      this.pvpMatchId = 0;
+      this.pvpScores = {};
+      this.lastAttackerId = null;
       this.netSyncTimer = 0;
       this.net = null;
       this.isMobileMode = this._detectMobile();
@@ -225,6 +230,11 @@
       this._setMobileMode(this.isMobileMode);
       this._renderScorePips();
       this.enterLobby(false);
+      if (!this.hasCustomName) {
+        this._openUsernameModal(true);
+      } else if (this.net) {
+        this.net.start();
+      }
       this._animate();
     }
 
@@ -255,6 +265,7 @@
         this.isMobileMode &&
         !this.isPaused &&
         !this.pickerOpen &&
+        !this.usernameModalOpen &&
         this.roundState !== 'menu' &&
         this.roundState !== 'match_over';
       this.ui.mobileControls.classList.toggle('hidden', !show);
@@ -367,6 +378,161 @@
       if (this.ui.hudDuelFriendBtn) this.ui.hudDuelFriendBtn.classList.toggle('hidden', !(hasFriends && isHost));
       if (this.ui.menuDuelFriendBtn) this.ui.menuDuelFriendBtn.classList.toggle('hidden', !(hasFriends && isHost));
       if (this.ui.srvHostControls) this.ui.srvHostControls.classList.toggle('hidden', !isHost);
+      if (this.ui.srvGuestControls) this.ui.srvGuestControls.classList.toggle('hidden', isHost);
+      if (this.ui.srvGuestNote && !isHost) {
+        this.ui.srvGuestNote.textContent = `CONNECTED TO ${serverName || 'PRIVATE SERVER'} · HOST CONTROLS MATCHES`;
+      }
+    }
+
+    _isGuestInServer() {
+      return Boolean(this.net && !this.net.isHost);
+    }
+
+    _openUsernameModal(isFirstTime = false) {
+      this.usernameModalOpen = true;
+      this.isMouseDown = false;
+      this.isAds = false;
+      this.isShielding = false;
+      if (document.pointerLockElement) document.exitPointerLock();
+      if (!this.ui.usernameModal) return;
+
+      const urlInfo = typeof NetManager !== 'undefined' && NetManager.getUrlJoinInfo ? NetManager.getUrlJoinInfo() : { code: '' };
+      if (this.ui.usernameModalTitle) {
+        this.ui.usernameModalTitle.textContent = isFirstTime
+          ? urlInfo.code
+            ? `JOINING SERVER ${urlInfo.code}`
+            : 'PICK YOUR USERNAME'
+          : 'CHANGE YOUR USERNAME';
+      }
+      if (this.ui.usernameModalSub) {
+        this.ui.usernameModalSub.textContent =
+          isFirstTime && urlInfo.code
+            ? 'Pick the username your friends will see before joining their Private Server!'
+            : 'Choose the name your friends will see floating above your character in the 3D Lobby & matches.';
+      }
+      if (this.ui.usernameConfirmBtn) {
+        this.ui.usernameConfirmBtn.textContent = isFirstTime
+          ? urlInfo.code
+            ? 'JOIN PRIVATE SERVER'
+            : 'ENTER 3D LOBBY'
+          : 'SAVE USERNAME';
+      }
+      if (this.ui.usernameModalInput) {
+        this.ui.usernameModalInput.value = this.playerName || '';
+      }
+      if (this.ui.usernameError) this.ui.usernameError.classList.add('hidden');
+      this.ui.usernameModal.classList.remove('hidden');
+      this._updateMobileControlsVis();
+      setTimeout(() => {
+        if (this.ui.usernameModalInput) this.ui.usernameModalInput.focus();
+      }, 40);
+    }
+
+    _confirmUsername() {
+      if (!this.ui.usernameModalInput) return;
+      const raw = this.ui.usernameModalInput.value.trim().replace(/\s+/g, ' ').slice(0, 16);
+      if (raw.length < 2) {
+        if (this.ui.usernameError) this.ui.usernameError.classList.remove('hidden');
+        return;
+      }
+      if (this.ui.usernameError) this.ui.usernameError.classList.add('hidden');
+
+      const wasFirst = !this.hasCustomName;
+      this.playerName = raw;
+      this.hasCustomName = true;
+      this.usernameModalOpen = false;
+      this._savePreferences();
+      if (this.ui.playerNameInput) this.ui.playerNameInput.value = raw;
+      if (this.ui.usernameModal) this.ui.usernameModal.classList.add('hidden');
+
+      if (this.net) {
+        this.net.myName = raw;
+        this.net.serverName = this.net.isHost ? `${raw}'s Server` : this.net.serverName;
+        if (wasFirst) {
+          this.net.start();
+        } else {
+          this.net.setLocalProfile({ name: raw });
+        }
+      }
+      this._pushKillFeed(`WELCOME, ${raw}!`);
+      this._updateMobileControlsVis();
+    }
+
+    _applyPvpScores(scores = {}) {
+      this.pvpScores = { ...scores };
+      const myId = this.net ? this.net.myId : 'me';
+      this.playerScore = this.pvpScores[myId] || 0;
+      let bestOther = 0;
+      for (const [pid, sc] of Object.entries(this.pvpScores)) {
+        if (pid !== myId && sc > bestOther) bestOther = sc;
+      }
+      this.botScore = bestOther;
+      this._renderScorePips();
+    }
+
+    _syncFromHostServerState(state) {
+      if (!state || !this.net || this.net.isHost) return;
+      if (state.scores) this._applyPvpScores(state.scores);
+
+      if (state.scene === 'lobby') {
+        if (!this.inLobby || this.pvpActive) {
+          this.pvpActive = false;
+          this.enterLobby(false);
+        }
+      } else if (state.scene === 'range') {
+        if (this.inLobby || this.pvpActive || this.loadoutChoice.mode !== 'range') {
+          this.pvpActive = false;
+          this.loadoutChoice.mode = 'range';
+          this.loadoutChoice.map = 'shootingrange';
+          this._syncMenuFromState();
+          this.startNewMatch();
+        }
+      } else if (state.scene === 'pvp') {
+        if (!this.pvpActive || this.pvpMatchId !== state.matchId) {
+          this.pvpMatchId = state.matchId || Date.now();
+          this._startPvpMatch(state.map || 'arena', false, state.matchId, state.roundNumber || 1, state.scores || {});
+        }
+      }
+    }
+
+    _hostCheckPvpRoundEnd() {
+      if (!this.pvpActive || !this.net || !this.net.isHost || this.roundState !== 'playing') return;
+      const aliveIds = [];
+      if (this.player.alive) aliveIds.push({ id: this.net.myId, name: this.playerName });
+      for (const rp of this.remotePlayers.values()) {
+        if (rp.alive) aliveIds.push({ id: rp.peerId, name: rp.name });
+      }
+      if (aliveIds.length > 1) return;
+
+      const winner = aliveIds[0] || { id: '', name: 'DRAW' };
+      if (winner.id) {
+        this.pvpScores[winner.id] = (this.pvpScores[winner.id] || 0) + 1;
+      }
+      this.net.setServerState({ scores: this.pvpScores }, false);
+      const payload = {
+        type: 'pvp_round_end',
+        winnerId: winner.id,
+        winnerName: winner.name,
+        scores: this.pvpScores,
+      };
+      this.net.broadcast(payload);
+      this._applyPvpRoundEnd(payload);
+    }
+
+    _applyPvpRoundEnd(msg) {
+      if (!this.pvpActive) return;
+      if (this.roundState !== 'playing' && this.roundState !== 'countdown') return;
+      if (this.pickerOpen) this._closeLoadoutPicker(false);
+      this._applyPvpScores(msg.scores || {});
+      const iWon = Boolean(this.net && msg.winnerId === this.net.myId);
+      const sub = iWon ? 'YOU WON THE ROUND!' : `${msg.winnerName || 'FRIEND'} WON THE ROUND!`;
+      this.roundState = 'round_over';
+      this.stateTimer = 3.0;
+      this.roundEndTitle = iWon ? 'ROUND WON' : 'ROUND LOST';
+      this.roundEndSub = sub;
+      if (iWon) this._awardKeys(12, 'PVP ROUND WIN');
+      this.sound.playRoundEnd(iWon);
+      this._showBanner(this.roundEndTitle, `${sub} · NEXT ROUND IN 3...`, !iWon);
     }
 
     _openMenuTab(tabName) {
@@ -381,8 +547,9 @@
       if (this.ui.playerNameInput) this.ui.playerNameInput.value = this.playerName;
       this.net = new NetManager(
         {
-          playerName: this.playerName,
-          serverName: `${this.playerName}'s Server`,
+          autoStart: false,
+          playerName: this.playerName || 'Player',
+          serverName: `${this.playerName || 'My'}'s Server`,
           isMobile: this.isMobileMode,
           streak: this.winStreak,
         },
@@ -409,31 +576,43 @@
             this.sound.playUnlock();
             this._getOrCreateRemotePlayer(info.id, info);
             this._pushKillFeed(`${info.name} JOINED YOUR PRIVATE SERVER!`);
-            this.netSyncTimer = 0; // Push our position immediately so they see us!
+            this.netSyncTimer = 0;
           },
           onPeerLeave: (info) => {
             this._removeRemotePlayer(info.id);
             this._pushKillFeed(`${info.name || 'Friend'} LEFT THE PRIVATE SERVER`);
-            if (this.pvpActive && this.remotePlayers.size === 0) {
-              this.pvpActive = false;
-              this.enterLobby(!this.isMobileMode);
+            if (this.pvpActive) {
+              if (this.remotePlayers.size === 0) {
+                this.pvpActive = false;
+                this.enterLobby(!this.isMobileMode);
+              } else if (this.net && this.net.isHost) {
+                this._hostCheckPvpRoundEnd();
+              }
             }
           },
-          onConnectedToServer: (serverName) => {
+          onConnectedToServer: (serverName, serverState) => {
             this.sound.playUnlock();
             this._pushKillFeed(`JOINED PRIVATE SERVER: ${serverName}!`);
-            if (!this.inLobby) this.enterLobby(!this.isMobileMode);
-            else if (!this.isPaused) this.ui.menu.classList.add('hidden');
+            if (serverState && serverState.scene && serverState.scene !== 'lobby') {
+              this._syncFromHostServerState(serverState);
+            } else if (!this.inLobby) {
+              this.enterLobby(!this.isMobileMode);
+            } else if (!this.isPaused) {
+              this.ui.menu.classList.add('hidden');
+            }
+          },
+          onServerStateCheck: (state) => {
+            this._syncFromHostServerState(state);
           },
           onJoinDenied: (reason) => {
             this._pushKillFeed(`SERVER JOIN DENIED: ${reason}`);
           },
           onDisconnect: () => {
             this._clearAllRemotePlayers();
-            this._pushKillFeed('DISCONNECTED FROM PRIVATE SERVER');
+            this._pushKillFeed('CONNECTION LOST · RECONNECTING TO HOST...');
             if (this.pvpActive) {
               this.pvpActive = false;
-              this.enterLobby(!this.isMobileMode);
+              this.enterLobby(false);
             }
           },
           onMessage: (msg) => this._handleNetMessage(msg),
@@ -475,20 +654,28 @@
       }
     }
 
-    _startPvpMatch(mapId = 'arena', isInitiator = true) {
+    _startPvpMatch(mapId = 'arena', isInitiator = true, matchId = null, startRoundNum = 1, initScores = null) {
       if (!this.net || this.net.getOtherPlayersCount() <= 0) {
         this._pushKillFeed('INVITE AT LEAST 1 FRIEND FIRST TO START SERVER PVP!');
         return;
       }
       const safeMap = MAPS[mapId] && mapId !== 'lobby' && mapId !== 'shootingrange' ? mapId : 'arena';
+      const mId = matchId || Date.now();
+      this.pvpMatchId = mId;
+      this.pvpScores = initScores ? { ...initScores } : {};
       if (isInitiator) {
-        this.net.broadcast({ type: 'pvp_start', map: safeMap });
+        this.net.setServerState({ scene: 'pvp', map: safeMap, roundNumber: startRoundNum, matchId: mId, scores: this.pvpScores }, false);
+        this.net.broadcast({ type: 'pvp_start', map: safeMap, matchId: mId, roundNumber: startRoundNum, scores: this.pvpScores });
       }
       this.pvpActive = true;
       this.loadoutChoice.mode = 'classic';
       this.loadoutChoice.map = safeMap;
       this._syncMenuFromState();
       this.startNewMatch();
+      if (startRoundNum > 1) {
+        this.roundNumber = startRoundNum;
+        this._applyPvpScores(this.pvpScores);
+      }
     }
 
     _handleNetMessage(msg) {
@@ -510,8 +697,40 @@
         const e = new THREE.Vector3(msg.ex, msg.ey, msg.ez);
         this._spawnTracer(s, e, msg.color || 0xff3e5e, 0.028);
         this.sound.playShoot(msg.weaponId || 'ar');
+      } else if (msg.type === 'guest_ping') {
+        if (msg.text) this._pushKillFeed(msg.text);
       } else if (msg.type === 'pvp_start') {
-        this._startPvpMatch(msg.map || 'arena', false);
+        this._startPvpMatch(msg.map || 'arena', false, msg.matchId, msg.roundNumber || 1, msg.scores || {});
+      } else if (msg.type === 'pvp_go') {
+        if (this.pvpActive && this.roundState === 'countdown') {
+          this.stateTimer = 0;
+          this.roundState = 'playing';
+          this.sound.playBeep(true);
+          if (this.pickerOpen) {
+            this._updatePickerTimerUI();
+            this._pushKillFeed('ROUND STARTED! FRIENDS ARE ATTACKING!');
+          } else {
+            this._showBanner('FIGHT!', 'ELIMINATE YOUR FRIENDS!', false);
+            setTimeout(() => {
+              if (this.roundState === 'playing') this.ui.centerBanner.classList.add('hidden');
+            }, 700);
+          }
+        }
+      } else if (msg.type === 'pvp_round_end') {
+        this._applyPvpRoundEnd(msg);
+      } else if (msg.type === 'pvp_next_round') {
+        if (this.pvpActive) {
+          this._stopEmote();
+          if (msg.scores) this._applyPvpScores(msg.scores);
+          this.roundNumber = msg.roundNumber || this.roundNumber + 1;
+          if (msg.map && MAPS[msg.map]) this.loadoutChoice.map = msg.map;
+          this._startRound();
+        }
+      } else if (msg.type === 'pvp_match_end') {
+        if (this.pvpActive) {
+          if (msg.scores) this._applyPvpScores(msg.scores);
+          this._finishMatch();
+        }
       } else if (msg.type === 'pvp_range') {
         this.pvpActive = false;
         this.loadoutChoice.mode = 'range';
@@ -520,6 +739,7 @@
         this.startNewMatch();
       } else if (msg.type === 'pvp_hit') {
         if (this.pvpActive && this.roundState === 'playing') {
+          this.lastAttackerId = senderId;
           const attackerName = (this.net && this.net.players.get(senderId)?.name) || 'FRIEND';
           this._damagePlayer(msg.damage || 15, `${attackerName} [${msg.weaponLabel || 'WEAPON'}]`);
           if (msg.freeze) {
@@ -532,14 +752,17 @@
         }
       } else if (msg.type === 'pvp_dead') {
         const rp = this.remotePlayers.get(senderId);
-        if (this.pvpActive && this.roundState === 'playing' && rp) {
+        if (this.pvpActive && rp) {
           rp.takeDamage(999, false);
           this.sound.playKill();
           this._triggerKillEffect(rp.getCenterWorldPos(), rp);
           this._pushKillFeed(`${rp.name} WAS ELIMINATED!`);
-          if (this.player.alive && this._getAliveEnemyCount() === 0) {
+          if (msg.killerId && this.net && msg.killerId === this.net.myId) {
             this.stats.kills += 1;
-            this._endRound(true, 'ALL FRIENDS ELIMINATED!');
+            this._awardKeys(6, 'FRIEND ELIM');
+          }
+          if (this.net && this.net.isHost) {
+            this._hostCheckPvpRoundEnd();
           }
         }
       } else if (msg.type === 'pvp_lobby') {
@@ -788,8 +1011,9 @@
         if (typeof saved.winStreak === 'number' && Number.isFinite(saved.winStreak)) {
           this.winStreak = Math.max(0, Math.floor(saved.winStreak));
         }
-        if (typeof saved.playerName === 'string' && saved.playerName.trim()) {
+        if (typeof saved.playerName === 'string' && saved.playerName.trim().length >= 2) {
           this.playerName = saved.playerName.trim().slice(0, 16);
+          this.hasCustomName = Boolean(saved.hasCustomName);
         }
         if (Array.isArray(saved.unlockedWeapons)) {
           this.unlockedWeapons = new Set([...(STARTER_WEAPONS || ['ar', 'handgun', 'fists', 'grenade']), ...saved.unlockedWeapons]);
@@ -868,6 +1092,7 @@
             keysCurrency: this.keysCurrency,
             winStreak: this.winStreak,
             playerName: this.playerName,
+            hasCustomName: this.hasCustomName,
             unlockedWeapons: Array.from(this.unlockedWeapons),
             sensitivity: this.settings.sensitivity,
             fov: this.settings.fov,
@@ -918,6 +1143,13 @@
         hudServerTitle: document.getElementById('hud-server-title'),
         hudServerCount: document.getElementById('hud-server-count'),
         hudFriendsList: document.getElementById('hud-friends-list'),
+        hudEditNameBtn: document.getElementById('hud-edit-name-btn'),
+        usernameModal: document.getElementById('username-modal'),
+        usernameModalTitle: document.getElementById('username-modal-title'),
+        usernameModalSub: document.getElementById('username-modal-sub'),
+        usernameModalInput: document.getElementById('username-modal-input'),
+        usernameError: document.getElementById('username-error'),
+        usernameConfirmBtn: document.getElementById('username-confirm-btn'),
         playerNameInput: document.getElementById('player-name-input'),
         saveNameBtn: document.getElementById('save-name-btn'),
         srvNameInput: document.getElementById('srv-name-input'),
@@ -932,6 +1164,10 @@
         srvRosterCount: document.getElementById('srv-roster-count'),
         srvRosterList: document.getElementById('srv-roster-list'),
         srvHostControls: document.getElementById('srv-host-controls'),
+        srvGuestControls: document.getElementById('srv-guest-controls'),
+        srvGuestNote: document.getElementById('srv-guest-note'),
+        srvReconnectBtn: document.getElementById('srv-reconnect-btn'),
+        srvLeaveBtn: document.getElementById('srv-leave-btn'),
         srvStartPvpBtn: document.getElementById('srv-start-pvp-btn'),
         srvPullRangeBtn: document.getElementById('srv-pull-range-btn'),
         srvPullLobbyBtn: document.getElementById('srv-pull-lobby-btn'),
@@ -1432,6 +1668,42 @@
           this._setMobileMode(e.target.checked);
         });
       }
+      if (this.ui.usernameConfirmBtn) {
+        this.ui.usernameConfirmBtn.addEventListener('click', () => {
+          this.sound.unlock();
+          this._confirmUsername();
+        });
+      }
+      if (this.ui.usernameModalInput) {
+        this.ui.usernameModalInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            this.sound.unlock();
+            this._confirmUsername();
+          }
+        });
+      }
+      if (this.ui.hudEditNameBtn) {
+        this.ui.hudEditNameBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this._openUsernameModal(false);
+        });
+      }
+      if (this.ui.srvReconnectBtn) {
+        this.ui.srvReconnectBtn.addEventListener('click', () => {
+          if (this.net) this.net.reconnectNow();
+        });
+      }
+      if (this.ui.srvLeaveBtn) {
+        this.ui.srvLeaveBtn.addEventListener('click', () => {
+          if (!this.net) return;
+          this.pvpActive = false;
+          this._clearAllRemotePlayers();
+          this.net.createPrivateServer({ name: `${this.playerName}'s Server`, pass: '', maxPlayers: 8 });
+          this.enterLobby(false);
+          this._pushKillFeed('LEFT SERVER · NOW HOSTING YOUR OWN PRIVATE SERVER');
+        });
+      }
       if (this.ui.hudCopyLinkBtn) {
         this.ui.hudCopyLinkBtn.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -1512,7 +1784,10 @@
       if (this.ui.srvPullRangeBtn) {
         this.ui.srvPullRangeBtn.addEventListener('click', () => {
           this.sound.unlock();
-          if (this.net && this.net.isHost) this.net.broadcast({ type: 'pvp_range' });
+          if (this.net && this.net.isHost) {
+            this.net.setServerState({ scene: 'range', map: 'shootingrange', roundNumber: 1, matchId: 0 }, false);
+            this.net.broadcast({ type: 'pvp_range' });
+          }
           this.pvpActive = false;
           this.loadoutChoice.mode = 'range';
           this.loadoutChoice.map = 'shootingrange';
@@ -1523,7 +1798,10 @@
       if (this.ui.srvPullLobbyBtn) {
         this.ui.srvPullLobbyBtn.addEventListener('click', () => {
           this.sound.unlock();
-          if (this.net && this.net.isHost) this.net.broadcast({ type: 'pvp_lobby' });
+          if (this.net && this.net.isHost) {
+            this.net.setServerState({ scene: 'lobby', map: 'lobby', roundNumber: 1, matchId: 0 }, false);
+            this.net.broadcast({ type: 'pvp_lobby' });
+          }
           this.pvpActive = false;
           this.enterLobby(!this.isMobileMode);
         });
@@ -1540,15 +1818,29 @@
       if (this.ui.lobbyBtn) {
         this.ui.lobbyBtn.addEventListener('click', () => {
           this.sound.unlock();
-          this.enterLobby();
+          if (this._isGuestInServer() && this.pvpActive) {
+            this.isPaused = false;
+            this.ui.menu.classList.add('hidden');
+            this.ui.hud.classList.remove('hidden');
+            this._updateMobileControlsVis();
+            this._requestPointerLock();
+            this._pushKillFeed('IN HOST SERVER MATCH · USE PRIVATE SERVERS TAB TO LEAVE');
+            return;
+          }
+          this.enterLobby(!this.isMobileMode);
         });
       }
 
       if (this.ui.endLobbyBtn) {
         this.ui.endLobbyBtn.addEventListener('click', () => {
           this.sound.unlock();
+          if (this._isGuestInServer() && this.pvpActive) {
+            this.net.broadcast({ type: 'guest_ping', text: `${this.playerName} IS READY FOR LOBBY!` });
+            this._pushKillFeed('ASKED HOST TO RETURN EVERYONE TO LOBBY...');
+            return;
+          }
           this.ui.matchEnd.classList.add('hidden');
-          this.enterLobby();
+          this.enterLobby(!this.isMobileMode);
         });
       }
 
@@ -1568,6 +1860,19 @@
           this.loadoutChoice.mode !== this.activeMatchMode ||
           this.loadoutChoice.map !== this.activeMatchMap
         ) {
+          if (this._isGuestInServer()) {
+            this.isPaused = false;
+            this.ui.menu.classList.add('hidden');
+            this.ui.hud.classList.remove('hidden');
+            this._updateMobileControlsVis();
+            this.net.broadcast({ type: 'guest_ping', text: `${this.playerName} IS READY TO PLAY!` });
+            this._pushKillFeed('WAITING FOR HOST TO START SERVER MATCH!');
+            return;
+          }
+          if (this.net && this.net.isHost && this.net.getOtherPlayersCount() > 0) {
+            this._startPvpMatch(this.loadoutChoice.map, true);
+            return;
+          }
           this.pvpActive = false;
           this.startNewMatch();
         } else {
@@ -1586,13 +1891,28 @@
       if (this.ui.exitMenuBtn) {
         this.ui.exitMenuBtn.addEventListener('click', () => {
           this.sound.unlock();
-          this.enterLobby();
+          if (this._isGuestInServer() && this.pvpActive) {
+            this.net.broadcast({ type: 'guest_ping', text: `${this.playerName} WANTS TO RETURN TO LOBBY!` });
+            this._pushKillFeed('HOST CONTROLS SERVER SCENE · USE PRIVATE SERVERS TAB TO LEAVE');
+            return;
+          }
+          this.enterLobby(!this.isMobileMode);
         });
       }
 
       if (this.ui.rangeQuickBtn) {
         this.ui.rangeQuickBtn.addEventListener('click', () => {
           this.sound.unlock();
+          if (this._isGuestInServer()) {
+            this.net.broadcast({ type: 'guest_ping', text: `${this.playerName} WANTS TO GO TO SHOOTING RANGE!` });
+            this._pushKillFeed('ASKED HOST TO PULL SERVER TO SHOOTING RANGE!');
+            return;
+          }
+          if (this.net && this.net.isHost && this.net.getOtherPlayersCount() > 0) {
+            this.net.setServerState({ scene: 'range', map: 'shootingrange', roundNumber: 1, matchId: 0 }, false);
+            this.net.broadcast({ type: 'pvp_range' });
+          }
+          this.pvpActive = false;
           this.loadoutChoice.mode = 'range';
           this.loadoutChoice.map = 'shootingrange';
           this._syncMenuFromState();
@@ -1603,11 +1923,30 @@
 
       this.ui.restartBtn.addEventListener('click', () => {
         this.sound.unlock();
+        if (this.pvpActive && this.net && this.net.isHost) {
+          this._startPvpMatch(this.loadoutChoice.map, true);
+          return;
+        }
+        if (this._isGuestInServer() && this.pvpActive) {
+          this.net.broadcast({ type: 'guest_ping', text: `${this.playerName} WANTS A REMATCH!` });
+          this._pushKillFeed('WAITING FOR HOST TO RESTART...');
+          return;
+        }
         this.startNewMatch();
       });
 
       this.ui.rematchBtn.addEventListener('click', () => {
         this.sound.unlock();
+        if (this.pvpActive && this.net) {
+          if (this.net.isHost) {
+            this.ui.matchEnd.classList.add('hidden');
+            this._startPvpMatch(this.loadoutChoice.map, true);
+          } else {
+            this.net.broadcast({ type: 'guest_ping', text: `${this.playerName} WANTS A REMATCH!` });
+            this._pushKillFeed('ASKED HOST FOR A REMATCH!');
+          }
+          return;
+        }
         this.ui.matchEnd.classList.add('hidden');
         this.startNewMatch();
       });
@@ -1637,6 +1976,9 @@
       });
 
       window.addEventListener('keydown', (e) => {
+        if (this.usernameModalOpen) return;
+        const activeTag = document.activeElement && document.activeElement.tagName;
+        if (activeTag === 'INPUT' || activeTag === 'TEXTAREA' || activeTag === 'SELECT') return;
         const code = e.code;
         if (this.pickerOpen) {
           if (code === 'Digit1') { this.pickerSlot = 'primary'; this._renderPickerSlots(); this._renderPickerGrid(); return; }
@@ -1734,8 +2076,8 @@
       });
 
       window.addEventListener('mousedown', (e) => {
-        if (this.isPaused || this.pickerOpen || (!this.matchActive && !this.inLobby)) return;
-        if (e.target && e.target.closest && e.target.closest('#host-link-bar, #mobile-controls, .hotbar-slot')) return;
+        if (this.isPaused || this.pickerOpen || this.usernameModalOpen || (!this.matchActive && !this.inLobby)) return;
+        if (e.target && e.target.closest && e.target.closest('#host-link-bar, #hud-friends-panel, #mobile-controls, .hotbar-slot, #username-modal')) return;
         this.sound.unlock();
         if (!this.isMobileMode && document.pointerLockElement !== this.renderer.domElement) {
           this._requestPointerLock();
@@ -1805,9 +2147,16 @@
 
     enterLobby(requestLock = true) {
       this._closeLoadoutPicker(false);
+      const wasInMatchOrRange = !this.inLobby;
       this.inLobby = true;
       this.pvpActive = false;
       this.matchActive = true;
+      if (this.net && this.net.isHost) {
+        this.net.setServerState({ scene: 'lobby', map: 'lobby', roundNumber: 1, matchId: 0 }, false);
+        if (wasInMatchOrRange && this.net.getOtherPlayersCount() > 0) {
+          this.net.broadcast({ type: 'pvp_lobby' });
+        }
+      }
       this.isPaused = false;
       this.roundState = 'lobby';
       this.activeLobbyPad = null;
@@ -2017,11 +2366,32 @@
           return;
         }
         if (pad.instant) {
-          // Walk straight through the East Wall Shooting Range doorway!
+          if (this._isGuestInServer()) {
+            if (this.activeLobbyPad?.id !== pad.id) {
+              this.activeLobbyPad = pad;
+              this.net.broadcast({ type: 'guest_ping', text: `${this.playerName} WANTS TO GO TO SHOOTING RANGE!` });
+              this._showBanner('PRIVATE SERVER GUEST', 'ASKED HOST TO TAKE EVERYONE TO SHOOTING RANGE!', false);
+            }
+            return;
+          }
+          // Host walks through East Wall -> takes ALL friends into Shooting Range together!
+          if (this.net && this.net.isHost && this.net.getOtherPlayersCount() > 0) {
+            this.net.setServerState({ scene: 'range', map: 'shootingrange', roundNumber: 1, matchId: 0 }, false);
+            this.net.broadcast({ type: 'pvp_range' });
+          }
+          this.pvpActive = false;
           this.loadoutChoice.mode = pad.mode;
           this.loadoutChoice.map = 'shootingrange';
           this._syncMenuFromState();
           this.startNewMatch();
+          return;
+        }
+        if (this._isGuestInServer()) {
+          if (this.activeLobbyPad?.id !== pad.id) {
+            this.activeLobbyPad = pad;
+            this.net.broadcast({ type: 'guest_ping', text: `${this.playerName} WANTS TO PLAY ${pad.title}!` });
+            this._showBanner('WAITING FOR HOST', `SENT ${pad.title} REQUEST TO SERVER HOST!`, false);
+          }
           return;
         }
         if (this.activeLobbyPad?.id !== pad.id) {
@@ -2040,7 +2410,8 @@
         this._showBanner(`QUEUE: ${pad.title}`, `MATCHING WITH ${challenger} · ${sec}... (STEP OFF TO CANCEL)`, false);
 
         if (this.lobbyPadTimer <= 0) {
-          if (pad.mode === 'classic' && this.net && this.net.connected) {
+          if (this.net && this.net.isHost && this.net.getOtherPlayersCount() > 0) {
+            // Host with friends in Private Server: start Server PvP together so nobody gets split!
             this._startPvpMatch(this.loadoutChoice.map, true);
             return;
           }
@@ -2662,7 +3033,7 @@
     }
 
     _canPlayerAct() {
-      if (this.pickerOpen) return false;
+      if (this.pickerOpen || this.usernameModalOpen) return false;
       return (this.roundState === 'playing' || this.roundState === 'round_over' || this.roundState === 'lobby') && this.player.alive;
     }
 
@@ -3517,6 +3888,14 @@
           freeze: weaponLabel === 'FREEZE RAY' ? 2.2 : weaponLabel.includes('PERMAFROST') && isHeadshot ? 1.4 : 0,
           blind: weaponLabel === 'FLASHBANG' ? 2.5 : 0,
         });
+        // Let the victim authoritatively apply shields/heals & report real death so PvP never desyncs!
+        this.stats.damageDealt += damage;
+        if (isHeadshot) this.stats.headshots += 1;
+        this.sound.playHit(isHeadshot);
+        this._triggerHitmarker(isHeadshot);
+        this._spawnFloatingDamage(worldPoint, damage, isHeadshot);
+        this._spawnParticles(worldPoint, isHeadshot ? 0xffd447 : 0xff3e5e, isHeadshot ? 14 : 8);
+        return;
       }
       const res = enemy.takeDamage(damage, isHeadshot);
       this.stats.damageDealt += damage;
@@ -3741,7 +4120,13 @@
       this.killStreak = 0;
       this._pushKillFeed(`${source} ELIMINATED YOU`);
       if (this.pvpActive && this.net && this.net.connected) {
-        this.net.broadcast({ type: 'pvp_dead' });
+        this.net.broadcast({ type: 'pvp_dead', killerId: this.lastAttackerId });
+        if (this.net.isHost) {
+          this._hostCheckPvpRoundEnd();
+        } else {
+          this._showBanner('ELIMINATED', 'WAITING FOR ROUND TO FINISH...', true);
+        }
+        return;
       }
 
       if (this.loadoutChoice.mode === 'tdm' || this.loadoutChoice.mode === 'ffa') {
@@ -4772,8 +5157,15 @@
         }
         this._updatePickerTimerUI();
         if (this.stateTimer <= 0) {
+          if (this.pvpActive && this.net && !this.net.isHost) {
+            // Guests wait for Host's exact pvp_go signal (with tiny safety fallback at -1.2s)
+            if (this.stateTimer > -1.2) return;
+          }
           this.roundState = 'playing';
           this.sound.playBeep(true);
+          if (this.pvpActive && this.net && this.net.isHost) {
+            this.net.broadcast({ type: 'pvp_go' });
+          }
           if (this.pickerOpen) {
             // 5 seconds expired! Round starts WITHOUT closing the picker so player can be killed while still picking!
             this._updatePickerTimerUI();
@@ -4791,6 +5183,10 @@
         this.roundTimer -= dt;
         if (this.roundTimer <= 0) {
           this.roundTimer = 0;
+          if (this.pvpActive) {
+            if (this.net && this.net.isHost) this._hostCheckPvpRoundEnd();
+            return;
+          }
           if (this.loadoutChoice.mode === 'tdm' || this.loadoutChoice.mode === 'ffa') {
             this._finishMatch();
           } else {
@@ -4803,6 +5199,22 @@
         const secLeft = Math.max(1, Math.ceil(this.stateTimer));
         this.ui.bannerSub.textContent = `${this.roundEndSub} · RESETTING IN ${secLeft}...`;
         if (this.stateTimer <= 0) {
+          if (this.pvpActive && this.net) {
+            if (!this.net.isHost) return; // Host authoritatively advances EVERYONE to next round or match end!
+            this._stopEmote();
+            const someoneWon = Object.values(this.pvpScores).some((sc) => sc >= WINS_TO_VICTORY);
+            if (someoneWon) {
+              this.net.setServerState({ scene: 'lobby', map: 'lobby', roundNumber: 1, matchId: 0 }, false);
+              this.net.broadcast({ type: 'pvp_match_end', scores: this.pvpScores });
+              this._finishMatch();
+            } else {
+              this.roundNumber += 1;
+              this.net.setServerState({ roundNumber: this.roundNumber, scores: this.pvpScores }, false);
+              this.net.broadcast({ type: 'pvp_next_round', roundNumber: this.roundNumber, map: this.loadoutChoice.map, scores: this.pvpScores });
+              this._startRound();
+            }
+            return;
+          }
           this._stopEmote();
           if (this.playerScore >= WINS_TO_VICTORY || this.botScore >= WINS_TO_VICTORY) {
             this._finishMatch();
@@ -4818,7 +5230,11 @@
       requestAnimationFrame(() => this._animate());
       const dt = Math.min(0.05, this.clock.getDelta());
       const nowSec = performance.now() * 0.001;
-      const isPlaying = this.roundState === 'playing' && !this.isPaused;
+      // ALWAYS sync network & update friend avatars even when paused or on match_over!
+      for (const rp of this.remotePlayers.values()) rp.update(dt);
+      this._syncNetworkState(dt);
+
+      const isPlaying = this.roundState === 'playing' && (!this.isPaused || this.pvpActive);
       this.arena.update(dt, nowSec, (evtType, laneLabel) => {
         if (!isPlaying) return;
         if (evtType === 'warning') {
@@ -4840,10 +5256,8 @@
         return;
       }
 
-      const paused = this.isPaused && this.roundState !== 'match_over';
+      const paused = this.isPaused && !this.pvpActive && this.roundState !== 'match_over';
       if (!paused) {
-        for (const rp of this.remotePlayers.values()) rp.update(dt);
-        this._syncNetworkState(dt);
         if (this.inLobby) {
           this._updatePlayer(dt);
           this._updateWeaponAndViewmodel(dt);
