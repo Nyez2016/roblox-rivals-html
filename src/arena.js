@@ -3,6 +3,13 @@
   const THREE = global.THREE;
 
   const MAPS = {
+    lobby: {
+      id: 'lobby',
+      name: 'RIVALS LOBBY',
+      subtitle: 'Walkable 3D Hub Plaza · Duel Pads, Parkour Obby & Lobby Bots',
+      gravityScale: 1.0,
+      hasFloor: true,
+    },
     arena: {
       id: 'arena',
       name: 'ARENA',
@@ -194,6 +201,9 @@
       this.jumpPads = [];
       this.ladders = [];
       this.tempWalls = [];
+      this.tempJumpPads = [];
+      this.lobbyPads = [];
+      this.lobbyKeyCrate = null;
       this.animatedProps = [];
       this.trainHazard = null;
       this.meshes = [];
@@ -233,6 +243,9 @@
       this.jumpPads = [];
       this.ladders = [];
       this.tempWalls = [];
+      this.tempJumpPads = [];
+      this.lobbyPads = [];
+      this.lobbyKeyCrate = null;
       this.animatedProps = [];
       this.trainHazard = null;
       this.meshes = [];
@@ -242,7 +255,9 @@
         bot: new THREE.Vector3(0, 0, -29),
       };
 
-      if (this.mapId === 'shootingrange') {
+      if (this.mapId === 'lobby') {
+        this._buildLobbyMap();
+      } else if (this.mapId === 'shootingrange') {
         this._buildShootingRangeMap();
       } else if (this.mapId === 'skyislands') {
         this._buildSkyIslandsMap();
@@ -567,6 +582,9 @@
         } else if (prop.type === 'drift') {
           prop.mesh.position.x += prop.speed * dt;
           if (prop.mesh.position.x > 64) prop.mesh.position.x = -64;
+        } else if (prop.type === 'spinFloat') {
+          prop.mesh.rotation.y += dt * prop.speed;
+          prop.mesh.position.y = prop.baseY + Math.sin(timeSec * 2.4 + prop.phase) * 0.35;
         }
       }
 
@@ -695,6 +713,195 @@
       this._addBox(0, Math.min(6.5, wallH - 1.5), -34.9, 52, 0.35, 0.2, { color: accentB, emissive: accentB, solid: false });
       this._addBox(-26.9, Math.min(6.5, wallH - 1.5), 0, 0.2, 0.35, 68, { color: accentSide, emissive: accentSide, solid: false });
       this._addBox(26.9, Math.min(6.5, wallH - 1.5), 0, 0.2, 0.35, 68, { color: accentSide, emissive: accentSide, solid: false });
+    }
+
+    _createHoloSign(title, subtitle, colorHex) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 360;
+      canvas.height = 120;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = 'rgba(10, 16, 30, 0.86)';
+      ctx.fillRect(8, 8, 344, 104);
+      const colStr = '#' + new THREE.Color(colorHex).getHexString();
+      ctx.strokeStyle = colStr;
+      ctx.lineWidth = 6;
+      ctx.strokeRect(8, 8, 344, 104);
+
+      ctx.font = '900 34px Segoe UI, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = colStr;
+      ctx.fillText(title, 180, 56);
+
+      ctx.font = 'bold 21px Segoe UI, sans-serif';
+      ctx.fillStyle = '#f1f5f9';
+      ctx.fillText(subtitle, 180, 92);
+
+      const tex = new THREE.CanvasTexture(canvas);
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
+      sprite.scale.set(5.6, 1.85, 1);
+      return sprite;
+    }
+
+    _addLobbyPad(x, z, id, title, subtitle, mode, colorHex) {
+      const radius = 3.2;
+      const base = new THREE.Mesh(
+        new THREE.CylinderGeometry(radius, radius + 0.25, 0.24, 24),
+        new THREE.MeshStandardMaterial({ color: 0x162033, metalness: 0.55, roughness: 0.35 })
+      );
+      base.position.set(x, 0.12, z);
+
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(radius * 0.88, 0.14, 8, 28),
+        new THREE.MeshStandardMaterial({ color: colorHex, emissive: colorHex, emissiveIntensity: 1.1 })
+      );
+      ring.rotation.x = Math.PI / 2;
+      ring.position.set(x, 0.28, z);
+
+      const disc = new THREE.Mesh(
+        new THREE.CylinderGeometry(radius * 0.78, radius * 0.78, 0.06, 24),
+        new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.34 })
+      );
+      disc.position.set(x, 0.24, z);
+
+      const floatRing = new THREE.Mesh(
+        new THREE.TorusGeometry(radius * 0.72, 0.06, 8, 28),
+        new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.85 })
+      );
+      floatRing.rotation.x = Math.PI / 2;
+      floatRing.position.set(x, 0.55, z);
+      this.animatedProps.push({ type: 'padRing', mesh: floatRing, baseY: 0.35, phase: Math.random() * 6.28 });
+
+      const sign = this._createHoloSign(title, subtitle, colorHex);
+      sign.position.set(x, 3.6, z);
+
+      this.mapGroup.add(base, ring, disc, floatRing, sign);
+      this.lobbyPads.push({ id, title, subtitle, mode, x, z, radius, colorHex });
+    }
+
+    getLobbyPadAt(pos) {
+      for (const pad of this.lobbyPads) {
+        const d = Math.hypot(pos.x - pad.x, pos.z - pad.z);
+        if (d <= pad.radius && pos.y < 2.2) return pad;
+      }
+      return null;
+    }
+
+    // =========================================================
+    // HUB MAP: 3D WALKABLE ROBLOX RIVALS LOBBY!
+    // =========================================================
+    _buildLobbyMap() {
+      this._setLighting({
+        skyHex: 0x67b8ff,
+        fogHex: 0xaad8ff,
+        hemiSky: 0xeff8ff,
+        hemiGround: 0x475569,
+        hemiInt: 1.05,
+        sunHex: 0xfff8e6,
+        sunInt: 1.4,
+        sunPos: [32, 54, 24],
+        clouds: true,
+      });
+
+      this.bounds = { minX: -32, maxX: 32, minZ: -32, maxZ: 32 };
+      this.spawns = {
+        player: new THREE.Vector3(0, 0, 7),
+        bot: new THREE.Vector3(0, 0, -14),
+      };
+
+      // Bright Roblox Rivals Hub Plaza Floor
+      this._addBox(0, -0.5, 0, 68, 1.0, 68, {
+        color: 0xdbe5f3,
+        studColor: 0xeef4fc,
+        solid: false,
+        shootable: true,
+        castShadow: false,
+      });
+
+      // Decorative Rivals Cross-Lane Glow Strips
+      this._addBox(0, 0.02, -4, 62, 0.04, 0.55, { color: 0x2de2ff, emissive: 0x2de2ff, solid: false, castShadow: false });
+      this._addBox(0, 0.02, 10, 62, 0.04, 0.55, { color: 0xff3e5e, emissive: 0xff3e5e, solid: false, castShadow: false });
+      this._addBox(0, 0.02, 0, 0.55, 0.04, 62, { color: 0xfbbf24, emissive: 0xfbbf24, solid: false, castShadow: false });
+
+      // Sleek Perimeter Walls & Glowing Skyline Arches
+      for (const zSign of [-1, 1]) {
+        const accent = zSign > 0 ? 0x2de2ff : 0xff3e5e;
+        this._addBox(0, 3.2, zSign * 33, 68, 6.4, 1.6, { color: 0x1e293b, studColor: 0x334155 });
+        this._addBox(0, 6.5, zSign * 33, 68, 0.35, 1.8, { color: accent, emissive: accent, solid: false });
+      }
+      for (const xSign of [-1, 1]) {
+        this._addBox(xSign * 33, 3.2, 0, 1.6, 6.4, 68, { color: 0x1e293b, studColor: 0x334155 });
+        this._addBox(xSign * 33, 6.5, 0, 1.8, 0.35, 68, { color: 0x38bdf8, emissive: 0x38bdf8, solid: false });
+      }
+
+      // Centerpiece Rivals Monument Pedestal + Floating Golden Crown Crystal!
+      this._addBox(0, 0.5, 0, 5.2, 1.0, 5.2, { color: 0x1e293b, studColor: 0x334155 });
+      this._addBox(0, 1.2, 0, 3.6, 0.5, 3.6, { color: 0x0f172a, studColor: 0x1e293b });
+      const monumentGem = new THREE.Mesh(
+        new THREE.OctahedronGeometry(1.15, 0),
+        new THREE.MeshStandardMaterial({ color: 0xfbbf24, emissive: 0xf59e0b, emissiveIntensity: 0.85, metalness: 0.7, roughness: 0.2 })
+      );
+      monumentGem.position.set(0, 3.2, 0);
+      this.mapGroup.add(monumentGem);
+      this.animatedProps.push({ type: 'spinFloat', mesh: monumentGem, baseY: 3.2, speed: 1.5, phase: 0 });
+
+      const hubBanner = this._createHoloSign('ROBLOX RIVALS HUB', 'STEP ON A DUEL PAD TO PLAY!', 0x2de2ff);
+      hubBanner.scale.set(7.6, 2.3, 1);
+      hubBanner.position.set(0, 5.9, 0);
+      this.mapGroup.add(hubBanner);
+
+      // === 6 INTERACTIVE WALK-ON MATCHMAKING & SHOP PADS ===
+      this._addLobbyPad(-12, -12, 'duel1v1', '1v1 DUEL', 'CLASSIC RIVALS · FIRST TO 5', 'classic', 0x2de2ff);
+      this._addLobbyPad(0, -15, 'duel2v2', '2v2 DUELS', 'YOU + ALLY VS 2 BOTS', 'twovtwo', 0x3b82f6);
+      this._addLobbyPad(12, -12, 'tdm3v3', '3v3 TDM', 'TEAM DEATHMATCH · TO 25', 'tdm', 0xff5a36);
+      this._addLobbyPad(-16, 3, 'ffabots', 'BOT FFA (5 BOTS)', 'FREE-FOR-ALL · FIRST TO 15', 'ffa', 0xd946ef);
+      this._addLobbyPad(16, 3, 'range', 'SHOOTING RANGE', 'TEST ALL 52 WEAPONS', 'range', 0xfbbf24);
+      this._addLobbyPad(0, 16, 'armory', 'ARMORY & SHOP', 'UNLOCK WEAPONS · MAPS · SKINS', 'shop', 0x38ef7d);
+
+      // Bonus Free Key Crate in the Lobby!
+      const crateMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(1.7, 1.7, 1.7),
+        new THREE.MeshStandardMaterial({ color: 0xfbbf24, emissive: 0xd97706, emissiveIntensity: 0.75, metalness: 0.5, roughness: 0.25 })
+      );
+      crateMesh.position.set(-16, 1.6, 16);
+      const crateSign = this._createHoloSign('+25 FREE KEYS', 'WALK INTO CRATE TO CLAIM!', 0xfde047);
+      crateSign.position.set(-16, 3.8, 16);
+      this.mapGroup.add(crateMesh, crateSign);
+      this.animatedProps.push({ type: 'spinFloat', mesh: crateMesh, baseY: 1.6, speed: 1.8, phase: 1.2 });
+      this.lobbyKeyCrate = { pos: new THREE.Vector3(-16, 0, 16), mesh: crateMesh, sign: crateSign, claimed: false };
+
+      // Lobby Parkour Obby & VIP Sky Balcony (North-East & North-West)!
+      this._addJumpPad(24, 0, -22, 2.0, 14.2, 0xa855f7);
+      this._addJumpPad(-24, 0, -22, 2.0, 14.2, 0x2de2ff);
+      this._addBox(24, 4.2, -10, 6.5, 0.8, 6.5, { color: 0x38bdf8, studColor: 0x7dd3fc });
+      this._addBox(24, 7.6, -2, 6.5, 0.8, 6.5, { color: 0xa855f7, studColor: 0xc084fc });
+      this._addBox(16, 10.6, -24, 14, 0.9, 7, { color: 0xfbbf24, studColor: 0xfde047 });
+      this._addBox(-16, 10.6, -24, 14, 0.9, 7, { color: 0xf43f5e, studColor: 0xfb7185 });
+      this._addBox(0, 12.2, -26, 16, 0.9, 7.5, { color: 0xf8fafc, studColor: 0xffffff });
+      this._addLadder(0, -22.2, 0, 12.4, 'z', 1.3);
+
+      // Decorative Trees & Distant Skyline Towers
+      for (const [tx, tz] of [[-26, 12], [26, 12], [-26, 24], [26, 24], [-26, -6], [26, -6]]) {
+        this._addBox(tx, 2.0, tz, 1.1, 4.0, 1.1, { color: 0x784c2b });
+        this._addBox(tx, 4.9, tz, 4.0, 2.6, 4.0, { color: 0x16a34a, studColor: 0x22c55e, solid: false });
+      }
+      for (const [sx, sz, sh] of [[-55, -52, 42], [55, -52, 48], [-58, 22, 34], [58, 26, 38], [0, -64, 52]]) {
+        this._addBox(sx, sh / 2 - 4, sz, 14, sh, 14, { color: 0x1e293b, solid: false, castShadow: false });
+        this._addBox(sx, sh - 3.5, sz, 14.5, 0.5, 14.5, { color: 0x2de2ff, emissive: 0x2de2ff, solid: false });
+      }
+
+      this.waypoints = [
+        new THREE.Vector3(-12, 0, -12),
+        new THREE.Vector3(0, 0, -15),
+        new THREE.Vector3(12, 0, -12),
+        new THREE.Vector3(-16, 0, 3),
+        new THREE.Vector3(16, 0, 3),
+        new THREE.Vector3(0, 0, 16),
+        new THREE.Vector3(-9, 0, 7),
+        new THREE.Vector3(9, 0, 7),
+        new THREE.Vector3(-8, 0, -4),
+        new THREE.Vector3(8, 0, -4),
+        new THREE.Vector3(0, 0, 23),
+      ];
     }
 
     // =========================================================
@@ -1686,6 +1893,28 @@
       return mesh;
     }
 
+    addTempJumpPad(x, y, z, launchVel = 16.5, life = 18.0) {
+      const radius = 1.95;
+      const group = new THREE.Group();
+      const base = new THREE.Mesh(
+        new THREE.CylinderGeometry(radius, radius * 1.1, 0.24, 16),
+        new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.6, roughness: 0.3 })
+      );
+      base.position.set(x, y + 0.12, z);
+      const glow = new THREE.Mesh(
+        new THREE.TorusGeometry(radius * 0.8, 0.12, 8, 22),
+        new THREE.MeshStandardMaterial({ color: 0xa855f7, emissive: 0xa855f7, emissiveIntensity: 1.0 })
+      );
+      glow.rotation.x = Math.PI / 2;
+      glow.position.set(x, y + 0.28, z);
+      group.add(base, glow);
+      this.mapGroup.add(group);
+      const padObj = { x, y, z, radius, launchVel };
+      this.jumpPads.push(padObj);
+      this.tempJumpPads.push({ group, padObj, life });
+      return group;
+    }
+
     updateTempWalls(dt) {
       for (let i = this.tempWalls.length - 1; i >= 0; i--) {
         const tw = this.tempWalls[i];
@@ -1699,6 +1928,16 @@
           tw.mesh.geometry.dispose();
           tw.mesh.material.dispose();
           this.tempWalls.splice(i, 1);
+        }
+      }
+      for (let i = this.tempJumpPads.length - 1; i >= 0; i--) {
+        const tp = this.tempJumpPads[i];
+        tp.life -= dt;
+        if (tp.life <= 0) {
+          this.mapGroup.remove(tp.group);
+          const pi = this.jumpPads.indexOf(tp.padObj);
+          if (pi >= 0) this.jumpPads.splice(pi, 1);
+          this.tempJumpPads.splice(i, 1);
         }
       }
     }

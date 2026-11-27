@@ -250,8 +250,48 @@
           this._tone('sine', 680, 210, 0.13, 0.14, 0, 0.12);
           break;
         case 'axe':
-          this._noise(0.18, 1000, 0.3, 'lowpass', 0, 0.18);
-          this._tone('sawtooth', 230, 80, 0.16, 0.2, 0, 0.15);
+        case 'maul':
+          this._noise(0.2, 850, 0.34, 'lowpass', 0, 0.22);
+          this._tone('sawtooth', 190, 58, 0.18, 0.24, 0, 0.18);
+          break;
+        case 'spear':
+        case 'riotshield':
+          this._noise(0.14, 1800, 0.24, 'bandpass', 0, 0.15);
+          this._tone('triangle', 380, 140, 0.12, 0.18, 0, 0.12);
+          break;
+        case 'grenadelauncher':
+          this._noise(0.18, 620, 0.38, 'lowpass', 0, 0.35);
+          this._tone('sine', 165, 52, 0.18, 0.32, 0, 0.3);
+          break;
+        case 'wildcat':
+          this._noise(0.08, 2100, 0.24, 'bandpass', 0, 0.24);
+          this._tone('sawtooth', 290, 92, 0.065, 0.16, 0, 0.18);
+          break;
+        case 'permafrost':
+          this._noise(0.16, 4400, 0.24, 'highpass', 0, 0.3);
+          this._tone('sine', 1400, 2200, 0.14, 0.16, 0, 0.28);
+          break;
+        case 'distortion':
+          this._tone('sawtooth', 420, 95, 0.24, 0.26, 0, 0.42);
+          this._tone('sine', 960, 260, 0.22, 0.18, 0, 0.38);
+          this._noise(0.16, 1600, 0.22, 'bandpass', 0, 0.3);
+          break;
+        case 'warper':
+        case 'warpstone':
+          this._tone('sine', 520, 1560, 0.18, 0.2, 0, 0.35);
+          this._noise(0.14, 3200, 0.16, 'highpass', 0, 0.25);
+          break;
+        case 'grappler':
+          this._noise(0.15, 2800, 0.24, 'bandpass', 0, 0.2);
+          this._tone('triangle', 760, 340, 0.18, 0.18, 0, 0.2);
+          break;
+        case 'holodome':
+        case 'jumppad':
+          this._tone('sine', 280, 840, 0.28, 0.22, 0, 0.35);
+          this._tone('triangle', 420, 620, 0.22, 0.16, 0.05, 0.3);
+          break;
+        case 'subspace':
+          this._tone('sine', 880, 1320, 0.16, 0.16, 0, 0.25);
           break;
         case 'warhorn':
           // Deep heroic war horn brass blast!

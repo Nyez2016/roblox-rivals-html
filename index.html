@@ -40,6 +40,7 @@
           <span id="grav-badge" class="grav-pill hidden">LOW-G</span>
           <span id="autoshoot-badge" class="auto-pill hidden">AUTO SHOOT</span>
           <span id="warhorn-badge" class="horn-pill hidden">WAR HORN</span>
+          <span id="shield-badge" class="shield-pill hidden">SHIELD GUARD</span>
         </div>
         <div class="round-timer" id="round-timer">1:30</div>
       </div>
@@ -48,6 +49,14 @@
         <div class="score-pips" id="bot-pips"></div>
         <span class="team-name" id="bot-name">RIVAL</span>
       </div>
+    </div>
+
+    <!-- 3D Lobby Top Info Bar (shown when walking in Rivals Hub Lobby) -->
+    <div id="lobby-hud-bar" class="hidden">
+      <span class="lobby-tag">RIVALS HUB LOBBY</span>
+      <span class="lobby-hint">STEP ON A DUEL PAD TO PLAY · <b>TAB / ESC</b> ARMORY &amp; SHOP</span>
+      <span class="lobby-pill streak">STREAK: <b id="lobby-streak-val">0</b></span>
+      <span class="lobby-pill keys">KEYS: <b id="lobby-keys-val">40</b></span>
     </div>
 
     <!-- Kill Feed -->
@@ -157,16 +166,19 @@
     <div class="menu-card">
       <div class="brand-header">
         <div class="brand-top-row">
-          <div class="brand-tag">ROBLOX RIVALS · FULL ARSENAL EDITION</div>
-          <div class="keys-wallet" id="keys-wallet">KEYS: <strong id="keys-count">40</strong></div>
+          <div class="brand-tag">ROBLOX RIVALS · COMPLETE 52-WEAPON EDITION</div>
+          <div class="wallet-group">
+            <div class="streak-wallet" id="streak-wallet">STREAK: <strong id="streak-count">0</strong></div>
+            <div class="keys-wallet" id="keys-wallet">KEYS: <strong id="keys-count">40</strong></div>
+          </div>
         </div>
         <h1 class="brand-title">ROBLOX <span>RIVALS</span></h1>
-        <p class="brand-sub">39 Rivals Weapons · Key Unlocks · 9 Vertical Maps · Double Jump · Realistic Audio</p>
+        <p class="brand-sub">All 52 Rivals Weapons · 3D Walkable Lobby &amp; Bots · Key Unlocks · 9 Vertical Maps · Double Jump</p>
       </div>
 
       <!-- Menu Navigation Tabs -->
       <div class="menu-tabs">
-        <button class="tab-btn active" data-tab="loadout">ARMORY &amp; PROFILES (39)</button>
+        <button class="tab-btn active" data-tab="loadout">ARMORY &amp; PROFILES (52)</button>
         <button class="tab-btn" data-tab="maps">MAPS, GRAVITY &amp; MODES</button>
         <button class="tab-btn" data-tab="skins">SKINS &amp; KILL FX</button>
       </div>
@@ -206,22 +218,22 @@
 
         <div class="armory-scroll">
           <div class="loadout-section">
-            <label class="section-label">PRIMARY (SLOT 1 · 13 WEAPONS)</label>
+            <label class="section-label">PRIMARY (SLOT 1 · 17 WEAPONS)</label>
             <div class="choice-grid cols-4" id="grid-primary" data-category="primary"></div>
           </div>
 
           <div class="loadout-section">
-            <label class="section-label">SECONDARY (SLOT 2 · 10 WEAPONS)</label>
-            <div class="choice-grid cols-5" id="grid-secondary" data-category="secondary"></div>
+            <label class="section-label">SECONDARY (SLOT 2 · 11 WEAPONS)</label>
+            <div class="choice-grid cols-4" id="grid-secondary" data-category="secondary"></div>
           </div>
 
           <div class="loadout-section">
-            <label class="section-label">MELEE (SLOT 3 · 8 WEAPONS)</label>
+            <label class="section-label">MELEE (SLOT 3 · 11 WEAPONS)</label>
             <div class="choice-grid cols-4" id="grid-melee" data-category="melee"></div>
           </div>
 
           <div class="loadout-section">
-            <label class="section-label">UTILITY (SLOT 4 · 8 WEAPONS)</label>
+            <label class="section-label">UTILITY (SLOT 4 · 13 WEAPONS)</label>
             <div class="choice-grid cols-4" id="grid-utility" data-category="utility"></div>
           </div>
         </div>
@@ -322,8 +334,8 @@
 
         <div class="loadout-split">
           <div class="loadout-section">
-            <label class="section-label">GAME MODE (8 MODES)</label>
-            <div class="choice-grid cols-4" data-category="mode">
+            <label class="section-label">GAME MODE (9 MODES)</label>
+            <div class="choice-grid cols-3" data-category="mode">
               <button class="choice-btn center-text active" data-mode="classic">
                 <strong>Classic 1v1</strong>
                 <span>Custom Loadout</span>
@@ -335,6 +347,10 @@
               <button class="choice-btn center-text" data-mode="tdm">
                 <strong>Team DM</strong>
                 <span>3v3 · First to 25</span>
+              </button>
+              <button class="choice-btn center-text" data-mode="ffa">
+                <strong>Bot FFA</strong>
+                <span>5 AI Bots · To 15</span>
               </button>
               <button class="choice-btn center-text" data-mode="range">
                 <strong>Shooting Range</strong>
@@ -514,23 +530,24 @@
 
       <!-- Action Buttons -->
       <div class="menu-actions">
-        <button id="play-btn" class="primary-btn">ENTER ARENA</button>
+        <button id="lobby-btn" class="primary-btn">ENTER 3D LOBBY</button>
+        <button id="play-btn" class="secondary-btn">QUICK PLAY MATCH</button>
         <button id="range-quick-btn" class="secondary-btn">SHOOTING RANGE</button>
         <button id="restart-btn" class="secondary-btn hidden">NEW MATCH</button>
-        <button id="exit-menu-btn" class="secondary-btn hidden">EXIT TO MENU</button>
+        <button id="exit-menu-btn" class="secondary-btn hidden">RETURN TO LOBBY</button>
       </div>
 
       <!-- Controls Reference -->
       <div class="controls-footer">
         <span><b>WASD</b> Move</span>
-        <span><b>SPACE</b> Jump</span>
+        <span><b>2x SPACE</b> Double Jump</span>
         <span><b>SHIFT/C</b> Slide</span>
         <span><b>E</b> Dash</span>
         <span><b>LMB</b> Fire</span>
-        <span><b>RMB</b> ADS / Lunge</span>
+        <span><b>RMB</b> ADS / Guard / Lunge</span>
         <span><b>G</b> Inspect</span>
         <span><b>B / Z / X / V</b> Emotes</span>
-        <span><b>F</b> Auto Shoot</span>
+        <span><b>TAB / ESC</b> Armory</span>
         <span><b>R</b> Reload</span>
       </div>
     </div>
@@ -544,7 +561,8 @@
       <div id="end-stats" class="end-stats"></div>
       <div class="menu-actions">
         <button id="rematch-btn" class="primary-btn">REMATCH</button>
-        <button id="loadout-btn" class="secondary-btn">CUSTOMIZE</button>
+        <button id="end-lobby-btn" class="secondary-btn">RETURN TO LOBBY</button>
+        <button id="loadout-btn" class="secondary-btn">ARMORY</button>
       </div>
     </div>
   </div>

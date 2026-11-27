@@ -3,6 +3,19 @@
   const THREE = global.THREE;
   const { RIVAL_SKINS, WEAPONS, createWeaponMesh } = Rivals;
 
+  const BOT_PROFILES = [
+    { name: 'RivalsKing_YT', skin: 'golden', streak: 14 },
+    { name: 'NoobSlayer99', skin: 'classic', streak: 9 },
+    { name: 'SniperGod', skin: 'shadow', streak: 22 },
+    { name: 'DashMaster', skin: 'astronaut', streak: 6 },
+    { name: 'KatanaAce', skin: 'jin', streak: 11 },
+    { name: 'SkyJumper', skin: 'frost', streak: 4 },
+    { name: 'NeonGhost', skin: 'shadow', streak: 17 },
+    { name: 'VoxelPro', skin: 'classic', streak: 8 },
+    { name: 'BloxSweat', skin: 'golden', streak: 19 },
+    { name: 'ArcticWolf', skin: 'frost', streak: 7 },
+  ];
+
   const DIFFICULTIES = {
     rookie: {
       name: 'RIVAL (ROOKIE)',
@@ -235,12 +248,38 @@
         return { long: 'sniper', mid: 'sniper', close: 'revolver' };
       }
       if (mode === 'assassin') {
-        return { long: 'bow', mid: 'crossbow', close: pick(['kunai', 'knife', 'xiuchun']) };
+        return { long: 'bow', mid: 'crossbow', close: pick(['kunai', 'knife', 'xiuchun', 'spear']) };
       }
       return {
-        long: pick(['sniper', 'railgun', 'burst', 'bow', 'energyrifle', 'ar']),
-        mid: pick(['ar', 'burst', 'revolver', 'paintball', 'gunblade', 'minigun', 'exogun', 'energypistols', 'crossbow']),
-        close: pick(['shotgun', 'uzi', 'spray', 'shorty', 'flamethrower', 'katana', 'scythe', 'chainsaw', 'knife']),
+        long: pick(['sniper', 'railgun', 'burst', 'bow', 'energyrifle', 'permafrost', 'distortion', 'ar']),
+        mid: pick([
+          'ar',
+          'burst',
+          'revolver',
+          'paintball',
+          'wildcat',
+          'gunblade',
+          'grenadelauncher',
+          'minigun',
+          'warper',
+          'exogun',
+          'energypistols',
+          'crossbow',
+        ]),
+        close: pick([
+          'shotgun',
+          'uzi',
+          'spray',
+          'shorty',
+          'flamethrower',
+          'katana',
+          'spear',
+          'maul',
+          'riotshield',
+          'scythe',
+          'chainsaw',
+          'knife',
+        ]),
       };
     }
 
@@ -313,12 +352,13 @@
       const h = this.hpCanvas.height;
       ctx.clearRect(0, 0, w, h);
 
-      // Weapon label tag above HP bar so player sees what weapon the Rival switched to!
-      ctx.font = 'bold 13px Segoe UI, sans-serif';
+      // Bot name & active weapon label above HP bar!
+      ctx.font = 'bold 11.5px Segoe UI, sans-serif';
       ctx.textAlign = 'center';
       ctx.fillStyle = this.team === 'blue' ? '#7dd3fc' : '#fde047';
-      const wLabel = this.weaponDef ? this.weaponDef.name : 'ASSAULT RIFLE';
-      ctx.fillText(wLabel, w / 2, 13);
+      const wLabel = this.weaponDef ? this.weaponDef.name : 'AR';
+      const header = this.name && this.name !== 'RIVAL' ? `${this.name} · ${wLabel}` : wLabel;
+      ctx.fillText(header.slice(0, 22), w / 2, 13);
 
       const barY = 18;
       const barH = 20;
@@ -930,7 +970,191 @@
     }
   }
 
+  // =========================================================
+  // ANIMATED 3D LOBBY BOT (Wanders Plaza, Emotes & Waits on Duel Pads!)
+  // =========================================================
+  class LobbyBot {
+    constructor(scene, arena, profile, startPos) {
+      this.scene = scene;
+      this.arena = arena;
+      this.name = profile.name;
+      this.streak = profile.streak || 3;
+      this.skinId = profile.skin || 'classic';
+
+      this.pos = startPos.clone();
+      this.vel = new THREE.Vector3();
+      this.yaw = Math.random() * Math.PI * 2;
+      this.walkPhase = Math.random() * 6.28;
+      this.waitTimer = 1.0 + Math.random() * 3.5;
+      this.emoteMode = null;
+      this.emoteTimer = 0;
+      this.targetPos = startPos.clone();
+
+      this._buildAvatar();
+      this._pickNextSpot();
+    }
+
+    _buildAvatar() {
+      const skin = RIVAL_SKINS[this.skinId] || RIVAL_SKINS.classic;
+      this.group = new THREE.Group();
+      this.bodyGroup = new THREE.Group();
+      this.group.add(this.bodyGroup);
+
+      const matSkin = new THREE.MeshStandardMaterial({ color: skin.skinColor, roughness: 0.55 });
+      const matTorso = new THREE.MeshStandardMaterial({ color: skin.torsoColor, roughness: 0.45, metalness: skin.metalness });
+      const matLegs = new THREE.MeshStandardMaterial({ color: skin.legsColor, roughness: 0.65 });
+      const matAccent = new THREE.MeshStandardMaterial({
+        color: skin.accentColor,
+        emissive: skin.accentColor,
+        emissiveIntensity: 0.75,
+      });
+
+      this.leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.72, 0.34), matLegs);
+      this.leftLeg.position.set(-0.19, 0.36, 0);
+      this.leftLeg.castShadow = true;
+
+      this.rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.72, 0.34), matLegs);
+      this.rightLeg.position.set(0.19, 0.36, 0);
+      this.rightLeg.castShadow = true;
+
+      const torso = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.76, 0.4), matTorso);
+      torso.position.set(0, 1.1, 0);
+      torso.castShadow = true;
+
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.14, 0.42), matAccent);
+      stripe.position.set(0, 1.18, 0);
+
+      this.leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.72, 0.3), matSkin);
+      this.leftArm.position.set(-0.54, 1.1, 0);
+      this.leftArm.castShadow = true;
+
+      this.rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.72, 0.3), matSkin);
+      this.rightArm.position.set(0.54, 1.12, 0.12);
+      this.rightArm.rotation.x = -0.7;
+      this.rightArm.castShadow = true;
+
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.52, 0.54), matSkin);
+      head.position.set(0, 1.76, 0);
+      head.castShadow = true;
+
+      const visor = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.14, 0.08), matAccent);
+      visor.position.set(0, 1.8, 0.27);
+
+      // Hold a random Rivals weapon!
+      const allIds = Object.keys(WEAPONS);
+      const wId = allIds[Math.floor(Math.random() * allIds.length)];
+      const weaponMesh = createWeaponMesh(wId, this.skinId === 'golden' ? 'gold' : 'default');
+      weaponMesh.position.set(0.54, 1.16, 0.42);
+      weaponMesh.rotation.y = Math.PI;
+      weaponMesh.scale.setScalar(1.05);
+
+      this.bodyGroup.add(this.leftLeg, this.rightLeg, torso, stripe, this.leftArm, this.rightArm, head, visor, weaponMesh);
+
+      // Floating Rivals Nameplate + Win Streak!
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 56;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = 'rgba(10, 16, 30, 0.78)';
+      ctx.fillRect(6, 6, 244, 44);
+      ctx.strokeStyle = '#' + new THREE.Color(skin.accentColor).getHexString();
+      ctx.lineWidth = 3;
+      ctx.strokeRect(6, 6, 244, 44);
+      ctx.font = 'bold 18px Segoe UI, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(this.name, 128, 27);
+      ctx.font = 'bold 14px Segoe UI, sans-serif';
+      ctx.fillStyle = '#fbbf24';
+      ctx.fillText(`STREAK ${this.streak}`, 128, 45);
+
+      const tex = new THREE.CanvasTexture(canvas);
+      const tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
+      tag.scale.set(2.35, 0.52, 1);
+      tag.position.set(0, 2.68, 0);
+      this.group.add(tag);
+
+      this.group.position.copy(this.pos);
+      this.scene.add(this.group);
+    }
+
+    _pickNextSpot() {
+      const wps = this.arena.getWaypoints();
+      if (wps && wps.length > 0) {
+        const pick = wps[Math.floor(Math.random() * wps.length)];
+        this.targetPos.set(pick.x + (Math.random() - 0.5) * 3.5, 0, pick.z + (Math.random() - 0.5) * 3.5);
+      } else {
+        this.targetPos.set((Math.random() - 0.5) * 32, 0, (Math.random() - 0.5) * 32);
+      }
+    }
+
+    update(dt, playerPos) {
+      if (this.emoteTimer > 0) {
+        this.emoteTimer -= dt;
+        const t = performance.now() * 0.006;
+        if (this.emoteMode === 'griddy') {
+          this.bodyGroup.position.y = Math.abs(Math.sin(t * 1.5)) * 0.24;
+          this.leftLeg.rotation.x = Math.sin(t * 1.5) * 0.7;
+          this.rightLeg.rotation.x = -Math.sin(t * 1.5) * 0.7;
+        } else {
+          this.bodyGroup.position.y = Math.abs(Math.sin(t)) * 0.16;
+          this.leftArm.rotation.z = 2.4 + Math.sin(t * 2.5) * 0.4;
+        }
+        if (this.emoteTimer <= 0) {
+          this.bodyGroup.position.y = 0;
+          this.leftArm.rotation.z = 0;
+          this._pickNextSpot();
+        }
+        this.group.position.copy(this.pos);
+        return;
+      }
+
+      if (this.waitTimer > 0) {
+        this.waitTimer -= dt;
+        if (playerPos) {
+          const lookYaw = Math.atan2(playerPos.x - this.pos.x, playerPos.z - this.pos.z);
+          this.yaw += (lookYaw - this.yaw) * Math.min(1, dt * 3);
+        }
+        this.leftLeg.rotation.x *= 0.85;
+        this.rightLeg.rotation.x *= 0.85;
+        if (this.waitTimer <= 0) {
+          if (Math.random() < 0.35) {
+            this.emoteMode = Math.random() < 0.5 ? 'griddy' : 'wave';
+            this.emoteTimer = 2.6 + Math.random() * 2.0;
+          } else {
+            this._pickNextSpot();
+          }
+        }
+      } else {
+        const dx = this.targetPos.x - this.pos.x;
+        const dz = this.targetPos.z - this.pos.z;
+        const dist = Math.hypot(dx, dz);
+        if (dist < 1.2) {
+          this.waitTimer = 1.6 + Math.random() * 3.5;
+        } else {
+          const speed = 5.4;
+          this.pos.x += (dx / dist) * speed * dt;
+          this.pos.z += (dz / dist) * speed * dt;
+          this.yaw = Math.atan2(dx, dz);
+          this.walkPhase += dt * 8.5;
+          this.leftLeg.rotation.x = Math.sin(this.walkPhase) * 0.65;
+          this.rightLeg.rotation.x = -Math.sin(this.walkPhase) * 0.65;
+          this.leftArm.rotation.x = -Math.sin(this.walkPhase) * 0.45;
+        }
+      }
+
+      this.group.position.copy(this.pos);
+      this.group.rotation.set(0, this.yaw, 0);
+    }
+
+    dispose() {
+      this.scene.remove(this.group);
+    }
+  }
+
+  Rivals.BOT_PROFILES = BOT_PROFILES;
   Rivals.DIFFICULTIES = DIFFICULTIES;
   Rivals.RivalBot = RivalBot;
   Rivals.TargetDummy = TargetDummy;
+  Rivals.LobbyBot = LobbyBot;
 })(window);

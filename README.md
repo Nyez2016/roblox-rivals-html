@@ -6,14 +6,19 @@ Play live on GitHub Pages: **[https://nyez2016.github.io/roblox-rivals-html/](ht
 
 ## Features
 
-- **39 Authentic Roblox Rivals Weapons + Key Unlock Progression**:
-  - Start with the classic **Starter Loadout**: **Assault Rifle**, **Handgun**, **Fists**, and **Grenade** (plus 40 bonus Keys!).
-  - Earn **Keys** from eliminations (`+4`, `+6` for Headshot/Backstab/Wallbang), Round Wins (`+12`), Match Victories (`+40`), and Shooting Range Dummies (`+1` / `+20` Secret Boss) to unlock higher-tier **Standard**, **Pro**, **Exotic**, and **Mythic** weapons.
-  - **Live Weapon Profile Inspector**: Click or hover any weapon in the Armory to inspect its tier, tactical description, pro tip, and stat bars (Damage, Fire Rate, Range, Mobility), and unlock or equip directly.
-  - **Primary (13)**: Assault Rifle (Starter), Burst Rifle, Shotgun, Bow, **RPG** (Explosive + Rocket Jump), Crossbow, Gunblade, **Sniper** (**Scope-Only** — must hold `RMB` to fire!), Paintball Gun, **Flamethrower**, **Energy Rifle**, Minigun, **Phase Railgun** (pierces straight through solid walls!)
-  - **Secondary (10)**: Handgun (Starter), Uzi, **Flare Gun** (ignites fire pools), Shorty, Revolver, Daggers, Spray, Slingshot, **Exogun** (explosive splash bolts), **Energy Pistols**
-  - **Melee (8)**: Fists (Starter), Knife (105 Backstab), Chainsaw, Katana, Battle Axe, Imperial Saber (95 Backstab), **Scythe** (`RMB` Scythe Jump), **Trowel** (`RMB` builds solid 3D brick cover walls!)
-  - **Utility (8)**: Grenade (Starter, Grenade Jump), Smoke Grenade, Flashbang, Molotov, **Satchel** (mega blast & jump), **Freeze Ray** (freezes rivals in ice for 2.2s), **War Horn** (+38% speed & +25% fire rate surge), **Medkit** (+50 HP heal)
+- **3D Walkable Roblox Rivals Hub Lobby & Animated Lobby Bots**:
+  - Spawn inside a bright 3D **Rivals Hub Plaza** populated by **8 named AI Lobby Bots** (`RivalsKing_YT`, `NoobSlayer99`, `SniperGod`, `DashMaster`, `KatanaAce`, `SkyJumper`, `NeonGhost`, `VoxelPro`) carrying Rivals weapons, showing Win Streaks, walking around, and emoting!
+  - **Walk-On Matchmaking Duel Pads**: Step onto glowing 3D pads right on the lobby floor for **`1v1 DUEL`**, **`2v2 DUELS`**, **`3v3 TDM`**, **`BOT FFA (5 BOTS)`**, **`SHOOTING RANGE`**, or **`ARMORY & SHOP`** — plus a **Parkour Obby** and a **`+25 FREE KEYS` Bonus Crate**!
+- **All 52 Authentic Roblox Rivals Weapons + Key Unlock Progression**:
+  - Start with the classic **Starter Loadout**: **Assault Rifle**, **Handgun**, **Fists**, and **Grenade** (plus 40 bonus Keys + 25 free Lobby Crate Keys!).
+  - Earn **Keys** from eliminations (`+4`, `+6` for Headshot/Backstab/Wallbang), **First Blood** (`+3`), Round Wins (`+12`), Match Victories (`+40`/`+45`), **Win Streak bonuses**, and Shooting Range Dummies (`+1` / `+20` Secret Boss).
+  - **Live Weapon Profile Inspector**: Hover or click any weapon to inspect its Tier, Description, Pro Tip, and 4 Stat Bars, and unlock or equip directly.
+  - **Primary (17)**: Assault Rifle, Burst Rifle, Shotgun, Bow, **RPG**, Crossbow, Gunblade, **Grenade Launcher** (bouncing explosive shells), **Sniper** (**Scope-Only** — must hold `RMB` to fire!), Paintball Gun, **Wildcat**, **Flamethrower**, **Energy Rifle**, **Permafrost** (headshots freeze rivals solid!), Minigun, **Distortion** (gravity vortex pull blast!), **Phase Railgun** (pierces straight through walls!)
+  - **Secondary (11)**: Handgun, Uzi, **Flare Gun**, Shorty, Revolver, Daggers, Spray, Slingshot, **Warper** (quantum speed surge on hit), **Exogun**, **Energy Pistols**
+  - **Melee (11)**: Fists, Knife (105 Backstab), Chainsaw, **Riot Shield** (hold `RMB` to block 80% of incoming gunfire!), Katana, **Spear** (5.8m ultra-long reach!), Battle Axe, Imperial Saber, **Maul** (`RMB` AoE shockwave slam!), **Scythe** (`RMB` Scythe Jump), **Trowel** (`RMB` builds solid 3D brick walls!)
+  - **Utility (13)**: Grenade, Smoke Grenade, Flashbang, Molotov, **Jump Pad** (deploy portable launch pad!), **Satchel**, **Subspace Tripmine** (cloaked 110-dmg proximity mine!), **Freeze Ray**, **War Horn**, **Grappler** (75m grapple hook!), **Warpstone** (42m instant teleport!), **Medkit**, **Holodome** (6-second 3D energy shield dome!)
+- **9 Game Modes (Including 5-Bot Free-For-All!)**: `Classic 1v1`, `2v2 Duel`, `Team Deathmatch (3v3)`, **`Bot FFA` (You vs 5 independent AI Rivals Bots fighting everyone — First to 15!)**, `Shooting Range`, `Practice Rounds`, `Ancient Assassin`, `Sniper Only`, and `Randomizer`.
+- **Win Streaks & Rivals Callouts**: Track persistent **Win Streaks** (`STREAK`), plus live `FIRST BLOOD!`, `DOUBLE KILL!`, `TRIPLE KILL!`, and `UNSTOPPABLE!` callouts.
 - **Double Jump & Dynamic Movement**: Tap `Space` a second time in mid-air for a crisp **Double Jump** (`2x AIR JUMP`), paired with Slide Boost (`Shift`/`C`), Quick Dash (`E`/`Q`), Ladders, Jump Pads, Grenade Jumps, Rocket Jumps, and Scythe Jumps.
 - **9 Vertically Enhanced Arena Maps** *(with live 3D menu preview)*:
   - **Arena (Classic)** — Symmetrical bridge, twin ladders & jump pads up to a **2nd-Story Sky Arch Overpass**
