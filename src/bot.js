@@ -1152,22 +1152,38 @@
     }
   }
 
+  const FRIEND_COLORS = [
+    { torso: 0x10b981, accent: 0x38ef7d, hex: '#38ef7d' },
+    { torso: 0x0284c7, accent: 0x2de2ff, hex: '#2de2ff' },
+    { torso: 0xd97706, accent: 0xfbbf24, hex: '#fbbf24' },
+    { torso: 0x7c3aed, accent: 0xc084fc, hex: '#c084fc' },
+    { torso: 0xdb2777, accent: 0xf472b6, hex: '#f472b6' },
+    { torso: 0xea580c, accent: 0xff9f43, hex: '#ff9f43' },
+    { torso: 0x65a30d, accent: 0xa3e635, hex: '#a3e635' },
+    { torso: 0x2563eb, accent: 0x60a5fa, hex: '#60a5fa' },
+  ];
+
   // =========================================================
-  // REAL-TIME REMOTE FRIEND AVATAR (WebRTC P2P Multiplayer!)
+  // REAL-TIME REMOTE FRIEND AVATAR (Private Server Multiplayer!)
   // =========================================================
   class RemotePlayer {
-    constructor(scene) {
+    constructor(scene, info = {}) {
       this.scene = scene;
-      this.name = 'FRIEND';
+      this.peerId = info.id || 'friend';
+      this.name = info.name || 'FRIEND';
+      this.isHost = Boolean(info.isHost);
+      this.isMobile = Boolean(info.isMobile);
+      this.colorIdx = info.colorIdx || 0;
       this.isRemote = true;
       this.isDummy = false;
       this.team = 'red';
       this.maxHp = 100;
       this.hp = 100;
       this.alive = true;
+      this.inLobby = true;
 
-      this.pos = new THREE.Vector3(0, 0, -10);
-      this.targetPos = new THREE.Vector3(0, 0, -10);
+      this.pos = new THREE.Vector3((Math.random() - 0.5) * 6, 0, 5 + (Math.random() - 0.5) * 4);
+      this.targetPos = this.pos.clone();
       this.yaw = 0;
       this.targetYaw = 0;
       this.currentWeaponId = 'ar';
@@ -1182,7 +1198,8 @@
       this.hitMeshes = [];
 
       this._buildAvatar();
-      this.setVisible(false);
+      this.setLobbyAppearance(true);
+      this.setVisible(true);
     }
 
     _buildAvatar() {
@@ -1283,13 +1300,13 @@
       for (const m of this.hitMeshes) m.userData.enemyRef = this;
 
       this.hpCanvas = document.createElement('canvas');
-      this.hpCanvas.width = 180;
-      this.hpCanvas.height = 46;
+      this.hpCanvas.width = 240;
+      this.hpCanvas.height = 54;
       this.hpCtx = this.hpCanvas.getContext('2d');
       this.hpTex = new THREE.CanvasTexture(this.hpCanvas);
       this.hpSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.hpTex, depthTest: false }));
-      this.hpSprite.scale.set(1.85, 0.48, 1);
-      this.hpSprite.position.set(0, 2.68, 0);
+      this.hpSprite.scale.set(2.35, 0.54, 1);
+      this.hpSprite.position.set(0, 2.74, 0);
       this.group.add(this.hpSprite);
 
       this.equipWeapon('ar');
@@ -1297,11 +1314,21 @@
       this.scene.add(this.group);
     }
 
+    setProfile(info = {}) {
+      if (info.name) this.name = info.name;
+      if (typeof info.isHost === 'boolean') this.isHost = info.isHost;
+      if (typeof info.isMobile === 'boolean') this.isMobile = info.isMobile;
+      if (typeof info.colorIdx === 'number') this.colorIdx = info.colorIdx;
+      this.setLobbyAppearance(this.inLobby);
+    }
+
     setLobbyAppearance(isLobby) {
+      this.inLobby = isLobby;
+      const pal = FRIEND_COLORS[this.colorIdx % FRIEND_COLORS.length];
       if (isLobby) {
-        this.matTorso.color.setHex(0x10b981);
-        this.matAccent.color.setHex(0x38ef7d);
-        this.matAccent.emissive.setHex(0x38ef7d);
+        this.matTorso.color.setHex(pal.torso);
+        this.matAccent.color.setHex(pal.accent);
+        this.matAccent.emissive.setHex(pal.accent);
       } else {
         this.matTorso.color.setHex(0xe63956);
         this.matAccent.color.setHex(0xff3e5e);
@@ -1327,19 +1354,25 @@
       const h = this.hpCanvas.height;
       ctx.clearRect(0, 0, w, h);
 
+      const pal = FRIEND_COLORS[this.colorIdx % FRIEND_COLORS.length];
+      const badge = this.isHost ? ' [HOST]' : this.isMobile ? ' [MOB]' : '';
+      const label = `${this.name}${badge} · ${this.weaponDef ? this.weaponDef.name : 'AR'}`;
+
+      ctx.fillStyle = 'rgba(10, 14, 24, 0.84)';
+      ctx.fillRect(4, 2, w - 8, 22);
       ctx.font = 'bold 13px Segoe UI, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillStyle = '#38ef7d';
-      ctx.fillText(`FRIEND · ${this.weaponDef ? this.weaponDef.name : 'AR'}`.slice(0, 22), w / 2, 14);
+      ctx.fillStyle = this.inLobby ? pal.hex : '#fde047';
+      ctx.fillText(label.slice(0, 26), w / 2, 17);
 
       ctx.fillStyle = 'rgba(10, 14, 24, 0.85)';
-      ctx.fillRect(6, 20, w - 12, 20);
+      ctx.fillRect(10, 28, w - 20, 20);
       const pct = Math.max(0, this.hp / this.maxHp);
-      ctx.fillStyle = pct > 0.35 ? '#38ef7d' : '#ff3e5e';
-      ctx.fillRect(10, 24, Math.round((w - 20) * pct), 12);
+      ctx.fillStyle = this.inLobby ? pal.hex : pct > 0.35 ? '#ff3e5e' : '#ff9f1c';
+      ctx.fillRect(14, 32, Math.round((w - 28) * pct), 12);
       ctx.strokeStyle = 'rgba(255,255,255,0.5)';
       ctx.lineWidth = 2;
-      ctx.strokeRect(7, 21, w - 14, 18);
+      ctx.strokeRect(11, 29, w - 22, 18);
       this.hpTex.needsUpdate = true;
     }
 

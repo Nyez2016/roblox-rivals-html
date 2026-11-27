@@ -68,13 +68,23 @@
     <!-- Non-blocking Lobby Click Prompt (disappears on first click!) -->
     <div id="lobby-click-hint" class="hidden">CLICK ANYWHERE TO LOOK AROUND &amp; MOVE IN 3D LOBBY</div>
 
-    <!-- Live Host Link / Multiplayer Invite Bar (shown in Lobby so friends can join immediately!) -->
+    <!-- Live Private Server Invite Bar (shown in Lobby so friends can join immediately!) -->
     <div id="host-link-bar" class="hidden">
       <span class="host-dot" id="hud-host-dot"></span>
-      <span class="host-label">ROOM <b id="hud-room-code">------</b></span>
-      <span class="host-status" id="hud-net-status">HOSTING...</span>
-      <button id="hud-copy-link-btn" class="host-btn">COPY HOST LINK</button>
-      <button id="hud-duel-friend-btn" class="host-btn duel hidden">DUEL FRIEND 1v1</button>
+      <span class="host-label">PRIVATE SERVER <b id="hud-room-code">------</b></span>
+      <span class="host-status" id="hud-net-status">1/8 ONLINE</span>
+      <button id="hud-copy-link-btn" class="host-btn">COPY INVITE LINK</button>
+      <button id="hud-open-servers-btn" class="host-btn subtle">PRIVATE SERVERS</button>
+      <button id="hud-duel-friend-btn" class="host-btn duel hidden">START SERVER PVP</button>
+    </div>
+
+    <!-- Live Friends Roster Pill (top-left in 3D Lobby & Private Server Matches!) -->
+    <div id="hud-friends-panel" class="hidden">
+      <div class="friends-panel-head">
+        <span id="hud-server-title">PRIVATE SERVER</span>
+        <b id="hud-server-count">1/8</b>
+      </div>
+      <div id="hud-friends-list"></div>
     </div>
 
     <!-- Shooting Range Quick Weapon Picker Hint -->
@@ -271,9 +281,10 @@
 
       <!-- Menu Navigation Tabs -->
       <div class="menu-tabs">
-        <button class="tab-btn active" data-tab="loadout">ARMORY &amp; PROFILES (52)</button>
-        <button class="tab-btn" data-tab="maps">MAPS, GRAVITY &amp; MODES</button>
-        <button class="tab-btn" data-tab="skins">SKINS &amp; KILL FX</button>
+        <button class="tab-btn active" data-tab="loadout">ARMORY (52)</button>
+        <button class="tab-btn" data-tab="maps">MAPS &amp; MODES</button>
+        <button class="tab-btn" data-tab="skins">SKINS &amp; FX</button>
+        <button class="tab-btn tab-server-btn" data-tab="servers">PRIVATE SERVERS</button>
       </div>
 
       <!-- TAB 1: DYNAMIC ARMORY + LIVE WEAPON PROFILE INSPECTOR -->
@@ -596,6 +607,72 @@
               <strong>Voxel Shatter</strong>
               <span>Exploding Studs</span>
             </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 4: PRIVATE SERVERS (Host up to 8 Friends, See Everyone in 3D Lobby & Battle!) -->
+      <div class="tab-panel hidden" id="tab-servers">
+        <div class="server-grid">
+          <!-- Left: Create / Manage Your Private Server -->
+          <div class="server-card">
+            <div class="server-card-title">HOST PRIVATE SERVER (UP TO 8 FRIENDS)</div>
+            <div class="srv-form-row">
+              <label>YOUR DISPLAY NAME</label>
+              <div class="srv-inline">
+                <input type="text" id="player-name-input" maxlength="16" placeholder="Your Name" />
+                <button id="save-name-btn" class="mp-btn">SAVE</button>
+              </div>
+            </div>
+            <div class="srv-form-row">
+              <label>SERVER NAME</label>
+              <input type="text" id="srv-name-input" maxlength="26" placeholder="My Rivals Private Server" />
+            </div>
+            <div class="srv-two-col">
+              <div class="srv-form-row">
+                <label>OPTIONAL PIN</label>
+                <input type="text" id="srv-pin-input" maxlength="12" placeholder="None (Open)" />
+              </div>
+              <div class="srv-form-row">
+                <label>MAX PLAYERS</label>
+                <select id="srv-max-select">
+                  <option value="2">2 Players (1v1)</option>
+                  <option value="4">4 Players</option>
+                  <option value="6">6 Players</option>
+                  <option value="8" selected>8 Players</option>
+                </select>
+              </div>
+            </div>
+            <button id="create-server-btn" class="mp-btn primary full-w">CREATE / RESET PRIVATE SERVER</button>
+
+            <div class="srv-link-box">
+              <label>SHARE THIS PRIVATE SERVER LINK WITH FRIENDS</label>
+              <div class="srv-inline">
+                <input type="text" id="srv-invite-url" readonly value="Generating link..." />
+                <button id="srv-copy-link-btn" class="mp-btn primary">COPY LINK</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Join Friend + Live Connected Friends Roster -->
+          <div class="server-card">
+            <div class="server-card-title">JOIN A FRIEND'S PRIVATE SERVER</div>
+            <div class="srv-inline" style="margin-bottom: 10px;">
+              <input type="text" id="srv-join-code" maxlength="8" placeholder="SERVER CODE" />
+              <input type="text" id="srv-join-pin" maxlength="12" placeholder="PIN (IF SET)" />
+              <button id="srv-join-btn" class="mp-btn primary">JOIN</button>
+            </div>
+
+            <div class="server-card-title" style="margin-top: 6px;">
+              PLAYERS IN SERVER (<span id="srv-roster-count">1/8</span>)
+            </div>
+            <div id="srv-roster-list" class="srv-roster-list"></div>
+
+            <div class="srv-host-actions" id="srv-host-controls">
+              <button id="srv-start-pvp-btn" class="mp-btn duel">START SERVER PVP (ALL FRIENDS)</button>
+              <button id="srv-pull-range-btn" class="mp-btn">ALL TO SHOOTING RANGE</button>
+              <button id="srv-pull-lobby-btn" class="mp-btn">ALL TO 3D LOBBY</button>
+            </div>
           </div>
         </div>
       </div>

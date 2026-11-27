@@ -86,7 +86,8 @@
       this.bot = new RivalBot(this.scene, this.arena);
       this.bot.applySkin(this.loadoutChoice.rivalSkin);
       this.bot.setVisible(false);
-      this.remotePlayer = new RemotePlayer(this.scene);
+      this.remotePlayers = new Map();
+      this.playerName = this.playerName || 'Player_' + Math.floor(100 + Math.random() * 899);
       this.pvpActive = false;
       this.netSyncTimer = 0;
       this.net = null;
@@ -268,41 +269,176 @@
       }
     }
 
+    _getOrCreateRemotePlayer(peerId, info = {}) {
+      if (!peerId || (this.net && peerId === this.net.myId)) return null;
+      let rp = this.remotePlayers.get(peerId);
+      if (!rp) {
+        rp = new RemotePlayer(this.scene, { id: peerId, ...info });
+        this.remotePlayers.set(peerId, rp);
+      } else if (info && info.name) {
+        rp.setProfile(info);
+      }
+      return rp;
+    }
+
+    _removeRemotePlayer(peerId) {
+      const rp = this.remotePlayers.get(peerId);
+      if (rp) {
+        rp.dispose();
+        this.remotePlayers.delete(peerId);
+        const ei = this.enemies.indexOf(rp);
+        if (ei >= 0) this.enemies.splice(ei, 1);
+      }
+    }
+
+    _clearAllRemotePlayers() {
+      for (const rp of this.remotePlayers.values()) {
+        rp.dispose();
+      }
+      this.remotePlayers.clear();
+    }
+
+    _renderServerRoster(rosterList, maxPlayers, serverName) {
+      const list = rosterList || [];
+      const countTxt = `${list.length}/${maxPlayers || 8}`;
+      if (this.ui.hudServerTitle) this.ui.hudServerTitle.textContent = (serverName || 'PRIVATE SERVER').toUpperCase();
+      if (this.ui.hudServerCount) this.ui.hudServerCount.textContent = countTxt;
+      if (this.ui.srvRosterCount) this.ui.srvRosterCount.textContent = countTxt;
+
+      const palette = ['#38ef7d', '#2de2ff', '#fbbf24', '#c084fc', '#f472b6', '#ff9f43', '#a3e635', '#60a5fa'];
+
+      // Keep 3D RemotePlayer avatars synced with everyone in the Private Server!
+      const aliveIds = new Set();
+      for (const p of list) {
+        if (this.net && p.id === this.net.myId) continue;
+        aliveIds.add(p.id);
+        const rp = this._getOrCreateRemotePlayer(p.id, p);
+        if (rp) {
+          rp.setLobbyAppearance(this.inLobby || this.loadoutChoice.mode === 'range');
+          if (this.inLobby || this.loadoutChoice.mode === 'range' || this.pvpActive) {
+            rp.setVisible(true);
+          }
+        }
+      }
+      for (const existingId of Array.from(this.remotePlayers.keys())) {
+        if (!aliveIds.has(existingId)) this._removeRemotePlayer(existingId);
+      }
+
+      if (this.ui.hudFriendsList) {
+        this.ui.hudFriendsList.innerHTML = '';
+        for (const p of list) {
+          const isMe = this.net && p.id === this.net.myId;
+          const col = palette[(p.colorIdx || 0) % palette.length];
+          const row = document.createElement('div');
+          row.className = 'hud-friend-row';
+          row.innerHTML = `<span><i class="hud-friend-dot" style="background:${col}"></i>${p.name}${isMe ? ' (YOU)' : ''}</span><span class="hud-friend-tag">${
+            p.isHost ? 'HOST' : p.isMobile ? 'MOB' : 'PC'
+          }</span>`;
+          this.ui.hudFriendsList.appendChild(row);
+        }
+      }
+
+      if (this.ui.srvRosterList) {
+        this.ui.srvRosterList.innerHTML = '';
+        for (const p of list) {
+          const isMe = this.net && p.id === this.net.myId;
+          const col = palette[(p.colorIdx || 0) % palette.length];
+          const item = document.createElement('div');
+          item.className = 'srv-roster-item';
+          const left = document.createElement('span');
+          left.innerHTML = `<i class="hud-friend-dot" style="background:${col}"></i><b>${p.name}</b>${isMe ? ' (YOU)' : ''} · ${
+            p.isHost ? 'HOST' : p.isMobile ? 'MOBILE' : 'PC'
+          }`;
+          item.appendChild(left);
+
+          if (this.net && this.net.isHost && !isMe) {
+            const kick = document.createElement('button');
+            kick.className = 'srv-kick-btn';
+            kick.textContent = 'KICK';
+            kick.addEventListener('click', () => this.net.kickPlayer(p.id));
+            item.appendChild(kick);
+          }
+          this.ui.srvRosterList.appendChild(item);
+        }
+      }
+
+      const hasFriends = list.length > 1;
+      const isHost = Boolean(this.net && this.net.isHost);
+      if (this.ui.hudDuelFriendBtn) this.ui.hudDuelFriendBtn.classList.toggle('hidden', !(hasFriends && isHost));
+      if (this.ui.menuDuelFriendBtn) this.ui.menuDuelFriendBtn.classList.toggle('hidden', !(hasFriends && isHost));
+      if (this.ui.srvHostControls) this.ui.srvHostControls.classList.toggle('hidden', !isHost);
+    }
+
+    _openMenuTab(tabName) {
+      document.querySelectorAll('.tab-btn').forEach((b) => b.classList.toggle('active', b.dataset.tab === tabName));
+      document.querySelectorAll('.tab-panel').forEach((p) => {
+        p.classList.toggle('hidden', p.id !== `tab-${tabName}`);
+      });
+    }
+
     _initMultiplayer() {
       if (typeof NetManager === 'undefined') return;
-      this.net = new NetManager({
-        onReady: (code, url) => {
-          if (this.ui.hudRoomCode) this.ui.hudRoomCode.textContent = code;
-          if (this.ui.menuInviteUrl) this.ui.menuInviteUrl.value = url;
+      if (this.ui.playerNameInput) this.ui.playerNameInput.value = this.playerName;
+      this.net = new NetManager(
+        {
+          playerName: this.playerName,
+          serverName: `${this.playerName}'s Server`,
+          isMobile: this.isMobileMode,
+          streak: this.winStreak,
         },
-        onStatus: (text, connected) => {
-          if (this.ui.hudNetStatus) this.ui.hudNetStatus.textContent = text;
-          if (this.ui.menuNetStatus) {
-            this.ui.menuNetStatus.textContent = text;
-            this.ui.menuNetStatus.classList.toggle('online', connected);
-          }
-          if (this.ui.hudHostDot) this.ui.hudHostDot.classList.toggle('online', connected);
-          if (this.ui.hudDuelFriendBtn) this.ui.hudDuelFriendBtn.classList.toggle('hidden', !connected);
-          if (this.ui.menuDuelFriendBtn) this.ui.menuDuelFriendBtn.classList.toggle('hidden', !connected);
-        },
-        onPeerConnect: () => {
-          this.sound.playUnlock();
-          this._pushKillFeed('FRIEND CONNECTED! CLICK "DUEL FRIEND 1v1" OR STEP ON 1v1 PAD!');
-          if (this.inLobby) {
-            this.remotePlayer.setLobbyAppearance(true);
-            this.remotePlayer.setVisible(true);
-          }
-        },
-        onPeerDisconnect: () => {
-          this.remotePlayer.setVisible(false);
-          this._pushKillFeed('FRIEND DISCONNECTED');
-          if (this.pvpActive) {
-            this.pvpActive = false;
-            this.enterLobby(!this.isMobileMode);
-          }
-        },
-        onMessage: (msg) => this._handleNetMessage(msg),
-      });
+        {
+          onReady: ({ roomCode, inviteUrl, serverName, maxPlayers }) => {
+            if (this.ui.hudRoomCode) this.ui.hudRoomCode.textContent = roomCode;
+            if (this.ui.menuInviteUrl) this.ui.menuInviteUrl.value = inviteUrl;
+            if (this.ui.srvInviteUrl) this.ui.srvInviteUrl.value = inviteUrl;
+            if (this.ui.srvNameInput && !this.ui.srvNameInput.value) this.ui.srvNameInput.value = serverName;
+            if (this.ui.srvMaxSelect) this.ui.srvMaxSelect.value = String(maxPlayers || 8);
+          },
+          onStatus: (text, connected) => {
+            if (this.ui.hudNetStatus) this.ui.hudNetStatus.textContent = text;
+            if (this.ui.menuNetStatus) {
+              this.ui.menuNetStatus.textContent = text;
+              this.ui.menuNetStatus.classList.toggle('online', connected);
+            }
+            if (this.ui.hudHostDot) this.ui.hudHostDot.classList.toggle('online', connected);
+          },
+          onRoster: (list, maxPlayers, serverName) => {
+            this._renderServerRoster(list, maxPlayers, serverName);
+          },
+          onPeerJoin: (info) => {
+            this.sound.playUnlock();
+            this._getOrCreateRemotePlayer(info.id, info);
+            this._pushKillFeed(`${info.name} JOINED YOUR PRIVATE SERVER!`);
+            this.netSyncTimer = 0; // Push our position immediately so they see us!
+          },
+          onPeerLeave: (info) => {
+            this._removeRemotePlayer(info.id);
+            this._pushKillFeed(`${info.name || 'Friend'} LEFT THE PRIVATE SERVER`);
+            if (this.pvpActive && this.remotePlayers.size === 0) {
+              this.pvpActive = false;
+              this.enterLobby(!this.isMobileMode);
+            }
+          },
+          onConnectedToServer: (serverName) => {
+            this.sound.playUnlock();
+            this._pushKillFeed(`JOINED PRIVATE SERVER: ${serverName}!`);
+            if (!this.inLobby) this.enterLobby(!this.isMobileMode);
+            else if (!this.isPaused) this.ui.menu.classList.add('hidden');
+          },
+          onJoinDenied: (reason) => {
+            this._pushKillFeed(`SERVER JOIN DENIED: ${reason}`);
+          },
+          onDisconnect: () => {
+            this._clearAllRemotePlayers();
+            this._pushKillFeed('DISCONNECTED FROM PRIVATE SERVER');
+            if (this.pvpActive) {
+              this.pvpActive = false;
+              this.enterLobby(!this.isMobileMode);
+            }
+          },
+          onMessage: (msg) => this._handleNetMessage(msg),
+        }
+      );
     }
 
     _copyInviteLink(btnEl) {
@@ -314,12 +450,13 @@
         setTimeout(() => {
           btnEl.textContent = prev;
         }, 1600);
-        this._pushKillFeed('HOST LINK COPIED! SEND TO YOUR FRIEND!');
+        this._pushKillFeed('PRIVATE SERVER LINK COPIED! SEND TO YOUR FRIENDS!');
       };
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(url).then(done).catch(() => {
-          if (this.ui.menuInviteUrl) {
-            this.ui.menuInviteUrl.select();
+          const inp = this.ui.srvInviteUrl || this.ui.menuInviteUrl;
+          if (inp) {
+            inp.select();
             try {
               document.execCommand('copy');
             } catch {}
@@ -327,8 +464,9 @@
           done();
         });
       } else {
-        if (this.ui.menuInviteUrl) {
-          this.ui.menuInviteUrl.select();
+        const inp = this.ui.srvInviteUrl || this.ui.menuInviteUrl;
+        if (inp) {
+          inp.select();
           try {
             document.execCommand('copy');
           } catch {}
@@ -338,10 +476,13 @@
     }
 
     _startPvpMatch(mapId = 'arena', isInitiator = true) {
-      if (!this.net || !this.net.connected) return;
+      if (!this.net || this.net.getOtherPlayersCount() <= 0) {
+        this._pushKillFeed('INVITE AT LEAST 1 FRIEND FIRST TO START SERVER PVP!');
+        return;
+      }
       const safeMap = MAPS[mapId] && mapId !== 'lobby' && mapId !== 'shootingrange' ? mapId : 'arena';
       if (isInitiator) {
-        this.net.send({ type: 'pvp_start', map: safeMap });
+        this.net.broadcast({ type: 'pvp_start', map: safeMap });
       }
       this.pvpActive = true;
       this.loadoutChoice.mode = 'classic';
@@ -351,15 +492,19 @@
     }
 
     _handleNetMessage(msg) {
+      const senderId = msg.from;
       if (msg.type === 'state') {
-        this.remotePlayer.applyNetworkState(msg);
-        if (this.inLobby && msg.inLobby) {
-          this.remotePlayer.setLobbyAppearance(true);
-          this.remotePlayer.setVisible(true);
-        } else if (this.pvpActive) {
-          this.remotePlayer.setLobbyAppearance(false);
-          this.remotePlayer.setVisible(true);
-        }
+        if (!senderId) return;
+        const info = (this.net && this.net.players.get(senderId)) || {};
+        const rp = this._getOrCreateRemotePlayer(senderId, info);
+        if (!rp) return;
+        rp.applyNetworkState(msg);
+        const sameScene =
+          (this.inLobby && msg.inLobby) ||
+          (!this.inLobby && this.loadoutChoice.mode === 'range' && msg.mode === 'range') ||
+          (this.pvpActive && msg.pvpActive);
+        rp.setLobbyAppearance(this.inLobby || this.loadoutChoice.mode === 'range');
+        rp.setVisible(sameScene);
       } else if (msg.type === 'shot') {
         const s = new THREE.Vector3(msg.sx, msg.sy, msg.sz);
         const e = new THREE.Vector3(msg.ex, msg.ey, msg.ez);
@@ -367,25 +512,35 @@
         this.sound.playShoot(msg.weaponId || 'ar');
       } else if (msg.type === 'pvp_start') {
         this._startPvpMatch(msg.map || 'arena', false);
+      } else if (msg.type === 'pvp_range') {
+        this.pvpActive = false;
+        this.loadoutChoice.mode = 'range';
+        this.loadoutChoice.map = 'shootingrange';
+        this._syncMenuFromState();
+        this.startNewMatch();
       } else if (msg.type === 'pvp_hit') {
         if (this.pvpActive && this.roundState === 'playing') {
-          this._damagePlayer(msg.damage || 15, `FRIEND [${msg.weaponLabel || 'WEAPON'}]`);
+          const attackerName = (this.net && this.net.players.get(senderId)?.name) || 'FRIEND';
+          this._damagePlayer(msg.damage || 15, `${attackerName} [${msg.weaponLabel || 'WEAPON'}]`);
           if (msg.freeze) {
             this.player.freezeTimer = Math.max(this.player.freezeTimer || 0, msg.freeze);
-            this._pushKillFeed('FROZEN BY FRIEND!');
+            this._pushKillFeed(`FROZEN BY ${attackerName}!`);
           }
           if (msg.blind) {
             this.blindFlash = Math.max(this.blindFlash, 1.25);
           }
         }
       } else if (msg.type === 'pvp_dead') {
-        if (this.pvpActive && this.roundState === 'playing') {
-          this.remotePlayer.takeDamage(999, false);
-          this.stats.kills += 1;
+        const rp = this.remotePlayers.get(senderId);
+        if (this.pvpActive && this.roundState === 'playing' && rp) {
+          rp.takeDamage(999, false);
           this.sound.playKill();
-          this._triggerKillEffect(this.remotePlayer.getCenterWorldPos(), this.remotePlayer);
-          this._pushKillFeed('YOU ELIMINATED YOUR FRIEND!');
-          this._endRound(true, 'FRIEND ELIMINATED!');
+          this._triggerKillEffect(rp.getCenterWorldPos(), rp);
+          this._pushKillFeed(`${rp.name} WAS ELIMINATED!`);
+          if (this.player.alive && this._getAliveEnemyCount() === 0) {
+            this.stats.kills += 1;
+            this._endRound(true, 'ALL FRIENDS ELIMINATED!');
+          }
         }
       } else if (msg.type === 'pvp_lobby') {
         this.pvpActive = false;
@@ -398,7 +553,7 @@
       this.netSyncTimer -= dt;
       if (this.netSyncTimer > 0) return;
       this.netSyncTimer = 0.04;
-      this.net.send({
+      this.net.broadcast({
         type: 'state',
         x: Math.round(this.player.pos.x * 100) / 100,
         y: Math.round(this.player.pos.y * 100) / 100,
@@ -409,6 +564,8 @@
         weaponId: this._currentWeapon().id,
         emote: this.activeEmote || null,
         inLobby: this.inLobby,
+        mode: this.loadoutChoice.mode,
+        pvpActive: this.pvpActive,
       });
     }
 
@@ -631,6 +788,9 @@
         if (typeof saved.winStreak === 'number' && Number.isFinite(saved.winStreak)) {
           this.winStreak = Math.max(0, Math.floor(saved.winStreak));
         }
+        if (typeof saved.playerName === 'string' && saved.playerName.trim()) {
+          this.playerName = saved.playerName.trim().slice(0, 16);
+        }
         if (Array.isArray(saved.unlockedWeapons)) {
           this.unlockedWeapons = new Set([...(STARTER_WEAPONS || ['ar', 'handgun', 'fists', 'grenade']), ...saved.unlockedWeapons]);
         }
@@ -707,6 +867,7 @@
             ...this.loadoutChoice,
             keysCurrency: this.keysCurrency,
             winStreak: this.winStreak,
+            playerName: this.playerName,
             unlockedWeapons: Array.from(this.unlockedWeapons),
             sensitivity: this.settings.sensitivity,
             fov: this.settings.fov,
@@ -751,7 +912,29 @@
         hudRoomCode: document.getElementById('hud-room-code'),
         hudNetStatus: document.getElementById('hud-net-status'),
         hudCopyLinkBtn: document.getElementById('hud-copy-link-btn'),
+        hudOpenServersBtn: document.getElementById('hud-open-servers-btn'),
         hudDuelFriendBtn: document.getElementById('hud-duel-friend-btn'),
+        hudFriendsPanel: document.getElementById('hud-friends-panel'),
+        hudServerTitle: document.getElementById('hud-server-title'),
+        hudServerCount: document.getElementById('hud-server-count'),
+        hudFriendsList: document.getElementById('hud-friends-list'),
+        playerNameInput: document.getElementById('player-name-input'),
+        saveNameBtn: document.getElementById('save-name-btn'),
+        srvNameInput: document.getElementById('srv-name-input'),
+        srvPinInput: document.getElementById('srv-pin-input'),
+        srvMaxSelect: document.getElementById('srv-max-select'),
+        createServerBtn: document.getElementById('create-server-btn'),
+        srvInviteUrl: document.getElementById('srv-invite-url'),
+        srvCopyLinkBtn: document.getElementById('srv-copy-link-btn'),
+        srvJoinCode: document.getElementById('srv-join-code'),
+        srvJoinPin: document.getElementById('srv-join-pin'),
+        srvJoinBtn: document.getElementById('srv-join-btn'),
+        srvRosterCount: document.getElementById('srv-roster-count'),
+        srvRosterList: document.getElementById('srv-roster-list'),
+        srvHostControls: document.getElementById('srv-host-controls'),
+        srvStartPvpBtn: document.getElementById('srv-start-pvp-btn'),
+        srvPullRangeBtn: document.getElementById('srv-pull-range-btn'),
+        srvPullLobbyBtn: document.getElementById('srv-pull-lobby-btn'),
         menuNetStatus: document.getElementById('menu-net-status'),
         menuInviteUrl: document.getElementById('menu-invite-url'),
         menuCopyLinkBtn: document.getElementById('menu-copy-link-btn'),
@@ -1255,15 +1438,56 @@
           this._copyInviteLink(this.ui.hudCopyLinkBtn);
         });
       }
+      if (this.ui.hudOpenServersBtn) {
+        this.ui.hudOpenServersBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (document.pointerLockElement) document.exitPointerLock();
+          this._openPauseMenu();
+          this._openMenuTab('servers');
+        });
+      }
       if (this.ui.menuCopyLinkBtn) {
         this.ui.menuCopyLinkBtn.addEventListener('click', () => {
           this._copyInviteLink(this.ui.menuCopyLinkBtn);
         });
       }
+      if (this.ui.srvCopyLinkBtn) {
+        this.ui.srvCopyLinkBtn.addEventListener('click', () => {
+          this._copyInviteLink(this.ui.srvCopyLinkBtn);
+        });
+      }
+      if (this.ui.saveNameBtn && this.ui.playerNameInput) {
+        this.ui.saveNameBtn.addEventListener('click', () => {
+          const val = this.ui.playerNameInput.value.trim().slice(0, 16);
+          if (!val) return;
+          this.playerName = val;
+          this._savePreferences();
+          if (this.net) this.net.setLocalProfile({ name: val });
+          this._pushKillFeed(`NAME UPDATED TO ${val}!`);
+        });
+      }
+      if (this.ui.createServerBtn) {
+        this.ui.createServerBtn.addEventListener('click', () => {
+          if (!this.net) return;
+          this.net.createPrivateServer({
+            name: (this.ui.srvNameInput && this.ui.srvNameInput.value.trim()) || `${this.playerName}'s Server`,
+            pass: (this.ui.srvPinInput && this.ui.srvPinInput.value.trim()) || '',
+            maxPlayers: (this.ui.srvMaxSelect && parseInt(this.ui.srvMaxSelect.value, 10)) || 8,
+          });
+          this._pushKillFeed('NEW PRIVATE SERVER CREATED! COPY LINK TO INVITE FRIENDS!');
+        });
+      }
+      if (this.ui.srvJoinBtn && this.ui.srvJoinCode) {
+        this.ui.srvJoinBtn.addEventListener('click', () => {
+          const code = this.ui.srvJoinCode.value.trim();
+          const pin = (this.ui.srvJoinPin && this.ui.srvJoinPin.value.trim()) || '';
+          if (code && this.net) this.net.joinServer(code, pin);
+        });
+      }
       if (this.ui.joinRoomBtn && this.ui.joinCodeInput) {
         this.ui.joinRoomBtn.addEventListener('click', () => {
           const code = this.ui.joinCodeInput.value.trim();
-          if (code && this.net) this.net.joinRoom(code);
+          if (code && this.net) this.net.joinServer(code, '');
         });
       }
       if (this.ui.hudDuelFriendBtn) {
@@ -1277,6 +1501,31 @@
         this.ui.menuDuelFriendBtn.addEventListener('click', () => {
           this.sound.unlock();
           this._startPvpMatch(this.loadoutChoice.map, true);
+        });
+      }
+      if (this.ui.srvStartPvpBtn) {
+        this.ui.srvStartPvpBtn.addEventListener('click', () => {
+          this.sound.unlock();
+          this._startPvpMatch(this.loadoutChoice.map, true);
+        });
+      }
+      if (this.ui.srvPullRangeBtn) {
+        this.ui.srvPullRangeBtn.addEventListener('click', () => {
+          this.sound.unlock();
+          if (this.net && this.net.isHost) this.net.broadcast({ type: 'pvp_range' });
+          this.pvpActive = false;
+          this.loadoutChoice.mode = 'range';
+          this.loadoutChoice.map = 'shootingrange';
+          this._syncMenuFromState();
+          this.startNewMatch();
+        });
+      }
+      if (this.ui.srvPullLobbyBtn) {
+        this.ui.srvPullLobbyBtn.addEventListener('click', () => {
+          this.sound.unlock();
+          if (this.net && this.net.isHost) this.net.broadcast({ type: 'pvp_lobby' });
+          this.pvpActive = false;
+          this.enterLobby(!this.isMobileMode);
         });
       }
 
@@ -1574,11 +1823,9 @@
       this.bot.alive = false;
       this.bot.setVisible(false);
       this.enemies = [];
-      if (this.net && this.net.connected) {
-        this.remotePlayer.setLobbyAppearance(true);
-        this.remotePlayer.setVisible(true);
-      } else {
-        this.remotePlayer.setVisible(false);
+      for (const rp of this.remotePlayers.values()) {
+        rp.setLobbyAppearance(true);
+        rp.setVisible(true);
       }
 
       if (this.arena.mapId !== 'lobby') {
@@ -1610,6 +1857,7 @@
       if (this.ui.rangeHudHint) this.ui.rangeHudHint.classList.add('hidden');
       if (this.ui.lobbyHudBar) this.ui.lobbyHudBar.classList.remove('hidden');
       if (this.ui.hostLinkBar) this.ui.hostLinkBar.classList.remove('hidden');
+      if (this.ui.hudFriendsPanel) this.ui.hudFriendsPanel.classList.remove('hidden');
       if (this.ui.lobbyClickHint) this.ui.lobbyClickHint.classList.toggle('hidden', requestLock || this.isMobileMode);
       if (this.ui.lobbyStreakVal) this.ui.lobbyStreakVal.textContent = String(this.winStreak);
       if (this.ui.lobbyKeysVal) this.ui.lobbyKeysVal.textContent = String(this.keysCurrency);
@@ -1944,6 +2192,7 @@
       this.ui.hud.classList.remove('hidden');
       if (this.ui.lobbyHudBar) this.ui.lobbyHudBar.classList.add('hidden');
       if (this.ui.hostLinkBar) this.ui.hostLinkBar.classList.add('hidden');
+      if (this.ui.hudFriendsPanel) this.ui.hudFriendsPanel.classList.toggle('hidden', !this.pvpActive && this.loadoutChoice.mode !== 'range');
       if (this.ui.lobbyClickHint) this.ui.lobbyClickHint.classList.add('hidden');
       if (this.ui.scoreboard) this.ui.scoreboard.classList.remove('hidden');
       if (this.ui.playerTeamName) {
@@ -2015,25 +2264,42 @@
     _setupEnemiesForRound(spawns) {
       this._clearExtraEnemies();
 
-      if (this.pvpActive && this.net && this.net.connected) {
+      if (this.pvpActive && this.net && this.remotePlayers.size > 0) {
         this.bot.alive = false;
         this.bot.setVisible(false);
-        const amHost = this.net.isHost;
-        this.player.pos.copy(amHost ? spawns.player : spawns.bot);
-        this.player.yaw = amHost ? 0 : Math.PI;
-        const oppSpawn = amHost ? spawns.bot : spawns.player;
-        this.remotePlayer.pos.copy(oppSpawn);
-        this.remotePlayer.targetPos.copy(oppSpawn);
-        this.remotePlayer.hp = 100;
-        this.remotePlayer.alive = true;
-        this.remotePlayer.deathFall = 0;
-        this.remotePlayer.setLobbyAppearance(false);
-        this.remotePlayer.setVisible(true);
-        this.enemies = [this.remotePlayer];
+        const roster = this.net.getRosterList();
+        const myIdx = Math.max(0, roster.findIndex((p) => p.id === this.net.myId));
+        const wps = this.arena.getWaypoints();
+        const spawnSlots = [spawns.player, spawns.bot, ...(wps || [])];
+        const mySpot = spawnSlots[myIdx % spawnSlots.length] || spawns.player;
+        this.player.pos.copy(mySpot);
+        this.player.yaw = myIdx % 2 === 0 ? 0 : Math.PI;
+
+        const remoteList = [];
+        let idx = 0;
+        for (const rp of this.remotePlayers.values()) {
+          const rIdx = roster.findIndex((p) => p.id === rp.peerId);
+          const spot = spawnSlots[(rIdx >= 0 ? rIdx : idx + 1) % spawnSlots.length] || spawns.bot;
+          rp.pos.copy(spot);
+          rp.targetPos.copy(spot);
+          rp.hp = 100;
+          rp.alive = true;
+          rp.deathFall = 0;
+          rp.setLobbyAppearance(false);
+          rp.setVisible(true);
+          remoteList.push(rp);
+          idx++;
+        }
+        this.enemies = remoteList;
         return;
       }
 
-      if (this.remotePlayer) this.remotePlayer.setVisible(false);
+      // Show friends in Shooting Range together; hide during solo bot matches!
+      const showFriendsHere = this.loadoutChoice.mode === 'range';
+      for (const rp of this.remotePlayers.values()) {
+        rp.setLobbyAppearance(true);
+        rp.setVisible(showFriendsHere);
+      }
 
       if (this.loadoutChoice.mode === 'range') {
         this.bot.alive = false;
@@ -2769,7 +3035,7 @@
 
         this._spawnTracer(muzzleWorld, endPoint, tracerCol, w.beamRadius || 0.02);
         if (p === 0 && this.net && this.net.connected) {
-          this.net.send({
+          this.net.broadcast({
             type: 'shot',
             sx: muzzleWorld.x,
             sy: muzzleWorld.y,
@@ -3243,7 +3509,7 @@
 
     _onPlayerHitEnemy(enemy, damage, isHeadshot, worldPoint, weaponLabel) {
       if (enemy.isRemote && this.net && this.net.connected) {
-        this.net.send({
+        this.net.sendTo(enemy.peerId, {
           type: 'pvp_hit',
           damage: Math.round(damage),
           isHeadshot,
@@ -3475,7 +3741,7 @@
       this.killStreak = 0;
       this._pushKillFeed(`${source} ELIMINATED YOU`);
       if (this.pvpActive && this.net && this.net.connected) {
-        this.net.send({ type: 'pvp_dead' });
+        this.net.broadcast({ type: 'pvp_dead' });
       }
 
       if (this.loadoutChoice.mode === 'tdm' || this.loadoutChoice.mode === 'ffa') {
@@ -4576,7 +4842,7 @@
 
       const paused = this.isPaused && this.roundState !== 'match_over';
       if (!paused) {
-        if (this.remotePlayer) this.remotePlayer.update(dt);
+        for (const rp of this.remotePlayers.values()) rp.update(dt);
         this._syncNetworkState(dt);
         if (this.inLobby) {
           this._updatePlayer(dt);

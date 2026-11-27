@@ -6,9 +6,10 @@ Play live on GitHub Pages: **[https://nyez2016.github.io/roblox-rivals-html/](ht
 
 ## Features
 
-- **Instant Host Link Multiplayer (Play With Friends!)**:
-  - Whenever you open the game, it automatically hosts a WebRTC P2P room and displays a **1-click `COPY HOST LINK`** bar right in the 3D Lobby HUD and Armory menu (`?join=ROOMCODE`).
-  - Send the link to a friend (on PC or Mobile!) to see them walk around the 3D Lobby live with you and challenge them to a real-time **1v1 Friend PvP Duel**!
+- **Private Servers (Invite Up to 8 Friends & See Everyone Live!)**:
+  - Automatically creates a **Private Server** when you open the game—or open the **`PRIVATE SERVERS`** tab to set a custom **Server Name**, **Optional PIN**, **Max Players (`2–8`)**, and your **Display Name**!
+  - Share your 1-click **Private Server Invite Link** (`?server=CODE`) with multiple friends (PC & Mobile!) so **everyone spawns together in the 3D Lobby and sees each other's live 3D avatars, names, colors, weapons, and emotes!**
+  - **Live Friends Roster & Host Controls**: View all connected friends in the top-left HUD & server list, kick players as Host, launch **`START SERVER PVP (ALL FRIENDS)`** across any of the 9 Arena Maps, pull everyone into the **Shooting Range** together, or bring everyone back to the **3D Lobby**!
 - **Auto-Detected Mobile Touch Controls**:
   - Automatically switches to ergonomic **Mobile Touch Controls** on phones and tablets (and toggleable in Settings on any device): Left Virtual Thumb Joystick, Right Touch-Drag Aiming, `FIRE`, `ADS/Scope/Lunge`, `JUMP` (with Double Jump!), `SLIDE`, `DASH`, `RELOAD`, tappable 1–4 weapon slots, `AUTO`, `EMOTE`, `MENU`, and `52 WEAPONS` in Shooting Range!
 - **Direct 3D Rivals Hub Lobby Spawn & Animated Lobby Bots**:
