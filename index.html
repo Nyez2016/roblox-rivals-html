@@ -54,10 +54,16 @@
     <!-- 3D Lobby Top Info Bar (shown when walking in Rivals Hub Lobby) -->
     <div id="lobby-hud-bar" class="hidden">
       <span class="lobby-tag">RIVALS HUB LOBBY</span>
-      <span class="lobby-hint">STEP ON A DUEL PAD TO PLAY · <b>TAB / ESC</b> ARMORY &amp; SHOP</span>
+      <span class="lobby-hint">STEP ON A DUEL PAD · WALK INTO EAST WALL FOR SHOOTING RANGE · <b>TAB / ESC</b> ARMORY</span>
       <span class="lobby-pill streak">STREAK: <b id="lobby-streak-val">0</b></span>
       <span class="lobby-pill keys">KEYS: <b id="lobby-keys-val">40</b></span>
     </div>
+
+    <!-- Non-blocking Lobby Click Prompt (disappears on first click!) -->
+    <div id="lobby-click-hint" class="hidden">CLICK ANYWHERE TO LOOK AROUND &amp; MOVE IN 3D LOBBY</div>
+
+    <!-- Shooting Range Quick Weapon Picker Hint -->
+    <div id="range-hud-hint" class="hidden">SHOOTING RANGE · PRESS <b>TAB</b> TO PICK ANY OF ALL 52 WEAPONS · <b>ESC</b> RETURN TO LOBBY</div>
 
     <!-- Kill Feed -->
     <div id="kill-feed"></div>
@@ -161,8 +167,49 @@
     </div>
   </div>
 
+  <!-- Live 5-Second Pre-Round Loadout Picker & Range All-52 Weapon Picker -->
+  <div id="loadout-picker-overlay" class="hidden">
+    <div class="picker-card" id="picker-card">
+      <div class="picker-header">
+        <div>
+          <div class="picker-eyebrow" id="picker-eyebrow">PRE-ROUND LOADOUT SELECT</div>
+          <h2 id="picker-title">PICK YOUR LOADOUT</h2>
+        </div>
+        <div class="picker-right">
+          <div id="picker-timer" class="picker-timer">5.0s</div>
+          <button id="picker-ready-btn" class="picker-ready-btn">READY / FIGHT!</button>
+        </div>
+      </div>
+
+      <div class="picker-slots-row">
+        <button class="picker-slot-btn active" data-pslot="primary" id="picker-slot-primary">
+          <span class="pslot-label">1 · PRIMARY</span>
+          <div class="pslot-icon"></div>
+          <strong class="pslot-name">ASSAULT RIFLE</strong>
+        </button>
+        <button class="picker-slot-btn" data-pslot="secondary" id="picker-slot-secondary">
+          <span class="pslot-label">2 · SECONDARY</span>
+          <div class="pslot-icon"></div>
+          <strong class="pslot-name">HANDGUN</strong>
+        </button>
+        <button class="picker-slot-btn" data-pslot="melee" id="picker-slot-melee">
+          <span class="pslot-label">3 · MELEE</span>
+          <div class="pslot-icon"></div>
+          <strong class="pslot-name">FISTS</strong>
+        </button>
+        <button class="picker-slot-btn" data-pslot="utility" id="picker-slot-utility">
+          <span class="pslot-label">4 · UTILITY</span>
+          <div class="pslot-icon"></div>
+          <strong class="pslot-name">GRENADE</strong>
+        </button>
+      </div>
+
+      <div id="picker-weapon-grid" class="picker-weapon-grid"></div>
+    </div>
+  </div>
+
   <!-- Main Menu / Pause / Customization Overlay -->
-  <div id="menu-overlay">
+  <div id="menu-overlay" class="hidden">
     <div class="menu-card">
       <div class="brand-header">
         <div class="brand-top-row">
@@ -188,9 +235,12 @@
         <!-- Weapon Profile Card (updates when clicking/hovering any weapon!) -->
         <div id="weapon-profile-card">
           <div class="profile-head">
-            <div>
-              <span class="profile-tier" id="prof-tier">STARTER</span>
-              <h2 id="prof-name">ASSAULT RIFLE</h2>
+            <div class="profile-title-wrap">
+              <div id="prof-icon" class="prof-icon-box"></div>
+              <div>
+                <span class="profile-tier" id="prof-tier">STARTER</span>
+                <h2 id="prof-name">ASSAULT RIFLE</h2>
+              </div>
             </div>
             <button id="prof-action-btn" class="profile-unlock-btn equipped">EQUIPPED</button>
           </div>

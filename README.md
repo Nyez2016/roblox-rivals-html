@@ -6,9 +6,13 @@ Play live on GitHub Pages: **[https://nyez2016.github.io/roblox-rivals-html/](ht
 
 ## Features
 
-- **3D Walkable Roblox Rivals Hub Lobby & Animated Lobby Bots**:
-  - Spawn inside a bright 3D **Rivals Hub Plaza** populated by **8 named AI Lobby Bots** (`RivalsKing_YT`, `NoobSlayer99`, `SniperGod`, `DashMaster`, `KatanaAce`, `SkyJumper`, `NeonGhost`, `VoxelPro`) carrying Rivals weapons, showing Win Streaks, walking around, and emoting!
-  - **Walk-On Matchmaking Duel Pads**: Step onto glowing 3D pads right on the lobby floor for **`1v1 DUEL`**, **`2v2 DUELS`**, **`3v3 TDM`**, **`BOT FFA (5 BOTS)`**, **`SHOOTING RANGE`**, or **`ARMORY & SHOP`** — plus a **Parkour Obby** and a **`+25 FREE KEYS` Bonus Crate**!
+- **Direct 3D Rivals Hub Lobby Spawn & Animated Lobby Bots**:
+  - Spawn straight inside the sunlit 3D **Rivals Hub Plaza** populated by **8 named AI Lobby Bots** (`RivalsKing_YT`, `NoobSlayer99`, `SniperGod`, `DashMaster`, `KatanaAce`, `SkyJumper`, `NeonGhost`, `VoxelPro`) carrying Rivals weapons, showing Win Streaks, walking around, and emoting!
+  - **Built-In East Wall Shooting Range Doorway**: Walk right through the glowing golden **Shooting Range portal built into the East Wall** to test **ALL 52 weapons for free** (press `Tab` anytime inside the Range to open the full 52-weapon picture picker!).
+  - **Walk-On Matchmaking Duel Pads**: Step onto glowing 3D pads on the lobby floor for **`1v1 DUEL`**, **`2v2 DUELS`**, **`3v3 TDM`**, **`BOT FFA (5 BOTS)`**, or **`ARMORY & SHOP`** — plus a **Parkour Obby** and a **`+25 FREE KEYS` Bonus Crate**!
+- **5-Second Live Pre-Round Loadout Picker (With Custom Pictures for All 52 Weapons!)**:
+  - Every battle round gives you **5 seconds** to pick your 4-slot loadout from crisp illustrated weapon cards!
+  - **Don't stall!** If you don't finish picking in 5 seconds, **the round starts live without you** — the picker stays open flashing red while the Rival rushes and shoots you, so you can actually be killed while still picking!
 - **All 52 Authentic Roblox Rivals Weapons + Key Unlock Progression**:
   - Start with the classic **Starter Loadout**: **Assault Rifle**, **Handgun**, **Fists**, and **Grenade** (plus 40 bonus Keys + 25 free Lobby Crate Keys!).
   - Earn **Keys** from eliminations (`+4`, `+6` for Headshot/Backstab/Wallbang), **First Blood** (`+3`), Round Wins (`+12`), Match Victories (`+40`/`+45`), **Win Streak bonuses**, and Shooting Range Dummies (`+1` / `+20` Secret Boss).

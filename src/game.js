@@ -5,6 +5,7 @@
     MAPS,
     WEAPONS,
     STARTER_WEAPONS,
+    getWeaponIconSVG,
     createWeaponMesh,
     createFirstPersonArms,
     createPlayerAvatar,
@@ -99,6 +100,15 @@
       this.killStreak = 0;
       this.firstBloodDone = false;
       this.isShielding = false;
+      this.pickerOpen = false;
+      this.pickerSlot = 'primary';
+      this.pickerIsRange = false;
+      this.rangeLoadout = {
+        primary: 'ar',
+        secondary: 'handgun',
+        melee: 'fists',
+        utility: 'grenade',
+      };
 
       this.viewmodelRoot = new THREE.Group();
       this.camera.add(this.viewmodelRoot);
@@ -196,9 +206,9 @@
 
       this._cacheUI();
       this._syncMenuFromState();
-      this._spawnLobbyBots();
       this._bindEvents();
       this._renderScorePips();
+      this.enterLobby(false);
       this._animate();
     }
 
@@ -327,8 +337,23 @@
         hud: document.getElementById('hud'),
         scoreboard: document.getElementById('scoreboard'),
         lobbyHudBar: document.getElementById('lobby-hud-bar'),
+        lobbyClickHint: document.getElementById('lobby-click-hint'),
+        rangeHudHint: document.getElementById('range-hud-hint'),
         lobbyStreakVal: document.getElementById('lobby-streak-val'),
         lobbyKeysVal: document.getElementById('lobby-keys-val'),
+        pickerOverlay: document.getElementById('loadout-picker-overlay'),
+        pickerCard: document.getElementById('picker-card'),
+        pickerEyebrow: document.getElementById('picker-eyebrow'),
+        pickerTitle: document.getElementById('picker-title'),
+        pickerTimer: document.getElementById('picker-timer'),
+        pickerReadyBtn: document.getElementById('picker-ready-btn'),
+        pickerWeaponGrid: document.getElementById('picker-weapon-grid'),
+        pickerSlots: {
+          primary: document.getElementById('picker-slot-primary'),
+          secondary: document.getElementById('picker-slot-secondary'),
+          melee: document.getElementById('picker-slot-melee'),
+          utility: document.getElementById('picker-slot-utility'),
+        },
         menu: document.getElementById('menu-overlay'),
         matchEnd: document.getElementById('match-end-overlay'),
         lobbyBtn: document.getElementById('lobby-btn'),
@@ -353,6 +378,7 @@
         scopeHint: document.getElementById('scope-hint'),
         keysCount: document.getElementById('keys-count'),
         streakCount: document.getElementById('streak-count'),
+        profIcon: document.getElementById('prof-icon'),
         profTier: document.getElementById('prof-tier'),
         profName: document.getElementById('prof-name'),
         profActionBtn: document.getElementById('prof-action-btn'),
@@ -510,11 +536,14 @@
           const previewing = this.previewWeaponId === w.id;
 
           const btn = document.createElement('button');
-          btn.className = 'choice-btn';
+          btn.className = 'choice-btn weapon-card-btn';
           if (equipped) btn.classList.add('active');
           if (!unlocked) btn.classList.add('locked-weapon');
           if (previewing) btn.classList.add('previewing');
           btn.dataset.weapon = w.id;
+
+          const iconWrap = document.createElement('div');
+          iconWrap.innerHTML = getWeaponIconSVG(w.id);
 
           const strong = document.createElement('strong');
           strong.textContent = w.name;
@@ -526,6 +555,7 @@
             sub.textContent = this._getWeaponShortTag(w);
           }
 
+          btn.appendChild(iconWrap);
           btn.appendChild(strong);
           btn.appendChild(sub);
 
@@ -557,6 +587,9 @@
       const unlocked = this.unlockedWeapons.has(w.id) || (w.cost || 0) <= 0;
       const equipped = this.loadoutChoice[w.slotType] === w.id;
 
+      if (this.ui.profIcon) {
+        this.ui.profIcon.innerHTML = getWeaponIconSVG(w.id);
+      }
       if (this.ui.profTier) {
         const tier = (w.tier || 'Starter').toLowerCase();
         this.ui.profTier.textContent = `${(w.tier || 'Starter').toUpperCase()} · ${w.slotType.toUpperCase()}`;
@@ -683,6 +716,24 @@
 
       if (this.ui.profActionBtn) {
         this.ui.profActionBtn.addEventListener('click', () => this._handleProfileAction());
+      }
+
+      if (this.ui.pickerReadyBtn) {
+        this.ui.pickerReadyBtn.addEventListener('click', () => {
+          this.sound.unlock();
+          this._closeLoadoutPicker(true);
+        });
+      }
+
+      for (const slotKey of ['primary', 'secondary', 'melee', 'utility']) {
+        const sBtn = this.ui.pickerSlots[slotKey];
+        if (sBtn) {
+          sBtn.addEventListener('click', () => {
+            this.pickerSlot = slotKey;
+            this._renderPickerSlots();
+            this._renderPickerGrid();
+          });
+        }
       }
 
       document.querySelectorAll('[data-category]').forEach((group) => {
@@ -852,7 +903,10 @@
         const locked = document.pointerLockElement === this.renderer.domElement;
         if (locked) {
           this.wasPointerLocked = true;
-        } else if (this.wasPointerLocked && this.matchActive && this.roundState !== 'match_over') {
+          if (this.ui.lobbyClickHint) this.ui.lobbyClickHint.classList.add('hidden');
+        } else if (this.pickerOpen) {
+          this.wasPointerLocked = false;
+        } else if (this.wasPointerLocked && (this.matchActive || this.inLobby) && this.roundState !== 'match_over') {
           this.wasPointerLocked = false;
           this._openPauseMenu();
         }
@@ -860,15 +914,37 @@
 
       window.addEventListener('keydown', (e) => {
         const code = e.code;
+        if (this.pickerOpen) {
+          if (code === 'Digit1') { this.pickerSlot = 'primary'; this._renderPickerSlots(); this._renderPickerGrid(); return; }
+          if (code === 'Digit2') { this.pickerSlot = 'secondary'; this._renderPickerSlots(); this._renderPickerGrid(); return; }
+          if (code === 'Digit3') { this.pickerSlot = 'melee'; this._renderPickerSlots(); this._renderPickerGrid(); return; }
+          if (code === 'Digit4') { this.pickerSlot = 'utility'; this._renderPickerSlots(); this._renderPickerGrid(); return; }
+          if (code === 'Enter') { this._closeLoadoutPicker(true); return; }
+          if (code === 'Tab' && this.pickerIsRange) { e.preventDefault(); this._closeLoadoutPicker(true); return; }
+          if (code === 'Escape') {
+            this._closeLoadoutPicker(false);
+            this._openPauseMenu();
+            return;
+          }
+          return;
+        }
+
         if (code === 'Escape' && (this.matchActive || this.inLobby) && !this.isPaused && this.roundState !== 'match_over') {
           this._openPauseMenu();
           return;
         }
-        if (code === 'Tab' && this.inLobby && !this.isPaused) {
-          e.preventDefault();
-          if (document.pointerLockElement) document.exitPointerLock();
-          this._openPauseMenu();
-          return;
+        if (code === 'Tab' && !this.isPaused) {
+          if (this.inLobby) {
+            e.preventDefault();
+            if (document.pointerLockElement) document.exitPointerLock();
+            this._openPauseMenu();
+            return;
+          }
+          if (this.loadoutChoice.mode === 'range' && this.matchActive) {
+            e.preventDefault();
+            this._openLoadoutPicker(true);
+            return;
+          }
         }
         if (['Space', 'Tab'].includes(code) && !this.isPaused) {
           e.preventDefault();
@@ -934,9 +1010,12 @@
       });
 
       window.addEventListener('mousedown', (e) => {
-        if (this.isPaused || !this.matchActive) return;
+        if (this.isPaused || this.pickerOpen || (!this.matchActive && !this.inLobby)) return;
+        this.sound.unlock();
         if (document.pointerLockElement !== this.renderer.domElement) {
           this._requestPointerLock();
+          if (this.ui.lobbyClickHint) this.ui.lobbyClickHint.classList.add('hidden');
+          if (this.inLobby) return;
         }
         if (this.activeEmote) this._stopEmote();
         if (e.button === 0) {
@@ -999,7 +1078,8 @@
       this.lobbyBots = [];
     }
 
-    enterLobby() {
+    enterLobby(requestLock = true) {
+      this._closeLoadoutPicker(false);
       this.inLobby = true;
       this.matchActive = true;
       this.isPaused = false;
@@ -1044,13 +1124,127 @@
       this.ui.centerBanner.classList.add('hidden');
       this.ui.hud.classList.remove('hidden');
       if (this.ui.scoreboard) this.ui.scoreboard.classList.add('hidden');
+      if (this.ui.rangeHudHint) this.ui.rangeHudHint.classList.add('hidden');
       if (this.ui.lobbyHudBar) this.ui.lobbyHudBar.classList.remove('hidden');
+      if (this.ui.lobbyClickHint) this.ui.lobbyClickHint.classList.toggle('hidden', requestLock);
       if (this.ui.lobbyStreakVal) this.ui.lobbyStreakVal.textContent = String(this.winStreak);
       if (this.ui.lobbyKeysVal) this.ui.lobbyKeysVal.textContent = String(this.keysCurrency);
       this.ui.killFeed.innerHTML = '';
-      this._pushKillFeed('WELCOME TO ROBLOX RIVALS HUB! STEP ON ANY DUEL PAD!');
+      this._pushKillFeed('WELCOME TO ROBLOX RIVALS HUB! WALK INTO EAST WALL FOR SHOOTING RANGE!');
       this._updateHUD();
-      this._requestPointerLock();
+      if (requestLock) this._requestPointerLock();
+    }
+
+    _openLoadoutPicker(isRange = false) {
+      this.pickerOpen = true;
+      this.pickerIsRange = isRange;
+      this.pickerSlot = 'primary';
+      this.isMouseDown = false;
+      this.isAds = false;
+      this.isShielding = false;
+      this.wasPointerLocked = false;
+      if (document.pointerLockElement) document.exitPointerLock();
+
+      if (this.ui.pickerOverlay) this.ui.pickerOverlay.classList.remove('hidden');
+      if (this.ui.pickerCard) this.ui.pickerCard.classList.remove('danger-live');
+      if (isRange) {
+        if (this.ui.pickerEyebrow) this.ui.pickerEyebrow.textContent = 'SHOOTING RANGE · ALL 52 WEAPONS FREE';
+        if (this.ui.pickerTitle) this.ui.pickerTitle.textContent = 'PICK ANY WEAPON TO TEST';
+        if (this.ui.pickerTimer) {
+          this.ui.pickerTimer.textContent = 'ALL 52 FREE';
+          this.ui.pickerTimer.classList.remove('urgent');
+        }
+        if (this.ui.pickerReadyBtn) this.ui.pickerReadyBtn.textContent = 'EQUIP & SHOOT!';
+      } else {
+        if (this.ui.pickerEyebrow) this.ui.pickerEyebrow.textContent = 'PRE-ROUND LOADOUT (5 SECONDS!)';
+        if (this.ui.pickerTitle) this.ui.pickerTitle.textContent = 'PICK YOUR LOADOUT FAST!';
+        if (this.ui.pickerReadyBtn) this.ui.pickerReadyBtn.textContent = 'READY / FIGHT!';
+        this._updatePickerTimerUI();
+      }
+      this._renderPickerSlots();
+      this._renderPickerGrid();
+    }
+
+    _closeLoadoutPicker(lockPointer = true) {
+      if (!this.pickerOpen) return;
+      this.pickerOpen = false;
+      if (this.ui.pickerOverlay) this.ui.pickerOverlay.classList.add('hidden');
+      if (this.ui.pickerCard) this.ui.pickerCard.classList.remove('danger-live');
+      this._buildLoadoutSlots();
+      if (lockPointer && !this.isPaused) {
+        this._requestPointerLock();
+      }
+    }
+
+    _renderPickerSlots() {
+      const source = this.pickerIsRange ? this.rangeLoadout : this.loadoutChoice;
+      for (const slotKey of ['primary', 'secondary', 'melee', 'utility']) {
+        const el = this.ui.pickerSlots[slotKey];
+        if (!el) continue;
+        const w = WEAPONS[source[slotKey]] || WEAPONS.ar;
+        el.classList.toggle('active', this.pickerSlot === slotKey);
+        const iconEl = el.querySelector('.pslot-icon');
+        const nameEl = el.querySelector('.pslot-name');
+        if (iconEl) iconEl.innerHTML = getWeaponIconSVG(w.id);
+        if (nameEl) nameEl.textContent = w.name;
+      }
+    }
+
+    _renderPickerGrid() {
+      const grid = this.ui.pickerWeaponGrid;
+      if (!grid) return;
+      grid.innerHTML = '';
+      const source = this.pickerIsRange ? this.rangeLoadout : this.loadoutChoice;
+      const list = Object.values(WEAPONS).filter((w) => w.slotType === this.pickerSlot);
+
+      for (const w of list) {
+        const available = this.pickerIsRange || this.unlockedWeapons.has(w.id) || (w.cost || 0) <= 0;
+        const isSelected = source[this.pickerSlot] === w.id;
+        const btn = document.createElement('button');
+        btn.className = 'picker-wep-btn';
+        if (isSelected) btn.classList.add('selected');
+        if (!available) btn.classList.add('locked');
+
+        btn.innerHTML = `${getWeaponIconSVG(w.id)}<strong>${w.name}</strong><span>${
+          available ? this._getWeaponShortTag(w) : `LOCKED · ${w.cost} KEYS`
+        }</span>`;
+
+        btn.addEventListener('click', () => {
+          if (!available) {
+            this.sound.playDryClick();
+            return;
+          }
+          source[this.pickerSlot] = w.id;
+          if (!this.pickerIsRange) {
+            this._savePreferences();
+          }
+          this._buildLoadoutSlots();
+          this._renderPickerSlots();
+          this._renderPickerGrid();
+        });
+        grid.appendChild(btn);
+      }
+    }
+
+    _updatePickerTimerUI() {
+      if (!this.pickerOpen || this.pickerIsRange) return;
+      if (this.roundState === 'countdown') {
+        const t = Math.max(0, this.stateTimer);
+        if (this.ui.pickerTimer) {
+          this.ui.pickerTimer.textContent = `${t.toFixed(1)}s`;
+          this.ui.pickerTimer.classList.toggle('urgent', t <= 2.0);
+        }
+        if (this.ui.pickerCard) this.ui.pickerCard.classList.remove('danger-live');
+      } else if (this.roundState === 'playing') {
+        // 5 SECONDS RAN OUT! Round started WITHOUT you — Rival is attacking!
+        if (this.ui.pickerCard) this.ui.pickerCard.classList.add('danger-live');
+        if (this.ui.pickerTimer) {
+          this.ui.pickerTimer.textContent = 'LIVE! FIGHT!';
+          this.ui.pickerTimer.classList.add('urgent');
+        }
+        if (this.ui.pickerEyebrow) this.ui.pickerEyebrow.textContent = 'TIME UP! ROUND STARTED WITHOUT YOU!';
+        if (this.ui.pickerTitle) this.ui.pickerTitle.textContent = 'RIVAL IS ATTACKING — CLICK READY NOW!';
+      }
     }
 
     _updateLobby(dt) {
@@ -1076,7 +1270,7 @@
         }
       }
 
-      // Walk-on Matchmaking & Armory Pads!
+      // Walk-on Matchmaking Pads & East Wall Shooting Range Doorway!
       const pad = this.arena.getLobbyPadAt(this.player.pos);
       if (pad) {
         if (pad.mode === 'shop') {
@@ -1085,6 +1279,14 @@
             if (document.pointerLockElement) document.exitPointerLock();
             this._openPauseMenu();
           }
+          return;
+        }
+        if (pad.instant) {
+          // Walk straight through the East Wall Shooting Range doorway!
+          this.loadoutChoice.mode = pad.mode;
+          this.loadoutChoice.map = 'shootingrange';
+          this._syncMenuFromState();
+          this.startNewMatch();
           return;
         }
         if (this.activeLobbyPad?.id !== pad.id) {
@@ -1246,6 +1448,7 @@
       this.ui.matchEnd.classList.add('hidden');
       this.ui.hud.classList.remove('hidden');
       if (this.ui.lobbyHudBar) this.ui.lobbyHudBar.classList.add('hidden');
+      if (this.ui.lobbyClickHint) this.ui.lobbyClickHint.classList.add('hidden');
       if (this.ui.scoreboard) this.ui.scoreboard.classList.remove('hidden');
       if (this.ui.playerTeamName) {
         this.ui.playerTeamName.textContent =
@@ -1275,7 +1478,7 @@
       this.ui.killFeed.innerHTML = '';
 
       this._startRound();
-      this._requestPointerLock();
+      if (!this.pickerOpen) this._requestPointerLock();
     }
 
     _clearExtraEnemies() {
@@ -1485,7 +1688,14 @@
 
     _buildLoadoutSlots() {
       let ids;
-      if (this.loadoutChoice.mode === 'assassin') {
+      if (this.loadoutChoice.mode === 'range' && !this.inLobby) {
+        ids = [
+          this.rangeLoadout.primary,
+          this.rangeLoadout.secondary,
+          this.rangeLoadout.melee,
+          this.rangeLoadout.utility,
+        ];
+      } else if (this.loadoutChoice.mode === 'assassin') {
         ids = ['crossbow', 'kunai', 'knife', 'smoke'];
       } else if (this.loadoutChoice.mode === 'sniper') {
         ids = ['sniper', 'revolver', 'katana', 'flashbang'];
@@ -1599,12 +1809,20 @@
 
       if (this.loadoutChoice.mode === 'range') {
         this.roundState = 'playing';
-        this._showBanner('SHOOTING RANGE', 'TEST ALL WEAPONS & SKINS · ESC TO SWAP', false);
-        setTimeout(() => {
-          if (this.roundState === 'playing' && this.loadoutChoice.mode === 'range') {
-            this.ui.centerBanner.classList.add('hidden');
-          }
-        }, 1600);
+        if (this.ui.rangeHudHint) this.ui.rangeHudHint.classList.remove('hidden');
+        this.ui.centerBanner.classList.add('hidden');
+        this._openLoadoutPicker(true);
+        return;
+      }
+
+      if (this.ui.rangeHudHint) this.ui.rangeHudHint.classList.add('hidden');
+
+      const use5SecPicker = ['classic', 'twovtwo', 'tdm', 'ffa', 'practice'].includes(this.loadoutChoice.mode);
+      if (use5SecPicker) {
+        this.stateTimer = 5.0;
+        this.countdownLastSec = 6;
+        this.ui.centerBanner.classList.add('hidden');
+        this._openLoadoutPicker(false);
         return;
       }
 
@@ -1615,22 +1833,8 @@
           ? 'SNIPER ONLY'
           : this.loadoutChoice.mode === 'randomizer'
           ? 'RANDOMIZER'
-          : this.loadoutChoice.mode === 'practice'
-          ? 'PRACTICE ROUND (3 MOVING NPCs)'
-          : this.loadoutChoice.mode === 'twovtwo'
-          ? '2v2 TEAM DUEL'
-          : this.loadoutChoice.mode === 'tdm'
-          ? '3v3 TEAM DEATHMATCH · FIRST TO 25'
-          : this.loadoutChoice.mode === 'ffa'
-          ? '5-BOT FREE-FOR-ALL · FIRST TO 15'
           : MAPS[this.arena.mapId].name;
-      const titleTag =
-        this.loadoutChoice.mode === 'tdm'
-          ? 'TEAM DEATHMATCH'
-          : this.loadoutChoice.mode === 'ffa'
-          ? 'FREE-FOR-ALL BOTS'
-          : `ROUND ${this.roundNumber}`;
-      this._showBanner(titleTag, `${modeTag} — FIGHT IN 3...`, false);
+      this._showBanner(`ROUND ${this.roundNumber}`, `${modeTag} — FIGHT IN 3...`, false);
     }
 
     _respawnPlayerTDM() {
@@ -1673,6 +1877,7 @@
     }
 
     _canPlayerAct() {
+      if (this.pickerOpen) return false;
       return (this.roundState === 'playing' || this.roundState === 'round_over' || this.roundState === 'lobby') && this.player.alive;
     }
 
@@ -2721,6 +2926,7 @@
     }
 
     _handlePlayerDeath(source) {
+      if (this.pickerOpen) this._closeLoadoutPicker(false);
       this.player.alive = false;
       this.killStreak = 0;
       this._pushKillFeed(`${source} ELIMINATED YOU`);
@@ -2775,6 +2981,7 @@
 
     _endRound(playerWon, subtitle) {
       if (this.roundState !== 'playing') return;
+      if (this.pickerOpen) this._closeLoadoutPicker(false);
       this.roundState = 'round_over';
       this.stateTimer = 3.0;
       this.roundEndTitle = playerWon ? 'ROUND WON' : 'ROUND LOST';
@@ -2793,6 +3000,7 @@
     }
 
     _finishMatch() {
+      if (this.pickerOpen) this._closeLoadoutPicker(false);
       this.roundState = 'match_over';
       this.matchActive = false;
       this.isPaused = true;
@@ -3743,17 +3951,27 @@
         if (sec !== this.countdownLastSec && sec > 0) {
           this.countdownLastSec = sec;
           this.sound.playBeep(false);
-          this._showBanner(`ROUND ${this.roundNumber}`, `FIGHT IN ${sec}...`, false);
+          if (!this.pickerOpen) {
+            this._showBanner(`ROUND ${this.roundNumber}`, `FIGHT IN ${sec}...`, false);
+          }
         }
+        this._updatePickerTimerUI();
         if (this.stateTimer <= 0) {
           this.roundState = 'playing';
           this.sound.playBeep(true);
-          this._showBanner('FIGHT!', 'ELIMINATE YOUR RIVAL', false);
-          setTimeout(() => {
-            if (this.roundState === 'playing') this.ui.centerBanner.classList.add('hidden');
-          }, 700);
+          if (this.pickerOpen) {
+            // 5 seconds expired! Round starts WITHOUT closing the picker so player can be killed while still picking!
+            this._updatePickerTimerUI();
+            this._pushKillFeed('ROUND STARTED! RIVAL IS COMING FOR YOU!');
+          } else {
+            this._showBanner('FIGHT!', 'ELIMINATE YOUR RIVAL', false);
+            setTimeout(() => {
+              if (this.roundState === 'playing') this.ui.centerBanner.classList.add('hidden');
+            }, 700);
+          }
         }
       } else if (this.roundState === 'playing') {
+        if (this.pickerOpen && !this.pickerIsRange) this._updatePickerTimerUI();
         if (this.loadoutChoice.mode === 'range') return;
         this.roundTimer -= dt;
         if (this.roundTimer <= 0) {

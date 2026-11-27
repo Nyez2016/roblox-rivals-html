@@ -2235,8 +2235,166 @@
     return root;
   }
 
+  function getWeaponIconSVG(weaponId) {
+    const w = WEAPONS[weaponId] || WEAPONS.ar;
+    const accent = '#' + new THREE.Color(w.tracerColor || 0x2de2ff).getHexString();
+    let art = '';
+    switch (weaponId) {
+      case 'ar':
+      case 'burst':
+      case 'energyrifle':
+        art = `<rect x="10" y="18" width="44" height="10" rx="2" fill="#334155"/><rect x="52" y="20" width="24" height="4" rx="1" fill="#94a3b8"/><rect x="14" y="20" width="32" height="3" fill="${accent}"/><polygon points="36,28 43,28 46,40 39,40" fill="#1e293b"/><rect x="18" y="28" width="7" height="11" rx="1" fill="#1e293b"/><rect x="28" y="13" width="12" height="5" rx="1" fill="${accent}"/>`;
+        break;
+      case 'wildcat':
+        art = `<rect x="14" y="17" width="42" height="11" rx="3" fill="#1e293b"/><rect x="54" y="20" width="18" height="4" fill="#94a3b8"/><rect x="18" y="20" width="32" height="4" fill="${accent}"/><rect x="20" y="28" width="8" height="12" rx="1" fill="#0f172a"/><rect x="40" y="28" width="7" height="10" rx="1" fill="#334155"/>`;
+        break;
+      case 'shotgun':
+        art = `<rect x="8" y="22" width="18" height="9" rx="2" fill="#7c4a2d"/><rect x="24" y="19" width="26" height="8" rx="1" fill="#334155"/><rect x="48" y="19" width="30" height="4" fill="#94a3b8"/><rect x="46" y="24" width="18" height="5" rx="1" fill="${accent}"/>`;
+        break;
+      case 'bow':
+        art = `<path d="M36 5 Q62 22 36 39" fill="none" stroke="${accent}" stroke-width="4" stroke-linecap="round"/><line x1="36" y1="6" x2="36" y2="38" stroke="#e2e8f0" stroke-width="1.6"/><line x1="22" y1="22" x2="72" y2="22" stroke="#ffffff" stroke-width="2.4"/><polygon points="75,22 66,17 66,27" fill="${accent}"/>`;
+        break;
+      case 'rpg':
+        art = `<rect x="10" y="17" width="52" height="10" rx="3" fill="#4b5e43"/><polygon points="62,13 80,22 62,31" fill="#ef4444"/><rect x="28" y="27" width="7" height="11" fill="#1e293b"/><rect x="44" y="27" width="6" height="9" fill="#1e293b"/><circle cx="22" cy="14" r="3" fill="${accent}"/>`;
+        break;
+      case 'crossbow':
+        art = `<rect x="12" y="20" width="46" height="7" rx="2" fill="#7c4a2d"/><path d="M52 7 Q68 23 52 39" fill="none" stroke="#eab308" stroke-width="4"/><line x1="52" y1="8" x2="36" y2="23" stroke="#e2e8f0" stroke-width="1.5"/><line x1="52" y1="38" x2="36" y2="23" stroke="#e2e8f0" stroke-width="1.5"/><line x1="36" y1="23" x2="76" y2="23" stroke="${accent}" stroke-width="3"/>`;
+        break;
+      case 'gunblade':
+        art = `<rect x="12" y="16" width="34" height="9" rx="2" fill="#3b2f4d"/><rect x="44" y="17" width="24" height="4" fill="#94a3b8"/><polygon points="28,25 78,25 70,32 28,30" fill="#e2e8f0"/><line x1="30" y1="29" x2="73" y2="29" stroke="${accent}" stroke-width="2.5"/><rect x="18" y="25" width="7" height="12" fill="#1e293b"/>`;
+        break;
+      case 'grenadelauncher':
+        art = `<rect x="10" y="19" width="22" height="9" rx="2" fill="#334155"/><circle cx="40" cy="24" r="9" fill="#1e293b" stroke="${accent}" stroke-width="2.5"/><rect x="49" y="17" width="26" height="9" rx="1" fill="#475569"/><rect x="20" y="28" width="7" height="10" fill="#0f172a"/>`;
+        break;
+      case 'sniper':
+        art = `<rect x="6" y="21" width="40" height="8" rx="1" fill="#2a3140"/><rect x="46" y="22" width="36" height="3.5" fill="#cbd5e1"/><rect x="22" y="12" width="24" height="6" rx="3" fill="#0f172a" stroke="${accent}" stroke-width="1.6"/><rect x="28" y="29" width="8" height="9" fill="#161b26"/><rect x="10" y="23" width="28" height="2.5" fill="${accent}"/>`;
+        break;
+      case 'paintball':
+        art = `<ellipse cx="40" cy="12" rx="12" ry="7" fill="${accent}"/><rect x="16" y="19" width="36" height="9" rx="2" fill="#334155"/><rect x="52" y="21" width="24" height="4.5" fill="${accent}"/><rect x="10" y="27" width="16" height="7" rx="3" fill="#0f172a"/><rect x="28" y="28" width="6" height="10" fill="#1e293b"/>`;
+        break;
+      case 'flamethrower':
+        art = `<rect x="12" y="20" width="30" height="12" rx="5" fill="#dc2626"/><rect x="42" y="18" width="24" height="6" fill="#334155"/><path d="M66 21 Q78 10 84 21 Q76 32 66 21 Z" fill="#ff9f1c"/><circle cx="74" cy="21" r="3.5" fill="#fef08a"/>`;
+        break;
+      case 'permafrost':
+        art = `<rect x="12" y="18" width="40" height="10" rx="2" fill="#dbeafe"/><polygon points="52,15 79,23 52,31" fill="${accent}"/><rect x="28" y="28" width="9" height="10" fill="#38bdf8"/><line x1="18" y1="23" x2="50" y2="23" stroke="#0284c7" stroke-width="3"/>`;
+        break;
+      case 'minigun':
+        art = `<rect x="12" y="15" width="24" height="15" rx="3" fill="#334155"/><rect x="36" y="16" width="40" height="3" fill="#94a3b8"/><rect x="36" y="21" width="40" height="3" fill="#cbd5e1"/><rect x="36" y="26" width="40" height="3" fill="#94a3b8"/><rect x="64" y="15" width="5" height="15" fill="${accent}"/><circle cx="24" cy="34" r="7" fill="#1e293b"/>`;
+        break;
+      case 'distortion':
+        art = `<rect x="10" y="17" width="36" height="11" rx="3" fill="#1e1b4b"/><ellipse cx="56" cy="22" rx="5" ry="12" fill="none" stroke="${accent}" stroke-width="3"/><ellipse cx="68" cy="22" rx="4" ry="9" fill="none" stroke="#2de2ff" stroke-width="2.5"/><circle cx="62" cy="22" r="4" fill="#ffffff"/>`;
+        break;
+      case 'railgun':
+        art = `<rect x="8" y="17" width="34" height="11" rx="2" fill="#1e293b"/><rect x="42" y="15" width="36" height="4" fill="#0f172a"/><rect x="42" y="26" width="36" height="4" fill="#0f172a"/><rect x="38" y="20" width="42" height="5" fill="${accent}"/><rect x="52" y="14" width="5" height="17" fill="#d946ef"/>`;
+        break;
+      case 'handgun':
+      case 'warper':
+        art = `<rect x="24" y="13" width="38" height="10" rx="2" fill="${weaponId === 'warper' ? '#4c1d95' : '#334155'}"/><rect x="28" y="16" width="28" height="3" fill="${accent}"/><polygon points="26,23 36,23 32,38 22,38" fill="#1e293b"/>`;
+        break;
+      case 'uzi':
+      case 'spray':
+        art = `<rect x="20" y="14" width="36" height="11" rx="2" fill="#1e293b"/><rect x="56" y="17" width="12" height="4" fill="#94a3b8"/><rect x="24" y="17" width="26" height="3" fill="${accent}"/><rect x="34" y="25" width="7" height="15" rx="1" fill="#0f172a"/>`;
+        break;
+      case 'flaregun':
+        art = `<rect x="22" y="13" width="38" height="11" rx="2" fill="#dc2626"/><rect x="58" y="14" width="8" height="9" fill="${accent}"/><polygon points="24,24 34,24 30,38 20,38" fill="#1e293b"/>`;
+        break;
+      case 'shorty':
+        art = `<polygon points="14,24 28,22 24,36 12,34" fill="#7c4a2d"/><rect x="26" y="15" width="42" height="5" fill="#475569"/><rect x="26" y="21" width="42" height="5" fill="#334155"/><rect x="52" y="14" width="6" height="13" fill="${accent}"/>`;
+        break;
+      case 'revolver':
+        art = `<rect x="38" y="14" width="30" height="7" rx="1" fill="#cbd5e1"/><circle cx="36" cy="20" r="7" fill="#334155" stroke="${accent}" stroke-width="2"/><polygon points="22,22 32,22 26,38 17,36" fill="#7c4a2d"/>`;
+        break;
+      case 'kunai':
+        art = `<polygon points="18,14 48,14 66,18 48,22 18,22" fill="#e2e8f0"/><rect x="14" y="16" width="12" height="4" fill="${accent}"/><polygon points="24,26 54,26 72,30 54,34 24,34" fill="#cbd5e1"/><rect x="20" y="28" width="12" height="4" fill="${accent}"/>`;
+        break;
+      case 'slingshot':
+        art = `<rect x="40" y="25" width="8" height="15" rx="2" fill="#854d0e"/><line x1="44" y1="26" x2="28" y2="10" stroke="#a16207" stroke-width="5" stroke-linecap="round"/><line x1="44" y1="26" x2="60" y2="10" stroke="#a16207" stroke-width="5" stroke-linecap="round"/><line x1="28" y1="10" x2="60" y2="10" stroke="${accent}" stroke-width="3.5"/>`;
+        break;
+      case 'exogun':
+        art = `<rect x="20" y="14" width="34" height="12" rx="4" fill="#3b0764"/><circle cx="62" cy="20" r="8" fill="${accent}"/><circle cx="62" cy="20" r="4" fill="#ffffff"/><polygon points="24,26 34,26 30,38 20,38" fill="#1e1b4b"/>`;
+        break;
+      case 'energypistols':
+        art = `<rect x="10" y="10" width="32" height="8" rx="2" fill="#e2e8f0"/><rect x="14" y="13" width="24" height="2.5" fill="${accent}"/><rect x="14" y="18" width="7" height="10" fill="#1e293b"/><rect x="44" y="20" width="32" height="8" rx="2" fill="#e2e8f0"/><rect x="48" y="23" width="24" height="2.5" fill="${accent}"/><rect x="48" y="28" width="7" height="10" fill="#1e293b"/>`;
+        break;
+      case 'fists':
+        art = `<rect x="18" y="14" width="20" height="18" rx="5" fill="#f7cf86"/><rect x="18" y="24" width="20" height="6" fill="${accent}"/><rect x="48" y="12" width="20" height="18" rx="5" fill="#f7cf86"/><rect x="48" y="22" width="20" height="6" fill="${accent}"/>`;
+        break;
+      case 'knife':
+        art = `<rect x="16" y="20" width="18" height="6" rx="2" fill="#18181b"/><polygon points="34,17 72,22 34,28" fill="#cbd5e1"/><line x1="36" y1="22" x2="66" y2="22" stroke="${accent}" stroke-width="2.5"/>`;
+        break;
+      case 'chainsaw':
+        art = `<rect x="10" y="14" width="24" height="18" rx="3" fill="#dc2626"/><rect x="34" y="17" width="42" height="11" rx="5" fill="#94a3b8" stroke="${accent}" stroke-width="2.5"/><rect x="14" y="9" width="16" height="4" fill="#1e293b"/>`;
+        break;
+      case 'riotshield':
+        art = `<rect x="28" y="5" width="32" height="34" rx="5" fill="#1e293b" stroke="${accent}" stroke-width="2.5"/><rect x="33" y="11" width="22" height="9" rx="2" fill="${accent}" fill-opacity="0.65"/><line x1="33" y1="32" x2="55" y2="32" stroke="${accent}" stroke-width="3"/>`;
+        break;
+      case 'katana':
+      case 'xiuchun':
+        art = `<line x1="12" y1="34" x2="76" y2="9" stroke="#e2e8f0" stroke-width="5" stroke-linecap="round"/><line x1="28" y1="28" x2="76" y2="9" stroke="${accent}" stroke-width="2"/><circle cx="28" cy="28" r="4.5" fill="#fbbf24"/>`;
+        break;
+      case 'spear':
+        art = `<line x1="8" y1="30" x2="64" y2="14" stroke="#7c4a2d" stroke-width="4" stroke-linecap="round"/><polygon points="60,10 82,9 66,22" fill="${accent}"/>`;
+        break;
+      case 'axe':
+        art = `<line x1="14" y1="34" x2="68" y2="12" stroke="#7c4a2d" stroke-width="4.5" stroke-linecap="round"/><path d="M52 6 Q74 14 66 30 Q54 22 52 6 Z" fill="#475569" stroke="${accent}" stroke-width="2.5"/>`;
+        break;
+      case 'maul':
+        art = `<line x1="14" y1="34" x2="60" y2="16" stroke="#475569" stroke-width="5" stroke-linecap="round"/><rect x="50" y="6" width="24" height="18" rx="3" transform="rotate(-22 62 15)" fill="#334155" stroke="${accent}" stroke-width="3"/>`;
+        break;
+      case 'scythe':
+        art = `<line x1="14" y1="36" x2="66" y2="10" stroke="#334155" stroke-width="4" stroke-linecap="round"/><path d="M62 8 Q82 20 56 36 Q68 20 52 14 Z" fill="${accent}"/>`;
+        break;
+      case 'trowel':
+        art = `<rect x="14" y="21" width="18" height="6" rx="2" fill="#7c4a2d"/><rect x="32" y="22" width="10" height="4" fill="#64748b"/><polygon points="42,13 74,24 42,35" fill="#e2e8f0" stroke="${accent}" stroke-width="2.5"/>`;
+        break;
+      case 'grenade':
+        art = `<circle cx="44" cy="25" r="12" fill="#3b4d3b" stroke="${accent}" stroke-width="2.5"/><rect x="39" y="8" width="10" height="6" fill="#1e293b"/><circle cx="52" cy="11" r="3.5" fill="none" stroke="#fbbf24" stroke-width="2"/>`;
+        break;
+      case 'smoke':
+        art = `<circle cx="44" cy="24" r="12" fill="#475569" stroke="${accent}" stroke-width="2.5"/><circle cx="30" cy="14" r="6" fill="#cbd5e1" fill-opacity="0.55"/><circle cx="58" cy="14" r="7" fill="#cbd5e1" fill-opacity="0.55"/>`;
+        break;
+      case 'flashbang':
+        art = `<rect x="34" y="10" width="20" height="26" rx="4" fill="#dbeafe" stroke="#38bdf8" stroke-width="2"/><rect x="34" y="19" width="20" height="6" fill="#38bdf8"/><circle cx="44" cy="22" r="16" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-dasharray="4 4"/>`;
+        break;
+      case 'molotov':
+        art = `<rect x="36" y="18" width="16" height="20" rx="4" fill="#b45309"/><rect x="40" y="12" width="8" height="7" fill="#d97706"/><path d="M44 3 Q52 10 44 15 Q36 10 44 3 Z" fill="#ff9f1c"/>`;
+        break;
+      case 'jumppad':
+        art = `<ellipse cx="44" cy="30" rx="24" ry="7" fill="#1e293b" stroke="${accent}" stroke-width="3"/><path d="M44 22 L44 7 M36 14 L44 6 L52 14" fill="none" stroke="${accent}" stroke-width="3" stroke-linecap="round"/>`;
+        break;
+      case 'satchel':
+        art = `<rect x="24" y="13" width="40" height="22" rx="4" fill="#4b5563" stroke="${accent}" stroke-width="2.5"/><rect x="34" y="19" width="20" height="10" fill="${accent}"/><circle cx="44" cy="24" r="3" fill="#ef4444"/>`;
+        break;
+      case 'subspace':
+        art = `<polygon points="44,6 60,22 44,38 28,22" fill="${accent}"/><rect x="30" y="8" width="28" height="28" fill="none" stroke="#e2e8f0" stroke-width="2" stroke-dasharray="5 3"/>`;
+        break;
+      case 'freeze':
+        art = `<rect x="18" y="16" width="34" height="12" rx="3" fill="#dbeafe"/><polygon points="52,13 72,22 52,31" fill="${accent}"/><circle cx="68" cy="22" r="4" fill="#ffffff"/>`;
+        break;
+      case 'warhorn':
+        art = `<polygon points="20,20 62,8 62,36 20,26" fill="#d97706"/><ellipse cx="62" cy="22" rx="5" ry="14" fill="#fde047"/><path d="M70 15 Q77 22 70 29" fill="none" stroke="#fbbf24" stroke-width="2.5"/>`;
+        break;
+      case 'grappler':
+        art = `<rect x="16" y="16" width="28" height="11" rx="2" fill="#1e293b"/><line x1="44" y1="21" x2="66" y2="21" stroke="${accent}" stroke-width="2.5"/><polygon points="62,13 78,21 62,29 67,21" fill="#e2e8f0"/>`;
+        break;
+      case 'warpstone':
+        art = `<polygon points="44,4 58,22 44,40 30,22" fill="${accent}" stroke="#f5d0fe" stroke-width="2"/><polygon points="44,10 51,22 44,34 37,22" fill="#ffffff" fill-opacity="0.45"/>`;
+        break;
+      case 'medkit':
+        art = `<rect x="22" y="10" width="44" height="28" rx="5" fill="#f8fafc"/><rect x="40" y="15" width="8" height="18" rx="1" fill="#22c55e"/><rect x="35" y="20" width="18" height="8" rx="1" fill="#22c55e"/>`;
+        break;
+      case 'holodome':
+        art = `<path d="M22 33 A22 22 0 0 1 66 33 Z" fill="${accent}" fill-opacity="0.35" stroke="${accent}" stroke-width="2.5"/><rect x="20" y="32" width="48" height="5" rx="2" fill="#1e293b"/>`;
+        break;
+      default:
+        art = `<rect x="16" y="16" width="56" height="12" rx="3" fill="${accent}"/>`;
+    }
+    return `<svg class="weapon-icon-svg" viewBox="0 0 88 44" xmlns="http://www.w3.org/2000/svg">${art}</svg>`;
+  }
+
   Rivals.STARTER_WEAPONS = STARTER_WEAPONS;
   Rivals.WEAPONS = WEAPONS;
+  Rivals.getWeaponIconSVG = getWeaponIconSVG;
   Rivals.createWeaponMesh = createWeaponMesh;
   Rivals.createFirstPersonArms = createFirstPersonArms;
   Rivals.createPlayerAvatar = createPlayerAvatar;

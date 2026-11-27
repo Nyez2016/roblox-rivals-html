@@ -828,10 +828,39 @@
         this._addBox(0, 3.2, zSign * 33, 68, 6.4, 1.6, { color: 0x1e293b, studColor: 0x334155 });
         this._addBox(0, 6.5, zSign * 33, 68, 0.35, 1.8, { color: accent, emissive: accent, solid: false });
       }
-      for (const xSign of [-1, 1]) {
-        this._addBox(xSign * 33, 3.2, 0, 1.6, 6.4, 68, { color: 0x1e293b, studColor: 0x334155 });
-        this._addBox(xSign * 33, 6.5, 0, 1.8, 0.35, 68, { color: 0x38bdf8, emissive: 0x38bdf8, solid: false });
-      }
+      // West Solid Wall
+      this._addBox(-33, 3.2, 0, 1.6, 6.4, 68, { color: 0x1e293b, studColor: 0x334155 });
+      this._addBox(-33, 6.5, 0, 1.8, 0.35, 68, { color: 0x38bdf8, emissive: 0x38bdf8, solid: false });
+
+      // East Wall with Built-In SHOOTING RANGE WALL DOORWAY (z = -2 to +8)!
+      this._addBox(33, 3.2, -18, 1.6, 6.4, 32, { color: 0x1e293b, studColor: 0x334155 });
+      this._addBox(33, 3.2, 21, 1.6, 6.4, 26, { color: 0x1e293b, studColor: 0x334155 });
+      this._addBox(33, 5.7, 3, 1.6, 1.4, 10, { color: 0x1e293b, studColor: 0x334155 });
+      this._addBox(33, 6.5, 0, 1.8, 0.35, 68, { color: 0xfbbf24, emissive: 0xfbbf24, solid: false });
+
+      // Glowing Shooting Range Wall Portal Frame & Bullseye Alcove!
+      this._addBox(32.2, 2.5, -1.9, 1.2, 5.0, 0.7, { color: 0xfbbf24, emissive: 0xf59e0b });
+      this._addBox(32.2, 2.5, 7.9, 1.2, 5.0, 0.7, { color: 0xfbbf24, emissive: 0xf59e0b });
+      this._addBox(32.2, 5.1, 3.0, 1.2, 0.65, 10.6, { color: 0xfbbf24, emissive: 0xf59e0b });
+      this._addBox(33.2, 2.5, 3.0, 0.35, 4.9, 9.2, { color: 0xfde047, emissive: 0xfbbf24, opacity: 0.42, solid: false });
+      // Target Bullseye visible inside the wall portal!
+      this._addBox(33.5, 2.5, 3.0, 0.25, 3.2, 3.2, { color: 0xff3e5e, emissive: 0xff3e5e, solid: false });
+      this._addBox(33.3, 2.5, 3.0, 0.25, 1.5, 1.5, { color: 0xffffff, emissive: 0xffffff, solid: false });
+      const rangeWallSign = this._createHoloSign('SHOOTING RANGE', 'WALK INTO WALL · PICK ALL 52 WEAPONS', 0xfbbf24);
+      rangeWallSign.scale.set(7.2, 2.1, 1);
+      rangeWallSign.position.set(30.6, 6.3, 3.0);
+      this.mapGroup.add(rangeWallSign);
+      this.lobbyPads.push({
+        id: 'range_wall',
+        title: 'SHOOTING RANGE',
+        subtitle: 'ALL 52 WEAPONS FREE',
+        mode: 'range',
+        x: 31.8,
+        z: 3.0,
+        radius: 3.6,
+        colorHex: 0xfbbf24,
+        instant: true,
+      });
 
       // Centerpiece Rivals Monument Pedestal + Floating Golden Crown Crystal!
       this._addBox(0, 0.5, 0, 5.2, 1.0, 5.2, { color: 0x1e293b, studColor: 0x334155 });
@@ -844,17 +873,16 @@
       this.mapGroup.add(monumentGem);
       this.animatedProps.push({ type: 'spinFloat', mesh: monumentGem, baseY: 3.2, speed: 1.5, phase: 0 });
 
-      const hubBanner = this._createHoloSign('ROBLOX RIVALS HUB', 'STEP ON A DUEL PAD TO PLAY!', 0x2de2ff);
-      hubBanner.scale.set(7.6, 2.3, 1);
+      const hubBanner = this._createHoloSign('ROBLOX RIVALS HUB', 'STEP ON A DUEL PAD OR WALK INTO RANGE WALL!', 0x2de2ff);
+      hubBanner.scale.set(7.8, 2.3, 1);
       hubBanner.position.set(0, 5.9, 0);
       this.mapGroup.add(hubBanner);
 
-      // === 6 INTERACTIVE WALK-ON MATCHMAKING & SHOP PADS ===
+      // === 5 WALK-ON MATCHMAKING & SHOP PADS ===
       this._addLobbyPad(-12, -12, 'duel1v1', '1v1 DUEL', 'CLASSIC RIVALS · FIRST TO 5', 'classic', 0x2de2ff);
       this._addLobbyPad(0, -15, 'duel2v2', '2v2 DUELS', 'YOU + ALLY VS 2 BOTS', 'twovtwo', 0x3b82f6);
       this._addLobbyPad(12, -12, 'tdm3v3', '3v3 TDM', 'TEAM DEATHMATCH · TO 25', 'tdm', 0xff5a36);
       this._addLobbyPad(-16, 3, 'ffabots', 'BOT FFA (5 BOTS)', 'FREE-FOR-ALL · FIRST TO 15', 'ffa', 0xd946ef);
-      this._addLobbyPad(16, 3, 'range', 'SHOOTING RANGE', 'TEST ALL 52 WEAPONS', 'range', 0xfbbf24);
       this._addLobbyPad(0, 16, 'armory', 'ARMORY & SHOP', 'UNLOCK WEAPONS · MAPS · SKINS', 'shop', 0x38ef7d);
 
       // Bonus Free Key Crate in the Lobby!
