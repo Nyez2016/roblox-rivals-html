@@ -16,6 +16,8 @@
     RivalBot,
     TargetDummy,
     LobbyBot,
+    RemotePlayer,
+    NetManager,
     BOT_PROFILES,
     DIFFICULTIES,
     SoundEngine,
@@ -84,6 +86,16 @@
       this.bot = new RivalBot(this.scene, this.arena);
       this.bot.applySkin(this.loadoutChoice.rivalSkin);
       this.bot.setVisible(false);
+      this.remotePlayer = new RemotePlayer(this.scene);
+      this.pvpActive = false;
+      this.netSyncTimer = 0;
+      this.net = null;
+      this.isMobileMode = this._detectMobile();
+      this.mobileMove = { x: 0, z: 0 };
+      this.mobileJumpQueued = false;
+      this.joyTouchId = null;
+      this.lookTouchId = null;
+      this.lookLast = { x: 0, y: 0 };
       this.enemies = [this.bot];
       this.extraEnemies = [];
       this.allies = [];
@@ -206,10 +218,406 @@
 
       this._cacheUI();
       this._syncMenuFromState();
+      this._initMultiplayer();
       this._bindEvents();
+      this._bindMobileControls();
+      this._setMobileMode(this.isMobileMode);
       this._renderScorePips();
       this.enterLobby(false);
       this._animate();
+    }
+
+    _detectMobile() {
+      try {
+        return (
+          'ontouchstart' in window ||
+          (navigator.maxTouchPoints && navigator.maxTouchPoints > 0) ||
+          (window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
+        );
+      } catch {
+        return false;
+      }
+    }
+
+    _setMobileMode(enabled) {
+      this.isMobileMode = Boolean(enabled);
+      if (this.ui.mobileToggle) this.ui.mobileToggle.checked = this.isMobileMode;
+      if (this.ui.lobbyClickHint && this.isMobileMode) {
+        this.ui.lobbyClickHint.classList.add('hidden');
+      }
+      this._updateMobileControlsVis();
+    }
+
+    _updateMobileControlsVis() {
+      if (!this.ui.mobileControls) return;
+      const show =
+        this.isMobileMode &&
+        !this.isPaused &&
+        !this.pickerOpen &&
+        this.roundState !== 'menu' &&
+        this.roundState !== 'match_over';
+      this.ui.mobileControls.classList.toggle('hidden', !show);
+      if (this.ui.mobRangeWepBtn) {
+        this.ui.mobRangeWepBtn.classList.toggle('hidden', this.inLobby || this.loadoutChoice.mode !== 'range');
+      }
+      if (this.ui.mobAutoBtn) {
+        this.ui.mobAutoBtn.classList.toggle('active', Boolean(this.settings.autoShoot));
+      }
+      if (this.ui.mobAdsBtn) {
+        this.ui.mobAdsBtn.classList.toggle('pressed', Boolean(this.isAds || this.isShielding));
+      }
+    }
+
+    _initMultiplayer() {
+      if (typeof NetManager === 'undefined') return;
+      this.net = new NetManager({
+        onReady: (code, url) => {
+          if (this.ui.hudRoomCode) this.ui.hudRoomCode.textContent = code;
+          if (this.ui.menuInviteUrl) this.ui.menuInviteUrl.value = url;
+        },
+        onStatus: (text, connected) => {
+          if (this.ui.hudNetStatus) this.ui.hudNetStatus.textContent = text;
+          if (this.ui.menuNetStatus) {
+            this.ui.menuNetStatus.textContent = text;
+            this.ui.menuNetStatus.classList.toggle('online', connected);
+          }
+          if (this.ui.hudHostDot) this.ui.hudHostDot.classList.toggle('online', connected);
+          if (this.ui.hudDuelFriendBtn) this.ui.hudDuelFriendBtn.classList.toggle('hidden', !connected);
+          if (this.ui.menuDuelFriendBtn) this.ui.menuDuelFriendBtn.classList.toggle('hidden', !connected);
+        },
+        onPeerConnect: () => {
+          this.sound.playUnlock();
+          this._pushKillFeed('FRIEND CONNECTED! CLICK "DUEL FRIEND 1v1" OR STEP ON 1v1 PAD!');
+          if (this.inLobby) {
+            this.remotePlayer.setLobbyAppearance(true);
+            this.remotePlayer.setVisible(true);
+          }
+        },
+        onPeerDisconnect: () => {
+          this.remotePlayer.setVisible(false);
+          this._pushKillFeed('FRIEND DISCONNECTED');
+          if (this.pvpActive) {
+            this.pvpActive = false;
+            this.enterLobby(!this.isMobileMode);
+          }
+        },
+        onMessage: (msg) => this._handleNetMessage(msg),
+      });
+    }
+
+    _copyInviteLink(btnEl) {
+      const url = (this.net && this.net.inviteUrl) || window.location.href;
+      const done = () => {
+        if (!btnEl) return;
+        const prev = btnEl.textContent;
+        btnEl.textContent = 'COPIED!';
+        setTimeout(() => {
+          btnEl.textContent = prev;
+        }, 1600);
+        this._pushKillFeed('HOST LINK COPIED! SEND TO YOUR FRIEND!');
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(done).catch(() => {
+          if (this.ui.menuInviteUrl) {
+            this.ui.menuInviteUrl.select();
+            try {
+              document.execCommand('copy');
+            } catch {}
+          }
+          done();
+        });
+      } else {
+        if (this.ui.menuInviteUrl) {
+          this.ui.menuInviteUrl.select();
+          try {
+            document.execCommand('copy');
+          } catch {}
+        }
+        done();
+      }
+    }
+
+    _startPvpMatch(mapId = 'arena', isInitiator = true) {
+      if (!this.net || !this.net.connected) return;
+      const safeMap = MAPS[mapId] && mapId !== 'lobby' && mapId !== 'shootingrange' ? mapId : 'arena';
+      if (isInitiator) {
+        this.net.send({ type: 'pvp_start', map: safeMap });
+      }
+      this.pvpActive = true;
+      this.loadoutChoice.mode = 'classic';
+      this.loadoutChoice.map = safeMap;
+      this._syncMenuFromState();
+      this.startNewMatch();
+    }
+
+    _handleNetMessage(msg) {
+      if (msg.type === 'state') {
+        this.remotePlayer.applyNetworkState(msg);
+        if (this.inLobby && msg.inLobby) {
+          this.remotePlayer.setLobbyAppearance(true);
+          this.remotePlayer.setVisible(true);
+        } else if (this.pvpActive) {
+          this.remotePlayer.setLobbyAppearance(false);
+          this.remotePlayer.setVisible(true);
+        }
+      } else if (msg.type === 'shot') {
+        const s = new THREE.Vector3(msg.sx, msg.sy, msg.sz);
+        const e = new THREE.Vector3(msg.ex, msg.ey, msg.ez);
+        this._spawnTracer(s, e, msg.color || 0xff3e5e, 0.028);
+        this.sound.playShoot(msg.weaponId || 'ar');
+      } else if (msg.type === 'pvp_start') {
+        this._startPvpMatch(msg.map || 'arena', false);
+      } else if (msg.type === 'pvp_hit') {
+        if (this.pvpActive && this.roundState === 'playing') {
+          this._damagePlayer(msg.damage || 15, `FRIEND [${msg.weaponLabel || 'WEAPON'}]`);
+          if (msg.freeze) {
+            this.player.freezeTimer = Math.max(this.player.freezeTimer || 0, msg.freeze);
+            this._pushKillFeed('FROZEN BY FRIEND!');
+          }
+          if (msg.blind) {
+            this.blindFlash = Math.max(this.blindFlash, 1.25);
+          }
+        }
+      } else if (msg.type === 'pvp_dead') {
+        if (this.pvpActive && this.roundState === 'playing') {
+          this.remotePlayer.takeDamage(999, false);
+          this.stats.kills += 1;
+          this.sound.playKill();
+          this._triggerKillEffect(this.remotePlayer.getCenterWorldPos(), this.remotePlayer);
+          this._pushKillFeed('YOU ELIMINATED YOUR FRIEND!');
+          this._endRound(true, 'FRIEND ELIMINATED!');
+        }
+      } else if (msg.type === 'pvp_lobby') {
+        this.pvpActive = false;
+        this.enterLobby(!this.isMobileMode);
+      }
+    }
+
+    _syncNetworkState(dt) {
+      if (!this.net || !this.net.connected) return;
+      this.netSyncTimer -= dt;
+      if (this.netSyncTimer > 0) return;
+      this.netSyncTimer = 0.04;
+      this.net.send({
+        type: 'state',
+        x: Math.round(this.player.pos.x * 100) / 100,
+        y: Math.round(this.player.pos.y * 100) / 100,
+        z: Math.round(this.player.pos.z * 100) / 100,
+        yaw: Math.round(this.player.yaw * 1000) / 1000,
+        hp: Math.round(this.player.hp),
+        alive: this.player.alive,
+        weaponId: this._currentWeapon().id,
+        emote: this.activeEmote || null,
+        inLobby: this.inLobby,
+      });
+    }
+
+    _bindMobileControls() {
+      const stop = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      };
+
+      // Tappable Hotbar Slots (1-4)
+      this.ui.hotbarSlots.forEach((slotEl, idx) => {
+        const pickSlot = (e) => {
+          e.stopPropagation();
+          if (!this.isPaused && !this.pickerOpen) this.switchWeapon(idx);
+        };
+        slotEl.addEventListener('click', pickSlot);
+        slotEl.addEventListener('touchstart', (e) => {
+          stop(e);
+          if (!this.isPaused && !this.pickerOpen) this.switchWeapon(idx);
+        }, { passive: false });
+      });
+
+      // Left Virtual Thumb Joystick
+      if (this.ui.mobJoyZone && this.ui.mobJoyKnob) {
+        const maxR = 42;
+        const updateJoy = (touch) => {
+          const rect = this.ui.mobJoyBase.getBoundingClientRect();
+          const cx = rect.left + rect.width / 2;
+          const cy = rect.top + rect.height / 2;
+          let dx = touch.clientX - cx;
+          let dy = touch.clientY - cy;
+          const dist = Math.hypot(dx, dy);
+          if (dist > maxR) {
+            dx = (dx / dist) * maxR;
+            dy = (dy / dist) * maxR;
+          }
+          this.ui.mobJoyKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+          this.mobileMove.x = dx / maxR;
+          this.mobileMove.z = -dy / maxR;
+        };
+
+        this.ui.mobJoyZone.addEventListener('touchstart', (e) => {
+          stop(e);
+          this.sound.unlock();
+          if (this.joyTouchId === null && e.changedTouches.length > 0) {
+            const t = e.changedTouches[0];
+            this.joyTouchId = t.identifier;
+            updateJoy(t);
+          }
+        }, { passive: false });
+
+        this.ui.mobJoyZone.addEventListener('touchmove', (e) => {
+          stop(e);
+          for (const t of e.changedTouches) {
+            if (t.identifier === this.joyTouchId) updateJoy(t);
+          }
+        }, { passive: false });
+
+        const endJoy = (e) => {
+          for (const t of e.changedTouches) {
+            if (t.identifier === this.joyTouchId) {
+              this.joyTouchId = null;
+              this.mobileMove.x = 0;
+              this.mobileMove.z = 0;
+              this.ui.mobJoyKnob.style.transform = 'translate(0px, 0px)';
+            }
+          }
+        };
+        this.ui.mobJoyZone.addEventListener('touchend', endJoy, { passive: false });
+        this.ui.mobJoyZone.addEventListener('touchcancel', endJoy, { passive: false });
+      }
+
+      // Right Touch-Drag Camera Look Zone
+      if (this.ui.mobLookZone) {
+        this.ui.mobLookZone.addEventListener('touchstart', (e) => {
+          stop(e);
+          this.sound.unlock();
+          if (this.lookTouchId === null && e.changedTouches.length > 0) {
+            const t = e.changedTouches[0];
+            this.lookTouchId = t.identifier;
+            this.lookLast.x = t.clientX;
+            this.lookLast.y = t.clientY;
+          }
+        }, { passive: false });
+
+        this.ui.mobLookZone.addEventListener('touchmove', (e) => {
+          stop(e);
+          if (this.isPaused || this.pickerOpen) return;
+          for (const t of e.changedTouches) {
+            if (t.identifier === this.lookTouchId) {
+              const dx = t.clientX - this.lookLast.x;
+              const dy = t.clientY - this.lookLast.y;
+              this.lookLast.x = t.clientX;
+              this.lookLast.y = t.clientY;
+              const mult = this.isAds && this._currentWeapon().scoped ? 0.35 : this.isAds ? 0.65 : 1.0;
+              const sens = 0.0046 * this.settings.sensitivity * mult;
+              this.player.yaw -= dx * sens;
+              this.player.pitch -= dy * sens;
+              this.player.pitch = Math.max(-Math.PI / 2 + 0.04, Math.min(Math.PI / 2 - 0.04, this.player.pitch));
+            }
+          }
+        }, { passive: false });
+
+        const endLook = (e) => {
+          for (const t of e.changedTouches) {
+            if (t.identifier === this.lookTouchId) this.lookTouchId = null;
+          }
+        };
+        this.ui.mobLookZone.addEventListener('touchend', endLook, { passive: false });
+        this.ui.mobLookZone.addEventListener('touchcancel', endLook, { passive: false });
+      }
+
+      // Action Buttons
+      if (this.ui.mobFireBtn) {
+        this.ui.mobFireBtn.addEventListener('touchstart', (e) => {
+          stop(e);
+          this.sound.unlock();
+          if (this.activeEmote) this._stopEmote();
+          this.isMouseDown = true;
+          this._tryFire(true);
+        }, { passive: false });
+        const endFire = (e) => {
+          stop(e);
+          this.isMouseDown = false;
+        };
+        this.ui.mobFireBtn.addEventListener('touchend', endFire, { passive: false });
+        this.ui.mobFireBtn.addEventListener('touchcancel', endFire, { passive: false });
+      }
+
+      if (this.ui.mobAdsBtn) {
+        this.ui.mobAdsBtn.addEventListener('touchstart', (e) => {
+          stop(e);
+          this.sound.unlock();
+          const cw = this._currentWeapon();
+          if (cw.shieldBlock) {
+            this.isShielding = !this.isShielding;
+          } else if (cw.slotType === 'melee') {
+            this._tryMeleeLunge();
+          } else {
+            this.isAds = !this.isAds;
+          }
+          this._updateMobileControlsVis();
+        }, { passive: false });
+      }
+
+      if (this.ui.mobJumpBtn) {
+        this.ui.mobJumpBtn.addEventListener('touchstart', (e) => {
+          stop(e);
+          this.sound.unlock();
+          this.mobileJumpQueued = true;
+          if (this.activeEmote) this._stopEmote();
+        }, { passive: false });
+      }
+
+      if (this.ui.mobSlideBtn) {
+        this.ui.mobSlideBtn.addEventListener('touchstart', (e) => {
+          stop(e);
+          this._trySlide();
+        }, { passive: false });
+      }
+
+      if (this.ui.mobDashBtn) {
+        this.ui.mobDashBtn.addEventListener('touchstart', (e) => {
+          stop(e);
+          this._tryDash();
+        }, { passive: false });
+      }
+
+      if (this.ui.mobReloadBtn) {
+        this.ui.mobReloadBtn.addEventListener('touchstart', (e) => {
+          stop(e);
+          this.startReload();
+        }, { passive: false });
+      }
+
+      if (this.ui.mobMenuBtn) {
+        this.ui.mobMenuBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this._openPauseMenu();
+        });
+      }
+
+      if (this.ui.mobRangeWepBtn) {
+        this.ui.mobRangeWepBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (this.loadoutChoice.mode === 'range') this._openLoadoutPicker(true);
+        });
+      }
+
+      if (this.ui.mobAutoBtn) {
+        this.ui.mobAutoBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.settings.autoShoot = !this.settings.autoShoot;
+          if (this.ui.autoShootToggle) this.ui.autoShootToggle.checked = this.settings.autoShoot;
+          this._updateAutoShootBadge();
+          this._updateMobileControlsVis();
+          this._savePreferences();
+          this._pushKillFeed(`AUTO SHOOT: ${this.settings.autoShoot ? 'ON' : 'OFF'}`);
+        });
+      }
+
+      if (this.ui.mobEmoteBtn) {
+        this.ui.mobEmoteBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const list = ['griddy', 'takeL', 'backflip', 'swordspin', 'wave'];
+          if (this.activeEmote) this._stopEmote();
+          else this._startEmote(list[Math.floor(Math.random() * list.length)]);
+        });
+      }
     }
 
     _loadPreferences() {
@@ -338,6 +746,34 @@
         scoreboard: document.getElementById('scoreboard'),
         lobbyHudBar: document.getElementById('lobby-hud-bar'),
         lobbyClickHint: document.getElementById('lobby-click-hint'),
+        hostLinkBar: document.getElementById('host-link-bar'),
+        hudHostDot: document.getElementById('hud-host-dot'),
+        hudRoomCode: document.getElementById('hud-room-code'),
+        hudNetStatus: document.getElementById('hud-net-status'),
+        hudCopyLinkBtn: document.getElementById('hud-copy-link-btn'),
+        hudDuelFriendBtn: document.getElementById('hud-duel-friend-btn'),
+        menuNetStatus: document.getElementById('menu-net-status'),
+        menuInviteUrl: document.getElementById('menu-invite-url'),
+        menuCopyLinkBtn: document.getElementById('menu-copy-link-btn'),
+        joinCodeInput: document.getElementById('join-code-input'),
+        joinRoomBtn: document.getElementById('join-room-btn'),
+        menuDuelFriendBtn: document.getElementById('menu-duel-friend-btn'),
+        mobileControls: document.getElementById('mobile-controls'),
+        mobJoyZone: document.getElementById('mob-joy-zone'),
+        mobJoyBase: document.getElementById('mob-joy-base'),
+        mobJoyKnob: document.getElementById('mob-joy-knob'),
+        mobLookZone: document.getElementById('mob-look-zone'),
+        mobFireBtn: document.getElementById('mob-fire-btn'),
+        mobAdsBtn: document.getElementById('mob-ads-btn'),
+        mobJumpBtn: document.getElementById('mob-jump-btn'),
+        mobSlideBtn: document.getElementById('mob-slide-btn'),
+        mobDashBtn: document.getElementById('mob-dash-btn'),
+        mobReloadBtn: document.getElementById('mob-reload-btn'),
+        mobMenuBtn: document.getElementById('mob-menu-btn'),
+        mobRangeWepBtn: document.getElementById('mob-range-wep-btn'),
+        mobAutoBtn: document.getElementById('mob-auto-btn'),
+        mobEmoteBtn: document.getElementById('mob-emote-btn'),
+        mobileToggle: document.getElementById('mobile-toggle'),
         rangeHudHint: document.getElementById('range-hud-hint'),
         lobbyStreakVal: document.getElementById('lobby-streak-val'),
         lobbyKeysVal: document.getElementById('lobby-keys-val'),
@@ -808,6 +1244,42 @@
           this._savePreferences();
         });
       }
+      if (this.ui.mobileToggle) {
+        this.ui.mobileToggle.addEventListener('change', (e) => {
+          this._setMobileMode(e.target.checked);
+        });
+      }
+      if (this.ui.hudCopyLinkBtn) {
+        this.ui.hudCopyLinkBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this._copyInviteLink(this.ui.hudCopyLinkBtn);
+        });
+      }
+      if (this.ui.menuCopyLinkBtn) {
+        this.ui.menuCopyLinkBtn.addEventListener('click', () => {
+          this._copyInviteLink(this.ui.menuCopyLinkBtn);
+        });
+      }
+      if (this.ui.joinRoomBtn && this.ui.joinCodeInput) {
+        this.ui.joinRoomBtn.addEventListener('click', () => {
+          const code = this.ui.joinCodeInput.value.trim();
+          if (code && this.net) this.net.joinRoom(code);
+        });
+      }
+      if (this.ui.hudDuelFriendBtn) {
+        this.ui.hudDuelFriendBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.sound.unlock();
+          this._startPvpMatch(this.loadoutChoice.map, true);
+        });
+      }
+      if (this.ui.menuDuelFriendBtn) {
+        this.ui.menuDuelFriendBtn.addEventListener('click', () => {
+          this.sound.unlock();
+          this._startPvpMatch(this.loadoutChoice.map, true);
+        });
+      }
+
       if (this.ui.graphicsToggle) {
         this.ui.graphicsToggle.addEventListener('change', (e) => {
           this.settings.highGraphics = e.target.checked;
@@ -838,6 +1310,7 @@
           this.ui.menu.classList.add('hidden');
           this.ui.hud.classList.remove('hidden');
           this._buildLoadoutSlots();
+          this._updateMobileControlsVis();
           this._requestPointerLock();
           return;
         }
@@ -846,6 +1319,7 @@
           this.loadoutChoice.mode !== this.activeMatchMode ||
           this.loadoutChoice.map !== this.activeMatchMap
         ) {
+          this.pvpActive = false;
           this.startNewMatch();
         } else {
           this.isPaused = false;
@@ -855,6 +1329,7 @@
             this._buildLoadoutSlots();
           }
           this._updateGravityBadge();
+          this._updateMobileControlsVis();
           this._requestPointerLock();
         }
       });
@@ -1011,8 +1486,9 @@
 
       window.addEventListener('mousedown', (e) => {
         if (this.isPaused || this.pickerOpen || (!this.matchActive && !this.inLobby)) return;
+        if (e.target && e.target.closest && e.target.closest('#host-link-bar, #mobile-controls, .hotbar-slot')) return;
         this.sound.unlock();
-        if (document.pointerLockElement !== this.renderer.domElement) {
+        if (!this.isMobileMode && document.pointerLockElement !== this.renderer.domElement) {
           this._requestPointerLock();
           if (this.ui.lobbyClickHint) this.ui.lobbyClickHint.classList.add('hidden');
           if (this.inLobby) return;
@@ -1081,6 +1557,7 @@
     enterLobby(requestLock = true) {
       this._closeLoadoutPicker(false);
       this.inLobby = true;
+      this.pvpActive = false;
       this.matchActive = true;
       this.isPaused = false;
       this.roundState = 'lobby';
@@ -1097,6 +1574,12 @@
       this.bot.alive = false;
       this.bot.setVisible(false);
       this.enemies = [];
+      if (this.net && this.net.connected) {
+        this.remotePlayer.setLobbyAppearance(true);
+        this.remotePlayer.setVisible(true);
+      } else {
+        this.remotePlayer.setVisible(false);
+      }
 
       if (this.arena.mapId !== 'lobby') {
         this.arena.loadMap('lobby');
@@ -1126,13 +1609,15 @@
       if (this.ui.scoreboard) this.ui.scoreboard.classList.add('hidden');
       if (this.ui.rangeHudHint) this.ui.rangeHudHint.classList.add('hidden');
       if (this.ui.lobbyHudBar) this.ui.lobbyHudBar.classList.remove('hidden');
-      if (this.ui.lobbyClickHint) this.ui.lobbyClickHint.classList.toggle('hidden', requestLock);
+      if (this.ui.hostLinkBar) this.ui.hostLinkBar.classList.remove('hidden');
+      if (this.ui.lobbyClickHint) this.ui.lobbyClickHint.classList.toggle('hidden', requestLock || this.isMobileMode);
       if (this.ui.lobbyStreakVal) this.ui.lobbyStreakVal.textContent = String(this.winStreak);
       if (this.ui.lobbyKeysVal) this.ui.lobbyKeysVal.textContent = String(this.keysCurrency);
       this.ui.killFeed.innerHTML = '';
-      this._pushKillFeed('WELCOME TO ROBLOX RIVALS HUB! WALK INTO EAST WALL FOR SHOOTING RANGE!');
+      this._pushKillFeed('WELCOME TO ROBLOX RIVALS HUB! COPY HOST LINK ABOVE TO INVITE A FRIEND!');
       this._updateHUD();
-      if (requestLock) this._requestPointerLock();
+      this._updateMobileControlsVis();
+      if (requestLock && !this.isMobileMode) this._requestPointerLock();
     }
 
     _openLoadoutPicker(isRange = false) {
@@ -1163,6 +1648,7 @@
       }
       this._renderPickerSlots();
       this._renderPickerGrid();
+      this._updateMobileControlsVis();
     }
 
     _closeLoadoutPicker(lockPointer = true) {
@@ -1171,6 +1657,7 @@
       if (this.ui.pickerOverlay) this.ui.pickerOverlay.classList.add('hidden');
       if (this.ui.pickerCard) this.ui.pickerCard.classList.remove('danger-live');
       this._buildLoadoutSlots();
+      this._updateMobileControlsVis();
       if (lockPointer && !this.isPaused) {
         this._requestPointerLock();
       }
@@ -1305,6 +1792,11 @@
         this._showBanner(`QUEUE: ${pad.title}`, `MATCHING WITH ${challenger} · ${sec}... (STEP OFF TO CANCEL)`, false);
 
         if (this.lobbyPadTimer <= 0) {
+          if (pad.mode === 'classic' && this.net && this.net.connected) {
+            this._startPvpMatch(this.loadoutChoice.map, true);
+            return;
+          }
+          this.pvpActive = false;
           this.loadoutChoice.mode = pad.mode;
           if (pad.mode === 'range') {
             this.loadoutChoice.map = 'shootingrange';
@@ -1333,6 +1825,7 @@
       this._renderArmory();
       this._showWeaponProfile(this.previewWeaponId || this.loadoutChoice.primary);
       this.ui.menu.classList.remove('hidden');
+      this._updateMobileControlsVis();
     }
 
     _exitToMainMenu() {
@@ -1355,9 +1848,11 @@
       this._renderArmory();
       this._showWeaponProfile(this.previewWeaponId || this.loadoutChoice.primary);
       this.ui.menu.classList.remove('hidden');
+      this._updateMobileControlsVis();
     }
 
     _requestPointerLock() {
+      if (this.isMobileMode) return;
       try {
         if (this.renderer.domElement.requestPointerLock) {
           const res = this.renderer.domElement.requestPointerLock();
@@ -1448,6 +1943,7 @@
       this.ui.matchEnd.classList.add('hidden');
       this.ui.hud.classList.remove('hidden');
       if (this.ui.lobbyHudBar) this.ui.lobbyHudBar.classList.add('hidden');
+      if (this.ui.hostLinkBar) this.ui.hostLinkBar.classList.add('hidden');
       if (this.ui.lobbyClickHint) this.ui.lobbyClickHint.classList.add('hidden');
       if (this.ui.scoreboard) this.ui.scoreboard.classList.remove('hidden');
       if (this.ui.playerTeamName) {
@@ -1463,7 +1959,9 @@
       const rivalProfile = BOT_PROFILES[Math.floor(Math.random() * BOT_PROFILES.length)];
       this.currentRivalProfile = rivalProfile;
       this.ui.botName.textContent =
-        this.loadoutChoice.mode === 'range'
+        this.pvpActive
+          ? 'FRIEND (LIVE)'
+          : this.loadoutChoice.mode === 'range'
           ? 'DUMMIES'
           : this.loadoutChoice.mode === 'practice'
           ? 'PRACTICE NPCs'
@@ -1478,6 +1976,7 @@
       this.ui.killFeed.innerHTML = '';
 
       this._startRound();
+      this._updateMobileControlsVis();
       if (!this.pickerOpen) this._requestPointerLock();
     }
 
@@ -1515,6 +2014,26 @@
 
     _setupEnemiesForRound(spawns) {
       this._clearExtraEnemies();
+
+      if (this.pvpActive && this.net && this.net.connected) {
+        this.bot.alive = false;
+        this.bot.setVisible(false);
+        const amHost = this.net.isHost;
+        this.player.pos.copy(amHost ? spawns.player : spawns.bot);
+        this.player.yaw = amHost ? 0 : Math.PI;
+        const oppSpawn = amHost ? spawns.bot : spawns.player;
+        this.remotePlayer.pos.copy(oppSpawn);
+        this.remotePlayer.targetPos.copy(oppSpawn);
+        this.remotePlayer.hp = 100;
+        this.remotePlayer.alive = true;
+        this.remotePlayer.deathFall = 0;
+        this.remotePlayer.setLobbyAppearance(false);
+        this.remotePlayer.setVisible(true);
+        this.enemies = [this.remotePlayer];
+        return;
+      }
+
+      if (this.remotePlayer) this.remotePlayer.setVisible(false);
 
       if (this.loadoutChoice.mode === 'range') {
         this.bot.alive = false;
@@ -2086,6 +2605,8 @@
       if (this.keys['KeyS']) dir.sub(forward);
       if (this.keys['KeyD']) dir.add(right);
       if (this.keys['KeyA']) dir.sub(right);
+      if (Math.abs(this.mobileMove.z) > 0.08) dir.addScaledVector(forward, this.mobileMove.z);
+      if (Math.abs(this.mobileMove.x) > 0.08) dir.addScaledVector(right, this.mobileMove.x);
       return dir;
     }
 
@@ -2247,6 +2768,19 @@
         }
 
         this._spawnTracer(muzzleWorld, endPoint, tracerCol, w.beamRadius || 0.02);
+        if (p === 0 && this.net && this.net.connected) {
+          this.net.send({
+            type: 'shot',
+            sx: muzzleWorld.x,
+            sy: muzzleWorld.y,
+            sz: muzzleWorld.z,
+            ex: endPoint.x,
+            ey: endPoint.y,
+            ez: endPoint.z,
+            color: tracerCol,
+            weaponId: w.id,
+          });
+        }
 
         if (w.flameStream) {
           const midPt = muzzleWorld.clone().lerp(endPoint, 0.45);
@@ -2708,6 +3242,16 @@
     }
 
     _onPlayerHitEnemy(enemy, damage, isHeadshot, worldPoint, weaponLabel) {
+      if (enemy.isRemote && this.net && this.net.connected) {
+        this.net.send({
+          type: 'pvp_hit',
+          damage: Math.round(damage),
+          isHeadshot,
+          weaponLabel,
+          freeze: weaponLabel === 'FREEZE RAY' ? 2.2 : weaponLabel.includes('PERMAFROST') && isHeadshot ? 1.4 : 0,
+          blind: weaponLabel === 'FLASHBANG' ? 2.5 : 0,
+        });
+      }
       const res = enemy.takeDamage(damage, isHeadshot);
       this.stats.damageDealt += damage;
       if (isHeadshot) this.stats.headshots += 1;
@@ -2930,6 +3474,9 @@
       this.player.alive = false;
       this.killStreak = 0;
       this._pushKillFeed(`${source} ELIMINATED YOU`);
+      if (this.pvpActive && this.net && this.net.connected) {
+        this.net.send({ type: 'pvp_dead' });
+      }
 
       if (this.loadoutChoice.mode === 'tdm' || this.loadoutChoice.mode === 'ffa') {
         if (this.loadoutChoice.mode === 'tdm') {
@@ -3212,7 +3759,8 @@
 
       const gravScale = this._getActiveGravityScale();
       const gravMode = GRAVITY_MODES[this.loadoutChoice.gravity] || GRAVITY_MODES.auto;
-      const canMove = this._canPlayerAct() && !this.activeEmote;
+      if (p.freezeTimer > 0) p.freezeTimer = Math.max(0, p.freezeTimer - dt);
+      const canMove = this._canPlayerAct() && !this.activeEmote && !(p.freezeTimer > 0);
       const w = this._currentWeapon();
       const modeSpeedBonus = this.loadoutChoice.mode === 'assassin' ? 1.12 : 1.0;
       const hornSpeedBonus = p.warhornTimer > 0 ? 1.38 : 1.0;
@@ -3220,8 +3768,9 @@
       const shieldSlow = this.isShielding && w.shieldBlock ? 0.68 : 1.0;
       const baseSpeed = 9.4 * w.moveMult * modeSpeedBonus * hornSpeedBonus * warpBonus * shieldSlow * (this.isAds ? 0.68 : 1.0);
       const activeLadder = canMove ? this.arena.getLadderAt(p.pos) : null;
-      const spacePressed = Boolean(this.keys['Space']) && !p.spaceWasDown;
+      const spacePressed = (Boolean(this.keys['Space']) && !p.spaceWasDown) || this.mobileJumpQueued;
       p.spaceWasDown = Boolean(this.keys['Space']);
+      this.mobileJumpQueued = false;
 
       if (canMove && activeLadder) {
         // Smooth Ladder Climbing! Hold W / Space to climb up, S to climb down
@@ -4027,6 +4576,8 @@
 
       const paused = this.isPaused && this.roundState !== 'match_over';
       if (!paused) {
+        if (this.remotePlayer) this.remotePlayer.update(dt);
+        this._syncNetworkState(dt);
         if (this.inLobby) {
           this._updatePlayer(dt);
           this._updateWeaponAndViewmodel(dt);
@@ -4068,6 +4619,7 @@
         const redTargets = this.enemies.map((e) => ({ pos: e.pos, alive: e.alive }));
 
         for (const enemy of this.enemies) {
+          if (enemy.isRemote) continue;
           const targetsForBot =
             this.loadoutChoice.mode === 'ffa'
               ? [

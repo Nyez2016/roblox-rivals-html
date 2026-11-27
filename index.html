@@ -2,13 +2,19 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>ROBLOX RIVALS — HTML5 Arena FPS</title>
   <link rel="stylesheet" href="./styles.css" />
   <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
   <script>
     if (typeof window.THREE === 'undefined') {
       document.write('<script src="https://unpkg.com/three@0.149.0/build/three.min.js"><\/script>');
+    }
+  </script>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script>
+    if (typeof window.Peer === 'undefined') {
+      document.write('<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"><\/script>');
     }
   </script>
 </head>
@@ -61,6 +67,15 @@
 
     <!-- Non-blocking Lobby Click Prompt (disappears on first click!) -->
     <div id="lobby-click-hint" class="hidden">CLICK ANYWHERE TO LOOK AROUND &amp; MOVE IN 3D LOBBY</div>
+
+    <!-- Live Host Link / Multiplayer Invite Bar (shown in Lobby so friends can join immediately!) -->
+    <div id="host-link-bar" class="hidden">
+      <span class="host-dot" id="hud-host-dot"></span>
+      <span class="host-label">ROOM <b id="hud-room-code">------</b></span>
+      <span class="host-status" id="hud-net-status">HOSTING...</span>
+      <button id="hud-copy-link-btn" class="host-btn">COPY HOST LINK</button>
+      <button id="hud-duel-friend-btn" class="host-btn duel hidden">DUEL FRIEND 1v1</button>
+    </div>
 
     <!-- Shooting Range Quick Weapon Picker Hint -->
     <div id="range-hud-hint" class="hidden">SHOOTING RANGE · PRESS <b>TAB</b> TO PICK ANY OF ALL 52 WEAPONS · <b>ESC</b> RETURN TO LOBBY</div>
@@ -164,6 +179,37 @@
         <span id="ammo-reserve">125</span>
       </div>
       <div id="reload-indicator" class="hidden">RELOADING...</div>
+    </div>
+
+    <!-- Mobile Touch Controls (auto-enabled on phones/tablets or via Settings toggle!) -->
+    <div id="mobile-controls" class="hidden">
+      <!-- Left Half: Floating Virtual Thumb Joystick -->
+      <div id="mob-joy-zone">
+        <div id="mob-joy-base">
+          <div id="mob-joy-knob"></div>
+        </div>
+      </div>
+
+      <!-- Right Half: Touch-Drag Camera Look Area -->
+      <div id="mob-look-zone"></div>
+
+      <!-- Top-Right Mobile Quick Buttons -->
+      <div class="mob-top-actions">
+        <button id="mob-menu-btn" class="mob-mini-btn">MENU</button>
+        <button id="mob-range-wep-btn" class="mob-mini-btn gold hidden">52 WEAPONS</button>
+        <button id="mob-auto-btn" class="mob-mini-btn">AUTO</button>
+        <button id="mob-emote-btn" class="mob-mini-btn">EMOTE</button>
+      </div>
+
+      <!-- Right Action Buttons Cluster -->
+      <div class="mob-action-cluster">
+        <button id="mob-fire-btn" class="mob-btn mob-fire">FIRE</button>
+        <button id="mob-ads-btn" class="mob-btn mob-ads">ADS</button>
+        <button id="mob-jump-btn" class="mob-btn mob-jump">JUMP</button>
+        <button id="mob-slide-btn" class="mob-btn mob-slide">SLIDE</button>
+        <button id="mob-dash-btn" class="mob-btn mob-dash">DASH</button>
+        <button id="mob-reload-btn" class="mob-btn mob-reload">R</button>
+      </div>
     </div>
   </div>
 
@@ -554,6 +600,20 @@
         </div>
       </div>
 
+      <!-- Multiplayer Host Link & Join Friend Bar -->
+      <div class="multiplayer-bar" id="menu-multiplayer-bar">
+        <div class="mp-left">
+          <span class="mp-badge" id="menu-net-status">HOST READY</span>
+          <input type="text" id="menu-invite-url" readonly value="Generating host link..." />
+          <button id="menu-copy-link-btn" class="mp-btn primary">COPY HOST LINK</button>
+        </div>
+        <div class="mp-right">
+          <input type="text" id="join-code-input" placeholder="FRIEND CODE" maxlength="8" />
+          <button id="join-room-btn" class="mp-btn">JOIN</button>
+          <button id="menu-duel-friend-btn" class="mp-btn duel hidden">DUEL FRIEND 1v1</button>
+        </div>
+      </div>
+
       <!-- Settings Row -->
       <div class="settings-bar">
         <div class="setting-item">
@@ -567,6 +627,10 @@
         <div class="setting-item toggle-item">
           <label for="autoshoot-toggle">Auto Shoot (F)</label>
           <input type="checkbox" id="autoshoot-toggle" />
+        </div>
+        <div class="setting-item toggle-item">
+          <label for="mobile-toggle">Mobile Controls</label>
+          <input type="checkbox" id="mobile-toggle" />
         </div>
         <div class="setting-item toggle-item">
           <label for="graphics-toggle">HD Graphics</label>
@@ -622,6 +686,7 @@
   <script src="./src/weapons.js"></script>
   <script src="./src/arena.js"></script>
   <script src="./src/bot.js"></script>
+  <script src="./src/net.js"></script>
   <script src="./src/game.js"></script>
 </body>
 </html>

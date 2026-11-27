@@ -6,6 +6,11 @@ Play live on GitHub Pages: **[https://nyez2016.github.io/roblox-rivals-html/](ht
 
 ## Features
 
+- **Instant Host Link Multiplayer (Play With Friends!)**:
+  - Whenever you open the game, it automatically hosts a WebRTC P2P room and displays a **1-click `COPY HOST LINK`** bar right in the 3D Lobby HUD and Armory menu (`?join=ROOMCODE`).
+  - Send the link to a friend (on PC or Mobile!) to see them walk around the 3D Lobby live with you and challenge them to a real-time **1v1 Friend PvP Duel**!
+- **Auto-Detected Mobile Touch Controls**:
+  - Automatically switches to ergonomic **Mobile Touch Controls** on phones and tablets (and toggleable in Settings on any device): Left Virtual Thumb Joystick, Right Touch-Drag Aiming, `FIRE`, `ADS/Scope/Lunge`, `JUMP` (with Double Jump!), `SLIDE`, `DASH`, `RELOAD`, tappable 1–4 weapon slots, `AUTO`, `EMOTE`, `MENU`, and `52 WEAPONS` in Shooting Range!
 - **Direct 3D Rivals Hub Lobby Spawn & Animated Lobby Bots**:
   - Spawn straight inside the sunlit 3D **Rivals Hub Plaza** populated by **8 named AI Lobby Bots** (`RivalsKing_YT`, `NoobSlayer99`, `SniperGod`, `DashMaster`, `KatanaAce`, `SkyJumper`, `NeonGhost`, `VoxelPro`) carrying Rivals weapons, showing Win Streaks, walking around, and emoting!
   - **Built-In East Wall Shooting Range Doorway**: Walk right through the glowing golden **Shooting Range portal built into the East Wall** to test **ALL 52 weapons for free** (press `Tab` anytime inside the Range to open the full 52-weapon picture picker!).

@@ -1152,9 +1152,320 @@
     }
   }
 
+  // =========================================================
+  // REAL-TIME REMOTE FRIEND AVATAR (WebRTC P2P Multiplayer!)
+  // =========================================================
+  class RemotePlayer {
+    constructor(scene) {
+      this.scene = scene;
+      this.name = 'FRIEND';
+      this.isRemote = true;
+      this.isDummy = false;
+      this.team = 'red';
+      this.maxHp = 100;
+      this.hp = 100;
+      this.alive = true;
+
+      this.pos = new THREE.Vector3(0, 0, -10);
+      this.targetPos = new THREE.Vector3(0, 0, -10);
+      this.yaw = 0;
+      this.targetYaw = 0;
+      this.currentWeaponId = 'ar';
+      this.weaponDef = WEAPONS.ar;
+      this.activeEmote = null;
+      this.emoteTime = 0;
+      this.walkPhase = 0;
+      this.hurtFlash = 0;
+      this.freezeTimer = 0;
+      this.blindTimer = 0;
+      this.deathFall = 0;
+      this.hitMeshes = [];
+
+      this._buildAvatar();
+      this.setVisible(false);
+    }
+
+    _buildAvatar() {
+      this.group = new THREE.Group();
+      this.bodyGroup = new THREE.Group();
+      this.group.add(this.bodyGroup);
+
+      this.matSkin = new THREE.MeshStandardMaterial({ color: 0xf7cf86, roughness: 0.55 });
+      this.matTorso = new THREE.MeshStandardMaterial({ color: 0xe63956, roughness: 0.45, metalness: 0.25 });
+      this.matLegs = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.65 });
+      this.matAccent = new THREE.MeshStandardMaterial({
+        color: 0xff3e5e,
+        emissive: 0xff3e5e,
+        emissiveIntensity: 0.85,
+      });
+
+      this.leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.72, 0.34), this.matLegs);
+      this.leftLeg.position.set(-0.19, 0.36, 0);
+      this.leftLeg.castShadow = true;
+      this.leftLeg.userData.hitbox = 'body';
+
+      this.rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.72, 0.34), this.matLegs);
+      this.rightLeg.position.set(0.19, 0.36, 0);
+      this.rightLeg.castShadow = true;
+      this.rightLeg.userData.hitbox = 'body';
+
+      this.torso = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.76, 0.4), this.matTorso);
+      this.torso.position.set(0, 1.1, 0);
+      this.torso.castShadow = true;
+      this.torso.userData.hitbox = 'body';
+
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.14, 0.42), this.matAccent);
+      stripe.position.set(0, 1.18, 0);
+      stripe.userData.hitbox = 'body';
+
+      this.leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.72, 0.3), this.matSkin);
+      this.leftArm.position.set(-0.54, 1.08, 0);
+      this.leftArm.castShadow = true;
+      this.leftArm.userData.hitbox = 'body';
+
+      this.rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.72, 0.3), this.matSkin);
+      this.rightArm.position.set(0.54, 1.16, 0.2);
+      this.rightArm.rotation.x = -Math.PI * 0.45;
+      this.rightArm.castShadow = true;
+      this.rightArm.userData.hitbox = 'body';
+
+      this.weaponHolder = new THREE.Group();
+      this.weaponHolder.position.set(0.54, 1.18, 0.44);
+      this.weaponHolder.rotation.y = Math.PI;
+      this.weaponHolder.scale.setScalar(1.15);
+      this.heldWeaponMesh = null;
+
+      this.headMesh = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.52, 0.54), this.matSkin);
+      this.headMesh.position.set(0, 1.76, 0);
+      this.headMesh.castShadow = true;
+      this.headMesh.userData.hitbox = 'head';
+
+      const visor = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.14, 0.08), this.matAccent);
+      visor.position.set(0, 1.8, 0.27);
+      visor.userData.hitbox = 'head';
+
+      this.iceBlock = new THREE.Mesh(
+        new THREE.BoxGeometry(1.25, 2.2, 1.15),
+        new THREE.MeshStandardMaterial({
+          color: 0x38bdf8,
+          emissive: 0x0284c7,
+          emissiveIntensity: 0.45,
+          transparent: true,
+          opacity: 0.52,
+        })
+      );
+      this.iceBlock.position.set(0, 1.1, 0);
+      this.iceBlock.visible = false;
+
+      this.bodyGroup.add(
+        this.leftLeg,
+        this.rightLeg,
+        this.torso,
+        stripe,
+        this.leftArm,
+        this.rightArm,
+        this.weaponHolder,
+        this.headMesh,
+        visor,
+        this.iceBlock
+      );
+
+      this.hitMeshes = [
+        this.headMesh,
+        visor,
+        this.torso,
+        stripe,
+        this.leftLeg,
+        this.rightLeg,
+        this.leftArm,
+        this.rightArm,
+      ];
+      for (const m of this.hitMeshes) m.userData.enemyRef = this;
+
+      this.hpCanvas = document.createElement('canvas');
+      this.hpCanvas.width = 180;
+      this.hpCanvas.height = 46;
+      this.hpCtx = this.hpCanvas.getContext('2d');
+      this.hpTex = new THREE.CanvasTexture(this.hpCanvas);
+      this.hpSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.hpTex, depthTest: false }));
+      this.hpSprite.scale.set(1.85, 0.48, 1);
+      this.hpSprite.position.set(0, 2.68, 0);
+      this.group.add(this.hpSprite);
+
+      this.equipWeapon('ar');
+      this._redrawTag();
+      this.scene.add(this.group);
+    }
+
+    setLobbyAppearance(isLobby) {
+      if (isLobby) {
+        this.matTorso.color.setHex(0x10b981);
+        this.matAccent.color.setHex(0x38ef7d);
+        this.matAccent.emissive.setHex(0x38ef7d);
+      } else {
+        this.matTorso.color.setHex(0xe63956);
+        this.matAccent.color.setHex(0xff3e5e);
+        this.matAccent.emissive.setHex(0xff3e5e);
+      }
+      this._redrawTag();
+    }
+
+    equipWeapon(weaponId) {
+      const def = WEAPONS[weaponId] || WEAPONS.ar;
+      if (this.currentWeaponId === def.id && this.heldWeaponMesh) return;
+      this.currentWeaponId = def.id;
+      this.weaponDef = def;
+      if (this.heldWeaponMesh) this.weaponHolder.remove(this.heldWeaponMesh);
+      this.heldWeaponMesh = createWeaponMesh(def.id, 'default');
+      this.weaponHolder.add(this.heldWeaponMesh);
+      this._redrawTag();
+    }
+
+    _redrawTag() {
+      const ctx = this.hpCtx;
+      const w = this.hpCanvas.width;
+      const h = this.hpCanvas.height;
+      ctx.clearRect(0, 0, w, h);
+
+      ctx.font = 'bold 13px Segoe UI, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#38ef7d';
+      ctx.fillText(`FRIEND · ${this.weaponDef ? this.weaponDef.name : 'AR'}`.slice(0, 22), w / 2, 14);
+
+      ctx.fillStyle = 'rgba(10, 14, 24, 0.85)';
+      ctx.fillRect(6, 20, w - 12, 20);
+      const pct = Math.max(0, this.hp / this.maxHp);
+      ctx.fillStyle = pct > 0.35 ? '#38ef7d' : '#ff3e5e';
+      ctx.fillRect(10, 24, Math.round((w - 20) * pct), 12);
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(7, 21, w - 14, 18);
+      this.hpTex.needsUpdate = true;
+    }
+
+    applyNetworkState(data) {
+      if (typeof data.x === 'number') {
+        this.targetPos.set(data.x, data.y || 0, data.z || 0);
+        if (this.pos.distanceTo(this.targetPos) > 12) {
+          this.pos.copy(this.targetPos);
+        }
+      }
+      if (typeof data.yaw === 'number') this.targetYaw = data.yaw + Math.PI;
+      if (typeof data.hp === 'number' && data.hp !== this.hp) {
+        this.hp = data.hp;
+        this._redrawTag();
+      }
+      if (typeof data.alive === 'boolean') {
+        this.alive = data.alive;
+        if (this.alive) this.deathFall = 0;
+        this.hpSprite.visible = this.alive;
+      }
+      if (data.weaponId) this.equipWeapon(data.weaponId);
+      this.activeEmote = data.emote || null;
+    }
+
+    setVisible(vis) {
+      this.group.visible = vis;
+    }
+
+    getHitMeshes() {
+      return this.group.visible && this.alive ? this.hitMeshes : [];
+    }
+
+    getCenterWorldPos() {
+      return new THREE.Vector3(this.pos.x, this.pos.y + 1.15, this.pos.z);
+    }
+
+    getHeadWorldPos() {
+      return new THREE.Vector3(this.pos.x, this.pos.y + 1.76, this.pos.z);
+    }
+
+    getForwardVector() {
+      return new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)).normalize();
+    }
+
+    takeDamage(amount, isHeadshot = false) {
+      if (!this.alive) return { killed: false, hp: 0 };
+      this.hp = Math.max(0, this.hp - Math.round(amount));
+      this.hurtFlash = 0.14;
+      this._redrawTag();
+      if (this.hp <= 0) {
+        this.alive = false;
+        this.hpSprite.visible = false;
+        return { killed: true, hp: 0, isHeadshot };
+      }
+      return { killed: false, hp: this.hp, isHeadshot };
+    }
+
+    freeze(sec = 2.2) {
+      this.freezeTimer = Math.max(this.freezeTimer, sec);
+      if (this.iceBlock) this.iceBlock.visible = true;
+    }
+
+    blind(sec = 2.5) {
+      this.blindTimer = Math.max(this.blindTimer, sec);
+    }
+
+    update(dt) {
+      if (!this.group.visible) return;
+      if (this.hurtFlash > 0) {
+        this.hurtFlash = Math.max(0, this.hurtFlash - dt);
+        this.matTorso.emissive.setHex(this.hurtFlash > 0 ? 0xffffff : 0x000000);
+        this.matTorso.emissiveIntensity = this.hurtFlash > 0 ? 0.5 : 0;
+      }
+      if (this.freezeTimer > 0) {
+        this.freezeTimer = Math.max(0, this.freezeTimer - dt);
+        if (this.iceBlock) this.iceBlock.visible = this.freezeTimer > 0;
+      }
+      if (!this.alive) {
+        this.deathFall = Math.min(Math.PI / 2, this.deathFall + dt * 5.2);
+        this.group.rotation.x = -this.deathFall;
+        this.group.position.set(this.pos.x, this.pos.y + 0.25, this.pos.z);
+        return;
+      }
+
+      const prevX = this.pos.x;
+      const prevZ = this.pos.z;
+      this.pos.lerp(this.targetPos, Math.min(1, dt * 16));
+      let dYaw = this.targetYaw - this.yaw;
+      while (dYaw > Math.PI) dYaw -= Math.PI * 2;
+      while (dYaw < -Math.PI) dYaw += Math.PI * 2;
+      this.yaw += dYaw * Math.min(1, dt * 16);
+
+      const moveDist = Math.hypot(this.pos.x - prevX, this.pos.z - prevZ) / Math.max(0.001, dt);
+      if (this.activeEmote) {
+        this.emoteTime += dt;
+        const t = this.emoteTime * 9;
+        this.bodyGroup.position.y = Math.abs(Math.sin(t)) * 0.25;
+        this.leftLeg.rotation.x = Math.sin(t) * 0.7;
+        this.rightLeg.rotation.x = -Math.sin(t) * 0.7;
+      } else {
+        this.bodyGroup.position.y = 0;
+        if (moveDist > 0.6) {
+          this.walkPhase += dt * moveDist * 1.45;
+          this.leftLeg.rotation.x = Math.sin(this.walkPhase) * 0.65;
+          this.rightLeg.rotation.x = -Math.sin(this.walkPhase) * 0.65;
+          this.leftArm.rotation.x = -Math.sin(this.walkPhase) * 0.45;
+        } else {
+          this.leftLeg.rotation.x *= 0.85;
+          this.rightLeg.rotation.x *= 0.85;
+          this.leftArm.rotation.x *= 0.85;
+        }
+      }
+
+      this.group.rotation.set(0, this.yaw, 0);
+      this.group.position.copy(this.pos);
+    }
+
+    dispose() {
+      this.scene.remove(this.group);
+    }
+  }
+
   Rivals.BOT_PROFILES = BOT_PROFILES;
   Rivals.DIFFICULTIES = DIFFICULTIES;
   Rivals.RivalBot = RivalBot;
   Rivals.TargetDummy = TargetDummy;
   Rivals.LobbyBot = LobbyBot;
+  Rivals.RemotePlayer = RemotePlayer;
 })(window);
